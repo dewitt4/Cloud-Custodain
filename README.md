@@ -42,28 +42,52 @@ actions:
 
 ```
 
-Given that you can run the janitor via::
+Given that you can run the janitor via
 
+```
   $ janitor run -c policy.yml
-  
+```
+
 Janitor supports a few other useful modes.
 
-One is to just query
+One is to just query for instances matching and export them as csv or json with
+the *identify* subcommand. 
 
-  $ janitor run -c policy.yml --dry-run
+```
+  $ janitor identify -c policy.yml -o instances.json --format=json
+```
 
 You can also use run directly in dryrun mode, in which case it will verify api
-access.
+access to perform the requested actions.
+
+```
+  $ janitor run -c policy.yml --dryrun
+```
 
 # Operations
 
 ## Mark
 
-Will mark instances matching with a 'Janitor' tag
+Will mark instances matching filters with a 'Janitor' tag and configurable message
+
+## Stop
+
+Will stop the instance. Stopped instances do not incur ec2 instance costs.
+
+## Terminate
+
+Will terminate the instance. Use with caution!
+
+## Notify
+
+Not implemented, todo list
+- [x] Access to CloudTrail bucket for acct
+- [x] Email Relay
+
 
 # Credentials
 
-All credentials are sourced from environment variables, either IAM Role
+All credentials are sourced from environment variables or IAM Role
 
 # Filters
 
