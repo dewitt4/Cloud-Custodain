@@ -1,3 +1,0 @@
-"""
-Multi-threaded concurrency
-"""

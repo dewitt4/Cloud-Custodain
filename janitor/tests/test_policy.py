@@ -1,20 +1,15 @@
-import tempfile
 import unittest
 
 import boto
 import yaml
 
 from janitor import policy, actions, filters
-            
-class TestPolicy(unittest.TestCase):
 
-    def load_policy(self, data):
-        t = tempfile.NamedTemporaryFile()
-        t.write(yaml.dump(data, Dumper=yaml.SafeDumper))
-        t.flush()
-        self.addCleanup(t.close)
-        return policy.load({}, t.name)
-    
+from janitor.tests.common import BaseTest
+
+
+class TestPolicy(BaseTest):
+
     def test_file_not_found(self):
         self.assertRaises(
             ValueError, policy.load, {}, "/asdf12")

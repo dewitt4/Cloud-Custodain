@@ -1,5 +1,18 @@
+import unittest
+import tempfile
+import yaml
 
+from janitor import policy
 
+class BaseTest(unittest.TestCase):
+
+    def load_policy(self, data):
+        t = tempfile.NamedTemporaryFile()
+        t.write(yaml.dump(data, Dumper=yaml.SafeDumper))
+        t.flush()
+        self.addCleanup(t.close)
+        return policy.load({}, t.name)
+    
 
 class Instance(object):
 

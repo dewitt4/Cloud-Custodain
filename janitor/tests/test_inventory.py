@@ -9,7 +9,6 @@ from janitor.tests.common import Instance, Client, Config
 class TestInventory(unittest.TestCase):
 
     def test_inventory_filters(self):
-
         instances = [
             Instance({'id': 1,
                       'tags': {'ASV': '123',
@@ -27,7 +26,6 @@ class TestInventory(unittest.TestCase):
             filter({'filter': 'tag:ASV', 'state': 'absent'}),
             filter({'filter': 'tag:CMDBEnvironment', 'state': 'absent'})]
         i = Inventory(client, filters, conf)
-
         self.assertEqual(
             [x.id for x in list(i)],
             [x.id for x in instances[1:]])
