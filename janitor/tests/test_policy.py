@@ -18,7 +18,8 @@ class TestPolicy(BaseTest):
         p = self.load_policy({'filters': [
             {'state': 'absent',
              'filter': 'tag:ASV'},
-            {'filter': 'tag:CMDBEnvironment'}
+            {'filter': 'tag-key',
+             'value': 'CMDBEnvironment'}
         ]})
         self.assertTrue(
             isinstance(p.filters[0], filters.EC2InstanceFilter))

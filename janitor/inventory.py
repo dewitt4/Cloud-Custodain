@@ -3,6 +3,7 @@ import cPickle
 import itertools
 import os
 import time
+import logging
 
 from janitor.filters import QueryFilter, InstanceFilter
 
@@ -14,11 +15,18 @@ class Inventory(object):
         self.filters = filters
         self.config = config
         self._cache = None
-
+        self.log = logging.getLogger(__name__)
+        
     def query(self):
+        filters = self._filter_params()
+        self.log.info("Querying ec2 instances with %s" % filters)
         results = self.client.get_all_instances(filters=self._filter_params())
-        return list(itertools.chain(
+
+        instances =  list(itertools.chain(
             *[r.instances for r in results]))
+        self.log.debug("Found %d instances on %d reservations" % (
+            len(instances), len(results)))        
+        return instances
 
     def _filter_params(self):
         params = {}
@@ -47,13 +55,14 @@ class Inventory(object):
         if not self.config.cache or not self.config.cache_period:
             return False
         if os.path.isfile(self._cache_path):
-            if time.time() - os.stat(self._cache_path).st_mtime > 60 * 5:
+            if time.time() - os.stat(self._cache_path).st_mtime > self.config.cache_period * 60:
                 return False            
             with open(self._cache_path) as fh:
                 data = cPickle.load(fh)
                 if (self._filter_params() != data.get('key')
                     or data['region'].name != self.client.region.name):
                     return False
+                self.log.info("Using cache")
                 self._cache = data['cache']
             return True
         return False
@@ -64,12 +73,25 @@ class Inventory(object):
                 self._cache = self.query()
                 self._save_cache()
 
-        for i in filter(self._instance_filters, self._cache):
-            yield i
+        for f in [f for f in self.filters if isinstance(f, InstanceFilter)]:
+            self.log.info("Filtering instances with instance "
+                     "filter:%s value:%s state:%s" % (
+                         f.data['filter'], f.data.get('value', 'null'),
+                         f.data.get('state', 'present')))
+            
+        instances = filter(self._instance_filters, self._cache)
+        self.log.info("Matched instances %d" % len(instances))
+        return iter(instances)
 
     def _instance_filters(self, i):
+        
         found = [
             s.process(i) for s in self.filters if isinstance(s, InstanceFilter)]
-        return any(found)
+        # No Filters
+        if len(found) == 0:
+            return True
+
+        op = self.config.or_operator and all or any
+        return op(found)
         
                     

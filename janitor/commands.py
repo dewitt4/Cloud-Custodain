@@ -1,6 +1,8 @@
 import csv
 import json
 import operator
+import os
+import sys
 
 from janitor import actions
 
@@ -36,24 +38,32 @@ def _serialize_csv(instances, fh):
             i.tags.get("CMDBEnvironment", "NA")                
         ))
 
-        
+
+def _serialize(options, instances):
+    if options.output_path == "-":
+        fh = sys.stdout
+    else: # dangling fh on close
+        fh = open(os.path.expanduser(options.output_path), 'w')
+
+    if options.format == "json":
+        _serialize_json(instances, fh)
+    else:
+        _serialize_csv(instances, fh)
+    
 def identify(options, policy):
     instances = sorted(
         policy.inventory, key=operator.attrgetter('launch_time'))
-    with open(options.csv_file, 'w') as fh:
-        if options.format == "json":
-            _serialize_json(instances, fh)
-        else:
-            _serialize_csv(instances, fh)
-
+    _serialize(instances)
 
 def mark(options, policy):
     instances = list(policy.inventory)
     mark = actions.Mark(options, policy)
     mark.process(instances)
-
+    _serialize(options, instances)
+    
 
 def run(options, policy):
     instances = list(policy.inventory)
     for a in policy.actions:
         a.process(instances)
+    _serialize(options, instances)

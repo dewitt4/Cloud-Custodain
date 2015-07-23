@@ -32,26 +32,28 @@ filters:
     type: janitor
 
 actions:
-  - operation: notify-owner
-  - operation: stop
-  - operation: terminate
-  - operation:
-	- type: mark
-	- msg: "Doesn't match policy" 
+  - notify-owner
+  - stop
+  - terminate
+  - type: mark
+    msg: "Doesn't match policy" 
      
 
 ```
 
-Given that you can run the janitor via
+Given that, you can run the janitor via
 
 ```
   $ janitor run -c policy.yml
 ```
+By default any run of the janitor will output csv of the instances operated on.
 
-Janitor supports a few other useful modes.
+
+Janitor supports a few other useful subcommands and options.
 
 One is to just query for instances matching and export them as csv or json with
-the *identify* subcommand. 
+the *identify* subcommand. Default output is to stdout, controlled with the
+'-o' option.
 
 ```
   $ janitor identify -c policy.yml -o instances.json --format=json
@@ -70,6 +72,7 @@ access to perform the requested actions.
 
 Will mark instances matching filters with a 'Janitor' tag and configurable message
 
+
 ## Stop
 
 Will stop the instance. Stopped instances do not incur ec2 instance costs.
@@ -81,8 +84,9 @@ Will terminate the instance. Use with caution!
 ## Notify
 
 Not implemented, todo list
+
 - [x] Access to CloudTrail bucket for acct
-- [x] Email Relay
+- [x] Email Relay (PonyEx)
 
 
 # Credentials
@@ -94,7 +98,9 @@ All credentials are sourced from environment variables or IAM Role
 Ec2 Filters are per filter list at
 http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html
 
-Note state: absent filters are done via post processing instances in memory.
+Note state: absent filters are done via post processing instances in
+memory. The -j option allows switching from the filter operator from
+or to and.
 
     
 

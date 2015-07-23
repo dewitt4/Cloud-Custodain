@@ -31,7 +31,6 @@ class Policy(object):
                 found = True
                 break
         if not found:
-            print self.options.region
             raise ValueError(
                 "Invalid region specified %s" % self.options.region)
 

@@ -96,6 +96,7 @@ class EC2InstanceFilter(InstanceFilter):
                 return True
             elif v and not i.tags[k] == v:
                 return True
+            
         elif f in EC2_FILTER_INSTANCE_MAP:
             k = EC2_FILTER_INSTANCE_MAP[f]
             iv = getattr(i, k, None)
@@ -112,6 +113,15 @@ class EC2InstanceFilter(InstanceFilter):
     
 class EC2QueryFilter(QueryFilter):
 
+    def validate(self):
+        super(EC2QueryFilter, self).validate()
+        if self.data.get('value') is None:
+            raise ValueError(
+                "EC2 Query Filters must have a value, use tag-key"
+                " w/ tag name as value for tag present checks"
+                " %s" % self.data)
+        return self
+    
     def query(self):
         return {self.data['filter']: self.data['value']}
 

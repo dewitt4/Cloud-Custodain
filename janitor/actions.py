@@ -1,3 +1,6 @@
+from boto.exception import EC2ResponseError
+import logging
+
 
 def action(action, options, policy):
     data = None
@@ -18,6 +21,8 @@ def action(action, options, policy):
     
 class BaseAction(object):
 
+    log = logging.getLogger(__name__)
+    
     def __init__(self, options, policy, data=None):
         self.options = options
         self.policy = policy
@@ -27,28 +32,47 @@ class BaseAction(object):
         raise NotImplemented(
             "Base action class does not implement behavior")
 
+    def _run_api(self, cmd, *args, **kw):
+        try:
+            cmd(*args, **kw)
+        except EC2ResponseError, e:
+            if (e.error_code == 'DryRunOperation'
+                and e.status == 412
+                and e.reason == 'Precondition Failed'):
+                return self.log.info("Dry run operation %s succeeded" % self.__class__.__name__.lower())
+            raise
+            
 
 class Mark(BaseAction):
 
     def process(self, instances):
         msg = self.data.get(
             'msg', 'Instance does not meet ec2 policy guidelines')
-        self.policy.connection.create_tags(
+        self._run_api(self.policy.connection.create_tags,
             [i.id for i in instances],
-            {'Janitor': msg}, dry_run=self.options.dry_run)
+            {'Janitor': msg}, dry_run=self.options.dryrun)
+
+
+class Unmark(BaseAction):
+
+    def process(self, instances):
+        self._run_api(self.policy.connection.create_tags,
+            [i.id for i in instances],
+            {'Janitor': None}, dry_run=self.options.dryrun)
+
         
 class Stop(BaseAction):
 
     def process(self, instances):
-        self.policy.connection.stop_instances(
-            [i.id for i in instances], dry_run=self.options.dry_run)
+        self._run_api(self.policy.connection.stop_instances,
+            [i.id for i in instances], dry_run=self.options.dryrun)
 
 
 class Terminate(BaseAction):
 
     def process(self, instances):
-        self.policy.connection.terminate_instances(
-            [i.id for i in instances], dry_run=self.options.dry_run)
+        self._run_api(self.policy.connection.terminate_instances,
+            [i.id for i in instances], dry_run=self.options.dryrun)
 
 
 class NotifyOwner(BaseAction):
