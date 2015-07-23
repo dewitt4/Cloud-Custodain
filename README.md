@@ -27,11 +27,9 @@ filters:
     value: running
 
 actions:
-  - notify-owner
   - stop
-  - terminate
   - type: mark
-    msg: "Doesn't match policy" 
+    msg: "Instance doesn't match tagging policy" 
      
 
 ```
@@ -76,12 +74,15 @@ Will stop the instance. Stopped instances do not incur ec2 instance costs.
 
 Will terminate the instance. Use with caution!
 
-## Notify
+# Todo List
 
-Not implemented, todo list
+For email notification to owner, we'll need the following.
 
-- [x] Access to CloudTrail bucket for acct
-- [x] Email Relay (PonyEx)
+- [ ] Access to CloudTrail bucket for account
+- [ ] Email Relay (PonyEx) 
+- [ ] Mapping of EID to email address.
+
+For ASV and CMDBEnvironment verification we'll need access to an API over hp service manager.
 
 
 # Credentials
