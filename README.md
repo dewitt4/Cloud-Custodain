@@ -26,11 +26,6 @@ filters:
     type: ec2  
     value: running
 
-  - filter: relative-instance-age
-    value:
-	days: 2
-    type: janitor
-
 actions:
   - notify-owner
   - stop

@@ -124,22 +124,3 @@ class EC2QueryFilter(QueryFilter):
     
     def query(self):
         return {self.data['filter']: self.data['value']}
-
-        
-class RelativeInstanceAge(InstanceFilter):
-
-    valid_specs = ('days', 'seconds', 'minutes', 'weeks')
-
-    def validate(self):
-        if not 'value' in self.data:
-            raise FilterValidationError(
-                "Invalid specification for relative age: "
-                "value requires one of %s" % valid_specs)
-        return self
-    
-    def process(self, i):
-        delta_data = self.data['value']
-        now = datetime.now()
-        for s in self.valid_specs:
-            if s in delta_data:
-                pass
