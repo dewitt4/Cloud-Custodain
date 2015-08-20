@@ -1,10 +1,14 @@
 
 # AWS Janitor
 
+Identifies ec2 instances that match a set of query filters
+and then take actions on them.
 
+Goals for the project are to help organizations manage their cloud
+spend rates by for example turning instances off at evening and
+starting them in the morning or terminating instances that aren't
+conformant with the organizations tag or security group policy.
 
-Identifies ec2 instances that are not conformant to an org tag policy
-and then take one of several configurable actions.
 
 # Usage
 
@@ -65,6 +69,10 @@ access to perform the requested actions.
 
 Will mark instances matching filters with a 'Janitor' tag and configurable message
 
+
+## Start
+
+Start a set of instances (presumably) already stopped.
 
 ## Stop
 

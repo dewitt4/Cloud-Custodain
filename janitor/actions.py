@@ -34,7 +34,7 @@ class BaseAction(object):
 
     def _run_api(self, cmd, *args, **kw):
         try:
-            cmd(*args, **kw)
+            return cmd(*args, **kw)
         except EC2ResponseError, e:
             if (e.error_code == 'DryRunOperation'
                 and e.status == 412
@@ -60,7 +60,16 @@ class Unmark(BaseAction):
             [i.id for i in instances],
             {'Janitor': None}, dry_run=self.options.dryrun)
 
-        
+
+class Start(BaseAction):
+
+    def process(self, instances):
+        self._run_api(
+            self.policy.connection.start_instances,
+            [i.id for i in instances],
+            dry_run=self.options.dry_run)
+
+
 class Stop(BaseAction):
 
     def process(self, instances):
