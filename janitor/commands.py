@@ -53,7 +53,7 @@ def _serialize(options, instances):
 def identify(options, policy):
     instances = sorted(
         policy.inventory, key=operator.attrgetter('launch_time'))
-    _serialize(instances)
+    _serialize(options, instances)
 
 def mark(options, policy):
     instances = list(policy.inventory)
