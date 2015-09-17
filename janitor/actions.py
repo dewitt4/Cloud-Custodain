@@ -48,17 +48,19 @@ class Mark(BaseAction):
     def process(self, instances):
         msg = self.data.get(
             'msg', 'Instance does not meet ec2 policy guidelines')
+        tag = self.data.get('tag', 'maid_status')
         self._run_api(self.policy.connection.create_tags,
             [i.id for i in instances],
-            {'Janitor': msg}, dry_run=self.options.dryrun)
+            {tag: msg}, dry_run=self.options.dryrun)
 
 
 class Unmark(BaseAction):
 
     def process(self, instances):
+        tag = self.data.get('tag', 'maid_status')
         self._run_api(self.policy.connection.create_tags,
             [i.id for i in instances],
-            {'Janitor': None}, dry_run=self.options.dryrun)
+            {tag: None}, dry_run=self.options.dryrun)
 
 
 class Start(BaseAction):
