@@ -10,30 +10,28 @@ starting them in the morning or terminating instances that aren't
 conformant with the organizations tag or security group policy.
 
 
+
 # Usage
 
 First a policy file needs to be created in yaml format, as an example:
 
 ```yaml
 
-filters:
-  - filter: tag-key
-    value: CMDBEnvironment
-    type: ec2  
-    state: absent
+ec2:
+  filters:
+    - filter: tag-key
+      value: CMDBEnvironment
+      state: absent
 
-  - filter: tag-key
-    type: ec2
-    value: ASV
+    - filter: tag-key
+      value: ASV
 
-  - filter: instance-state-name
-    type: ec2  
-    value: running
-
-actions:
-  - stop
-  - type: mark
-    msg: "Instance doesn't match tagging policy" 
+    - filter: instance-state-name
+      value: running
+  actions:
+    - stop
+    - type: mark
+      msg: "Instance doesn't match tagging policy" 
      
 
 ```
@@ -106,7 +104,36 @@ Note state: absent filters are done via post processing instances in
 memory. The -j option allows switching from the filter operator from
 or to and.
 
-    
+
+
+# Install
+
+You'll need python-dev and python-virtualenv packages installed already on linux, on
+OSX the default install comes with the nesc requirements.
+
+First clone the repository:
+
+$ git clone https://github.kdc.capitalone.com/ylv522/cloud-janitor.git
+
+Also recommended is to use a virtualenv to sandbox this install from your system packages:
+
+$ virtualenv cloud-janitor
+$ source cloud-janitor/bin/activate
+
+And then install the dependencies
+
+$ pip install -f requirements.txt
+
+And then the janitor itself
+
+$ python setup.py develop
+
+You should have the cloud-janitor command available now.
+
+$ cloud-janitor -h
+
+
+
 
   
 

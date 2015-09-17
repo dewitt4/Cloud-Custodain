@@ -15,12 +15,14 @@ class TestPolicy(BaseTest):
             ValueError, policy.load, {}, "/asdf12")
 
     def test_filters(self):
-        p = self.load_policy({'filters': [
-            {'state': 'absent',
-             'filter': 'tag:ASV'},
-            {'filter': 'tag-key',
-             'value': 'CMDBEnvironment'}
-        ]})
+        p = self.load_policy(
+            {'ec2':
+             {'filters': [
+                 {'state': 'absent',
+                  'filter': 'tag:ASV'},
+                 {'filter': 'tag-key',
+                  'value': 'CMDBEnvironment'}
+             ]}})
         self.assertTrue(
             isinstance(p.filters[0], filters.EC2InstanceFilter))
         self.assertTrue(
@@ -30,14 +32,16 @@ class TestPolicy(BaseTest):
 
     def test_actions(self):
         # a simple action by string
-        p = self.load_policy({'actions': ['mark']})
+        p = self.load_policy({'ec2': {'actions': ['mark']}})
         self.assertEqual(len(p.actions), 1)
         self.assertTrue(isinstance(p.actions[0], actions.Mark))
 
         # a configured action with dict
-        p = self.load_policy({'actions': [
-            {'type': 'mark',
-             'msg': 'Missing proper tags'}]})
+        p = self.load_policy(
+            {'ec2': {
+                'actions': [
+                    {'type': 'mark',
+                     'msg': 'Missing proper tags'}]}})
         self.assertEqual(len(p.actions), 1)
         self.assertTrue(isinstance(p.actions[0], actions.Mark))
         self.assertEqual(p.actions[0].data,

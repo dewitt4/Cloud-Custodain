@@ -43,14 +43,14 @@ class Policy(object):
     @property
     def filters(self):
         f = []
-        for fdat in self.data.get('filters'):
+        for fdat in self.data.get('ec2', {}).get('filters', []):
             f.append(filter(fdat))
         return f
     
     @property
     def actions(self):
         o = []
-        for adat in self.data.get('actions', []):
+        for adat in self.data.get('ec2', {}).get('actions', []):
             o.append(action(adat, self.options, self))
         return o
     
