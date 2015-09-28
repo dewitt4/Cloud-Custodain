@@ -3,59 +3,103 @@ import unittest
 import cPickle
 
 from janitor import filters
+from janitor.utils import annotation
+from .common import Instance, instance
 
-from .common import Instance
+
+
 
 class TestFilter(unittest.TestCase):
 
     def test_filter_construction(self):
         self.assertTrue(
             isinstance(
-                filters.filter({'type': 'ec2', 'state': 'absent', 'filter': 'tag:ASV'}),
-                filters.EC2InstanceFilter))
-
-        self.assertTrue(
-            isinstance(
-                filters.filter({'type': 'ec2', 'filter': 'tag:ASV',  'value': 'REALTIMEMSG'}),
-                filters.EC2QueryFilter))
+                filters.factory({'tag:ASV': 'absent'}),
+                filters.ValueFilter))
 
     def test_filter_validation(self):
-        self.assertRaises(filters.FilterValidationError,
-                          filters.filter,
-                          {'type': 'ax'})
-        self.assertRaises(filters.FilterValidationError,
-                          filters.filter,
-                          {'type': 'ec2'})
-
+        self.assertRaises(
+            filters.FilterValidationError,
+            filters.factory, {'type': 'ax', 'xyz': 1})
             
 
-class TestInstanceFilter(unittest.TestCase):
+class TestOrFilter(unittest.TestCase):
 
-    def test_absent_tag(self):
-        self.assertFalse(filters.filter(
-            {'type': 'ec2', 'state': 'absent', 'filter': 'tag:ASV'}).process(
-                Instance({
-                    'tags': {'ASV': 'abcd'}})))
+    def test_or(self):
+        f = filters.factory({
+            'or': [
+                {'Architecture': 'x86_64'},
+                {'Architecture': 'armv8'}]})
+        self.assertEqual(
+            f(instance(Architecture='x86_64')),
+            True)
+        self.assertEqual(
+            f(instance(Architecture='amd64')),
+            False)        
 
-        self.assertTrue(filters.filter(
-            {'type': 'ec2', 'state': 'absent', 'filter': 'tag:ASV'}).process(
-                Instance({
-                    'tags': {'CMDB': 'abcd'}})))
+        
+class TestInstanceValueFilter(unittest.TestCase):
 
-        self.assertFalse(filters.filter(
-            {'type': 'ec2', 'state': 'absent',
-             'filter': 'iam-instance-profile.arn'}).process(
-                Instance({'instance_profile': 'asf'})))
+    def _filter(self, f, i, v):
+        self.assertEqual(filters.factory(f)(i), v)
 
-        self.assertTrue(filters.filter(
-            {'type': 'ec2', 'state': 'absent',
-             'filter': 'iam-instance-profile.arn', 'value': 'asf2'}).process(
-                Instance({'instance_profile': 'asf'})))        
+        
+    def test_filter_tag(self):
+        i = instance(Tags=[
+            {'Key': 'ASV', 'Value': 'abcd'}])
+        self._filter(
+            {'tag:ASV': 'def'}, i, False)
+        self.assertEqual(
+            annotation(i, filters.ANNOTATION_KEY), ())
 
-        self.assertTrue(filters.filter(
-            {'type': 'ec2', 'state': 'absent',
-             'filter': 'iam-instance-profile.arn'}).process(
-                Instance({})))        
+        i = instance(Tags=[
+            {'Key': 'CMDB', 'Value': 'abcd'}])
+        self._filter(
+            {'tag:ASV': 'absent'}, i, True)
+        self.assertEqual(
+            annotation(i, filters.ANNOTATION_KEY), ['tag:ASV'])
+
+    def test_jmespath(self):
+        self._filter(
+            {'Placement.AvailabilityZone': 'us-east-1b'},
+            instance(),
+            True)
+
+        self._filter(
+            {'Placement.AvailabilityZone': 'us-east-1c'},
+            instance(),
+            False)
+
+    def test_complex_validator(self):
+        self.assertRaises(
+            filters.FilterValidationError,
+            filters.factory,
+            {"key": "xyz",
+             "type": "value"})
+        self.assertRaises(
+            filters.FilterValidationError,
+            filters.factory,
+            {"value": "xyz",
+             "type": "value"})        
+        self.assertRaises(
+            filters.FilterValidationError,
+            filters.factory,
+            {"key": "xyz",
+             "value": "xyz",
+             "op": "oo",
+             "type": "value"})        
+
+                
+    def test_complex_value_filter(self):
+        self._filter(
+            {"key": "length(BlockDeviceMappings[?Ebs.DeleteOnTermination == `false`].Ebs.DeleteOnTermination)",
+             "value": 0,
+             "type": "value",
+             "op": "gt"},
+            instance(),
+            True)
+
+    
 
 
 if __name__ == '__main__':
