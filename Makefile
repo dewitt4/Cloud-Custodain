@@ -5,4 +5,4 @@ install:
 
 
 coverage:
-	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover
+	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover janitor

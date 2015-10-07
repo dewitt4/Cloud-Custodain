@@ -1,11 +1,9 @@
 import os
 
-import boto
+import boto3
 import yaml
 
-from janitor.inventory import Inventory
-from janitor.filters import filter
-from janitor.actions import action
+from janitor.manager import EC2
 
 
 def load(options, path):
@@ -23,36 +21,11 @@ class Policy(object):
         self.data = data
         self.options = options
 
-    @property
-    def connection(self):
-        found = False
-        for r in boto.regioninfo.get_regions('ec2'):
-            if r.name == self.options.region:
-                found = True
-                break
-        if not found:
-            raise ValueError(
-                "Invalid region specified %s" % self.options.region)
+    def session_factory(self):
+        return boto3.Session(region_name=self.options.region)
 
-        return boto.connect_ec2(region=r)
-    
-    @property
-    def inventory(self):
-        return Inventory(self.connection, self.filters, self.options)
-
-    @property
-    def filters(self):
-        f = []
-        for fdat in self.data.get('ec2', {}).get('filters', []):
-            f.append(filter(fdat))
-        return f
-    
-    @property
-    def actions(self):
-        o = []
-        for adat in self.data.get('ec2', {}).get('actions', []):
-            o.append(action(adat, self.options, self))
-        return o
-    
-
-
+    def resource_manager(self, resource_type='ec2'):
+        # TODO make lookup via res mgr registry
+        return EC2(self.session_factory,
+                   self.data.get(resource_type),
+                   self.options)

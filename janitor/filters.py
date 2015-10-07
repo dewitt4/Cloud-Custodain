@@ -1,126 +1,218 @@
 """
-Filter logic is either matching for queries, or not matching for 'state': 'absent' instance queries.
+EC2 Instance Filtering Logic
+
 """
+from dateutil.parser import parse as parse_date
+from dateutil.tz import tzutc
+
+import jmespath
+
+from datetime import datetime, timedelta
+import logging
+import operator
+
+from janitor.registry import Registry
+from janitor.utils import set_annotation
+
 
 class FilterValidationError(Exception): pass
 
-# Valid EC2 Query Filters
-# http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html
-EC2_VALID_FILTERS = {
-    'architecture': ('i386', 'x86_64'),
-    'availability-zone': str,
-    'iam-instance-profile.arn': str,
-    'image-id': str,
-    'instance-id': str,
-    'instance-lifecycle': ('spot',),
-    'instance-state-name': (
-        'pending',
-        'terminated',
-        'running',
-        'shutting-down',
-        'stopping',
-        'stopped'),
-    'instance.group-id': str,
-    'instance.group-name': str,
-    'tag-key': str,
-    'tag-value': str,
-    'tag:': str,
-    'vpc-id': str}
+
+# Matching filters annotate their key onto objects
+ANNOTATION_KEY = "MatchedFilters"
 
 
-# Map Query Filters to Instance Attributes for late bound queries
-EC2_FILTER_INSTANCE_MAP = {
-    'architecture': 'architecture',
-    'availability-zone': 'placement',
-    'iam-instance-profile.arn': 'instance_profile',
-    'vpc-id': 'vpc_id',
-    'instance-state-name': 'state',
-    'architecture': 'architecture'
-    }
+OPERATORS = {
+    'eq': operator.eq,
+    'gt': operator.gt,
+    'ge': operator.ge,
+    'le': operator.le,
+    'lt': operator.lt}
 
-    
-def filter(data):
+
+def parse(data):
+    results = []
+    for d in data:
+        f = factory(d)
+        results.append(f)
+    return results
+
+
+def factory(data):
     """Factory func for filters."""
-    filter_type = data.get('type', 'ec2')
-    
-    if filter_type == 'ec2':
-        if data.get('state', '') == 'absent':
-            return EC2InstanceFilter(data).validate()
-        else:
-            return EC2QueryFilter(data).validate()
-    elif filter_type == 'janitor':
-        return JanitorFilter(data).validate()
+
+    # Make the syntax a little nicer for common cases.
+    if len(data) == 1 and not 'type' in data:
+        if data.keys()[0] == 'or':
+            return Or(data)
+        return ValueFilter(data).validate()
+
+    filter_type = data.get('type')
+    if not filter_type:
+        raise FilterValidationError(
+            "EC2 Invalid Filter %s" % data)
+
+    filter_class = _filters.get(filter_type)
+    if filter_class is not None:
+        return filter_class(data).validate()
     else:
-        raise FilterValidationError('invalid filter type: %s for %s' % (
-            filter_type, data))
-            
-    
+        raise FilterValidationError(
+            "EC2 Invalid filter type %s" % data)
+
+
+_filters = Registry('ec2.filters')
+register_filter = _filters.register_class
+
+
+# Really should be an abstract base class (abc) or zope.interface
 class Filter(object):
 
-    template = ()
-
     def __init__(self, data):
-        self.data = dict(self.template)
-        self.data.update(data)
-        
+        self.data = data
+
     def validate(self):
-        if not 'filter' in self.data:
-            raise FilterValidationError('missing filter in %s' % self.data)
         return self
 
     @property
     def type(self):
-        return self.data['type']
+        pass
 
+    @property
+    def name(self):
+        pass
 
-class QueryFilter(Filter): pass
+    def __call__(self, instance):
+        raise NotImplementedError()
     
-class InstanceFilter(Filter): pass
 
+class Or(Filter):
 
-class EC2InstanceFilter(InstanceFilter):
+    def __init__(self, data):
+        super(Or, self).__init__(data)
+        self.filters = parse(self.data.values()[0])
 
-    def process(self, i):
-        assert self.data.get('state', '') == 'absent'
-        f = self.data['filter']
-        if f == 'tag-key':
-            if self.data['value'] in i.tags:
+    def __call__(self, i):
+        for f in self.filters:
+            if f(i):
                 return True
-        elif f == 'tag-value':
-            if self.data.get('value') in i.tags.values():
-                return True
-        elif f.startswith('tag:'):
-            _, k = f.split(":", 1)
-            v = self.data.get('value')
-            if not k in i.tags:
-                return True
-            elif v and not i.tags[k] == v:
-                return True
-            
-        elif f in EC2_FILTER_INSTANCE_MAP:
-            k = EC2_FILTER_INSTANCE_MAP[f]
-            iv = getattr(i, k, None)
-            v = self.data.get('value')
-            if iv is None:
-                return True
-            elif iv and v:
-                return iv != v
-            else:
-                return False
         return False
+
+            
+@register_filter('instance-age')        
+class InstanceAgeFilter(Filter):
+
+    threshold_date = None
+    
+    def __call__(self, i):
+        if not self.threshold_date:
+            days = self.data.get('days', 60)
+            n = datetime.now(tz=tzutc())
+            self.threshold_date = n - timedelta(days)            
+        return self.threshold_date > i['LaunchTime']
                 
 
-    
-class EC2QueryFilter(QueryFilter):
+@register_filter('marked-for-op')
+class MarkedForOp(Filter):
+
+    log = logging.getLogger("maid.ec2.filters.marked_for_op")
+
+    current_date = None
+
+    def __call__(self, i):
+        tag = self.data.get('tag', 'maid_status')
+        op = self.data.get('op', 'stop')
+        
+        v = None
+        for n in i.get('Tags', ()):
+            if n['Key'] == tag:
+                v = n['Value']
+                break
+
+        if v is None:
+            return False
+        if not ':' in v or not '@' in v:
+            return False
+
+        msg, tgt = v.rsplit(':', 1)
+        action, action_date_str = tgt.strip().split('@', 1)
+
+        if action != op:
+            return False
+        
+        try:
+            action_date = parse_date(action_date_str)
+        except:
+            self.log.warning("%s could not parse tag:%s value:%s" % (
+                i['InstanceId'], tag, v))
+
+        if self.current_date is None:
+            self.current_date = datetime.now()
+
+        return self.current_date >= action_date
+        
+        
+
+@register_filter('value')
+class ValueFilter(Filter):
+
+    expr = None
+    op = v = None
 
     def validate(self):
-        super(EC2QueryFilter, self).validate()
-        if self.data.get('value') is None:
-            raise ValueError(
-                "EC2 Query Filters must have a value, use tag-key"
-                " w/ tag name as value for tag present checks"
-                " %s" % self.data)
+        if len(self.data) == 1:
+            return self
+        if not 'key' in self.data:
+            raise FilterValidationError(
+                "Missing 'key' in value filter %s" % self.data)
+        if not 'value' in self.data:
+            raise FilterValidationError(
+                "Missing 'value' in value filter %s" % self.data)
+        if 'op' in self.data:
+            if not self.data['op'] in OPERATORS:
+                raise FilterValidationError(
+                    "Invalid operatorin value filter %s" %  self.data)
+
         return self
-    
-    def query(self):
-        return {self.data['filter']: self.data['value']}
+
+    def __call__(self, i):
+        matched = self.match(i)
+        if matched:
+            set_annotation(i, ANNOTATION_KEY, self.k)
+        return matched
+        
+    def match(self, i):
+
+        if self.v is None and len(self.data) == 1:
+            [(self.k, self.v)] = self.data.items()
+        elif self.v is None: 
+            self.k = self.data.get('key')
+            self.op = self.data.get('op')
+            self.v = self.data.get('value')
+
+        # Value extract
+        if self.k.startswith('tag:'):
+            tk = self.k.split(':', 1)[1]
+            r = None
+            for t in i.get("Tags", []):
+                if t.get('Key') == tk:
+                    r = t.get('Value')
+                    break
+        elif not '.' in self.k and not '[' in self.k and not '(' in self.k:
+            r = i.get(self.k)
+        elif self.expr:
+            r = self.expr.search(i)
+        else:
+            self.expr = jmespath.compile(self.k)
+            r = self.expr.search(i)
+
+        # Value match
+        if r is None and self.v == 'absent':
+            return True
+        elif self.v == 'not-null' and r:
+            return True
+        elif self.op:
+            op = OPERATORS[self.op]
+            return op(r, self.v)
+        elif r == self.v:
+            return True
+        return False
