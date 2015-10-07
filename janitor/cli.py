@@ -43,11 +43,6 @@ def setup_parser():
     identify.set_defaults(command=commands.identify)
     _default_options(identify)
 
-    mark = subs.add_parser("mark")
-    mark.set_defaults(command=commands.mark)
-    _default_options(mark)
-    _dryrun_option(mark)
-    
     run = subs.add_parser("run")
     run.set_defaults(command=commands.run)
     _default_options(run)
@@ -62,7 +57,7 @@ def main():
 
     level = options.verbose and logging.DEBUG or logging.WARNING
     logging.basicConfig(level=level)
-    logging.getLogger('boto').setLevel(logging.CRITICAL)
+    logging.getLogger('botocore').setLevel(logging.ERROR)    
     
     config = policy.load(options, options.config)
     options.command(options, config)

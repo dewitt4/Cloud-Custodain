@@ -1,12 +1,27 @@
 
+from dateutil import tz
+
+from datetime import datetime, timedelta
 import unittest
-import cPickle
 
 from janitor import filters
 from janitor.utils import annotation
-from .common import Instance, instance
+from .common import instance
 
 
+class BaseFilterTest(unittest.TestCase):
+
+    def assertFilter(self, f, i, v):
+        """
+        f: filter data/spec
+        i: instance
+        v: expected value (true/false)
+        """
+        try:
+            self.assertEqual(filters.factory(f)(i), v)
+        except AssertionError:
+            print f, i['LaunchTime'], i['Tags'], v
+            raise
 
 
 class TestFilter(unittest.TestCase):
@@ -38,34 +53,73 @@ class TestOrFilter(unittest.TestCase):
             False)        
 
         
-class TestInstanceValueFilter(unittest.TestCase):
+class TestInstanceAge(BaseFilterTest):
 
-    def _filter(self, f, i, v):
-        self.assertEqual(filters.factory(f)(i), v)
+    def test_filter_instance_age(self):
+        now = datetime.now(tz=tz.tzutc())
+        three_months = now - timedelta(90)
+        two_months = now - timedelta(60)
+        one_month = now - timedelta(30)
 
+        def i(d):
+            return instance(LaunchTime=d)
+
+        for ii, v in [
+                (i(now), False),
+                (i(three_months), True),
+                (i(two_months), True),
+                (i(one_month), False)
+        ]:
+            self.assertFilter({'type': 'instance-age'}, ii, v)
+
+
+class TestMarkedForAction(BaseFilterTest):
+
+    def test_filter_action_date(self):
+        now = datetime.now()
+        yesterday = now - timedelta(1)
+        tomorrow = now + timedelta(1)
+
+        def i(d, action='stop'):
+            return instance(Tags=[
+                {"Key": "maid_status",
+                 "Value": "not compliant: %s@%s" % (
+                    action, d.strftime("%Y/%m/%d"))}])
+
+
+        for ii, v in [
+                (i(yesterday), True),
+                (i(now), True),
+                (i(tomorrow), False),
+                (i(yesterday, 'terminate'), False)
+        ]:
+            self.assertFilter({'type': 'marked-for-op'}, ii, v)
         
+        
+class TestInstanceValue(BaseFilterTest):
+
     def test_filter_tag(self):
         i = instance(Tags=[
             {'Key': 'ASV', 'Value': 'abcd'}])
-        self._filter(
+        self.assertFilter(
             {'tag:ASV': 'def'}, i, False)
         self.assertEqual(
             annotation(i, filters.ANNOTATION_KEY), ())
 
         i = instance(Tags=[
             {'Key': 'CMDB', 'Value': 'abcd'}])
-        self._filter(
+        self.assertFilter(
             {'tag:ASV': 'absent'}, i, True)
         self.assertEqual(
             annotation(i, filters.ANNOTATION_KEY), ['tag:ASV'])
 
     def test_jmespath(self):
-        self._filter(
+        self.assertFilter(
             {'Placement.AvailabilityZone': 'us-east-1b'},
             instance(),
             True)
 
-        self._filter(
+        self.assertFilter(
             {'Placement.AvailabilityZone': 'us-east-1c'},
             instance(),
             False)
@@ -89,9 +143,8 @@ class TestInstanceValueFilter(unittest.TestCase):
              "op": "oo",
              "type": "value"})        
 
-                
     def test_complex_value_filter(self):
-        self._filter(
+        self.assertFilter(
             {"key": "length(BlockDeviceMappings[?Ebs.DeleteOnTermination == `false`].Ebs.DeleteOnTermination)",
              "value": 0,
              "type": "value",

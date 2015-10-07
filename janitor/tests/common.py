@@ -21,7 +21,7 @@ class BaseTest(unittest.TestCase):
 def instance(state=None, **kw):
     data = json.loads(open(
         os.path.join(
-            os.path.dirname(__file__),
+            os.path.dirname(__file__), 'data',
             'instance.json')).read())
     if state:
         data.update(state)
@@ -42,15 +42,19 @@ class Config(Bag):
 
     @classmethod
     def empty(cls, **kw):
-        kw.update({
+        d = {}
+        d.update({
             'region': "us-east-1",
             'cache': '',
             'cache_period': 0,
             'dryrun': False})
+        d.update(kw)
         return cls(kw)
 
+    
 class Instance(Bag): pass
 class Reservation(Bag): pass
+
 
 
 class Client(object):

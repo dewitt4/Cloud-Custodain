@@ -2,6 +2,7 @@ import unittest
 
 from janitor import query
 
+
 class TestEC2QueryFilter(unittest.TestCase):
 
     def test_parse(self):

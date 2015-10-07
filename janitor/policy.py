@@ -22,7 +22,7 @@ class Policy(object):
         self.options = options
 
     def session_factory(self):
-        return boto3.Session(region=self.options.region)
+        return boto3.Session(region_name=self.options.region)
 
     def resource_manager(self, resource_type='ec2'):
         # TODO make lookup via res mgr registry

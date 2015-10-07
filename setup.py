@@ -7,7 +7,7 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'cloud-janitor = janitor.cli:main']},
+            'cloud-maid = janitor.cli:main']},
     requires=["boto", "pyyaml"],
     test_requires=["mock"],
 )

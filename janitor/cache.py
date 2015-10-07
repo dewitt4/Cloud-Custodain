@@ -16,7 +16,6 @@ def factory(config):
         log.info("Disabling cache")    
         return NullCache(config)
     
-    log.info("Using cache file %s" % config.cache)
     return FileCacheManager(config)
 
 
@@ -45,25 +44,22 @@ class FileCacheManager(object):
                 os.path.expandvars(
                     config.cache)))
         self.data = {}
+
+    def get(self, key):
+        k = cPickle.dumps(key)
+        return self.data.get(k)
         
     def load(self):
-        if os.path.isfile(self._cache_path):
-
-            if time.time() - os.stat(self._cache_path).st_mtime > self.config.cache_period * 60:
+        if os.path.isfile(self.cache_path):
+            if time.time() - os.stat(self.cache_path).st_mtime > self.config.cache_period * 60:
                 return False            
-            with open(self._cache_path) as fh:
-                data = cPickle.load(fh)
-                if (self._filter_params() != data.get('key')
-                    or data['region'].name != self.client.region.name):
-                    return False
-                self._cache = data['cache']
-
-
+            with open(self.cache_path) as fh:
+                self.data = cPickle.load(fh)
+            log.info("Using cache file %s" % self.cache_path)
+            return True
     def save(self, key, data):
-        with open(self._cache_path, 'w') as fh:
+        with open(self.cache_path, 'w') as fh:
             cPickle.dump({
-                'key': self._filter_params(),
-                'region': self.client.region,
-                'cache': self._cache},
-                fh, protocol=2)
+                cPickle.dumps(key): data}, fh, protocol=2)
+
 

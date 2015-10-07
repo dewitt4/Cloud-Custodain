@@ -6,4 +6,4 @@ RUN virtualenv --system-site-packages /janitor
 ADD . /janitor
 RUN /janitor/bin/pip install -r /janitor/requirements.txt
 
-CMD /janitor/bin/cloud-janitor
+CMD /janitor/bin/cloud-maid
