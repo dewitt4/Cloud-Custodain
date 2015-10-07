@@ -1,3 +1,4 @@
+**Under active development, config format will change**
 
 # AWS Janitor
 
