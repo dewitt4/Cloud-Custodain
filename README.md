@@ -1,9 +1,9 @@
 **Under active development, config format will change**
 
-# AWS Janitor
+# Cloud Maid
 
-Identifies ec2 instances that match a set of query filters
-and then take actions on them.
+Cloud maid is a rules engine that provides for querying, filtering,
+and applying actions to AWS resources.
 
 Goals for the project are to help organizations manage their cloud
 spend rates by for example turning instances off at evening and
@@ -19,33 +19,30 @@ First a policy file needs to be created in yaml format, as an example:
 ```yaml
 
 ec2:
+  query:
+    - instance-state-name: running
   filters:
-    - filter: tag-key
-      value: CMDBEnvironment
-      state: absent
-
-    - filter: tag-key
-      value: ASV
-
-    - filter: instance-state-name
-      value: running
+    - "tag:CMDBEnvironment": absent
+    - "tag:ASV": absent
+	- or:
+   	   - "tag:OwnerContact": absent
+	   - "tag:OwnerEID": absent
   actions:
-    - stop
-    - type: mark
-      msg: "Instance doesn't match tagging policy" 
-     
+    - type: mark-for-op
+      op: stop
+      days: 4
 
 ```
 
 Given that, you can run the janitor via
 
 ```
-  $ janitor run -c policy.yml
+  $ cloud-maid run -c policy.yml
 ```
-By default any run of the janitor will output csv of the instances operated on.
+By default any run of the maid will output csv of the instances operated on.
 
 
-Janitor supports a few other useful subcommands and options.
+Maid supports a few other useful subcommands and options.
 
 One is to just query for instances matching and export them as csv or json with
 the *identify* subcommand. Default output is to stdout, controlled with the
@@ -66,7 +63,7 @@ access to perform the requested actions.
 
 ## Mark
 
-Will mark instances matching filters with a 'Janitor' tag and configurable message
+Will mark instances matching filters with a 'Maid' tag and configurable message
 
 
 ## Start
@@ -96,10 +93,12 @@ For ASV and CMDBEnvironment verification we'll need access to an API over hp ser
 
 All credentials are sourced from environment variables or IAM Role
 
-# Filters
+# Querying
 
-Ec2 Filters are per filter list at
+Ec2 query capabilities are per filter list at
 http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html
+
+# Filtering
 
 Note state: absent filters are done via post processing instances in
 memory. The -j option allows switching from the filter operator from
@@ -118,20 +117,20 @@ $ git clone https://github.kdc.capitalone.com/ylv522/cloud-janitor.git
 
 Also recommended is to use a virtualenv to sandbox this install from your system packages:
 
-$ virtualenv cloud-janitor
-$ source cloud-janitor/bin/activate
+$ virtualenv cloud-maid
+$ source cloud-maid/bin/activate
 
 And then install the dependencies
 
 $ pip install -f requirements.txt
 
-And then the janitor itself
+And then the maid itself
 
 $ python setup.py develop
 
-You should have the cloud-janitor command available now.
+You should have the cloud-maid command available now.
 
-$ cloud-janitor -h
+$ cloud-maid -h
 
 
 
