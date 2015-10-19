@@ -35,10 +35,10 @@ class S3(ResourceManager):
         super(S3, self).__init__(session_factory, data, config)
         self.rate_limit = {
             'key_process_rate': TokenBucket(2000),
-            'list_objects': TokenBucket(12),
-            'get_object': TokenBucket(50),
-            'head_object': TokenBucket(50),
-            'copy_object': TokenBucket(20),
+#            'list_objects': TokenBucket(12),
+#            'get_object': TokenBucket(50),
+#            'head_object': TokenBucket(50),
+#            'copy_object': TokenBucket(20),
         }
 
     def incr(self, m, v=1):
@@ -65,8 +65,6 @@ class S3(ResourceManager):
     
 def assemble_bucket(factory, b):
     """Assemble a document representing all the config state around a bucket.
-
-
     """
     # TODO make suffix addressing for bucket instead of host in us-east-1
     # running into a few issues with subdomain addressing and dots
@@ -118,6 +116,16 @@ def assemble_bucket(factory, b):
 
 ## Actions
 
+class EncryptedPrefix(object):
+
+    def __init__(self, data, manager):
+        self.data = data
+        self.manager = manager
+
+    def process(self, buckets):
+        pass
+    
+
 class EncryptedPolicy(object):
 
     def __init__(self, data=None, manager=None):
@@ -165,7 +173,7 @@ class EncryptedPolicy(object):
 #            Policy=json.dumps(p))
 
         
-class BucketLog(object):
+class BucketScanLog(object):
 
     def __init__(self, log_dir, name):
         self.log_dir = log_dir
@@ -186,15 +194,64 @@ class BucketLog(object):
         self.fh = None
         return False
         
-    def log(self, keys):
+    def add(self, keys):
         self.count += len(keys)
         for v in map(json.dumps, keys):
             self.fh.write(v)
 
 
+class MainThreadExecutor(object):
+    # For Dev/Unit Testing with concurrent.futures
+    def __init__(self, *args, **kw):
+        self.args = args
+        self.kw = kw
+
+    def map(self, func, iterable):
+        for args in iterable:
+            yield func(args)
+
+    def submit(self, func, *args, **kw):
+        return
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    
+class MainThreadFuture(object):
+    # For Dev/Unit Testing with concurrent.futures
+
+    def __init__(self, value):
+        self.value = value
+        
+    def cancel(self):
+        return False
+
+    def cancelled(self):
+        return False
+
+    def exception(self):
+        return None
+
+    def done(self):
+        return True
+
+    def result(self, timeout=None):
+        return self.value
+
+    def add_done_callback(self, fn):
+        return fn(self)
+        
+            
 
 class ScanBucket(object):
 
+    #executor_factory = ProcessPoolExecutor
+    executor_factory = ThreadPoolExecutor
+    #executor_factory = MainThreadExecutor    
+    
     def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
         self.manager = manager
@@ -202,8 +259,7 @@ class ScanBucket(object):
     
     def process(self, buckets):
         results = []
-#        with MainThreadExecutor(max_workers=3) as w:        
-        with ThreadPoolExecutor(max_workers=3) as w:
+        with self.executor_factory(max_workers=3) as w:
             results.extend(
                 f for f in w.map(self.process_bucket, buckets))
 #            futures = [w.submit(
@@ -220,9 +276,8 @@ class ScanBucket(object):
         s = self.manager.session_factory()
         s3 = s.client('s3')
         p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
-        with BucketLog(self.log_dir, b['Name']) as key_log:
-#            with MainThreadExecutor(max_workers=10) as w:
-            with ThreadPoolExecutor(max_workers=10) as w:
+        with BucketScanLog(self.log_dir, b['Name']) as key_log:
+            with self.executor_factory(max_workers=10) as w:
                 return self._process_bucket(b, p, key_log, w)
                 
     def _process_bucket(self, b, p, key_log, w):
@@ -244,29 +299,13 @@ class ScanBucket(object):
                     time.sleep(slow)
                 futures = w.map(self.process_key,
                                 zip(key_set['Contents'], itertools.repeat(b['Name'])))
-                key_log.log([f for f in futures if f])
-        result = {'Bucket': b['Name'], 'Contents': key_log.count}
+                key_log.add([f for f in futures if f])
+        result = {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
         return result
 
     def process_key(self, params):
         return None
 
-
-class MainThreadExecutor(object):
-
-    def __init__(self, *args, **kw):
-        self.args = args
-        self.kw = kw
-
-    def map(self, func, iterable):
-        for args in iterable:
-            yield func(args)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
 
     
 class EncryptExtantKeys(ScanBucket):
@@ -279,7 +318,6 @@ class EncryptExtantKeys(ScanBucket):
 
         if 'ServerSideEncryption' in data:
             return None
-
         # Aborted attempt to put back acls            
         # acl = s3.get_object_acl(Bucket=b, Key=k)
         # log.debug("Remediating object %s" % k)
@@ -338,7 +376,7 @@ def main():
     #bucket_map = dict([(b['Name'], b) for b in buckets])
 
     scanner = EncryptExtantKeys({}, s, 'logs')
-    results = scanner.process([{"Name": 'dms2-qa-st-waf'}])
+    results = scanner.process([{"Name": 'c1-logs'}])
 
     import pprint
     pprint.pprint(results)
