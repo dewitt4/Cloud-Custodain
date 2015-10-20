@@ -1,7 +1,7 @@
 """
 S3 Resource Manager
 
-Scanning buckets is io and cpu bound.
+Scanning buckets is io and cpu bound
 
 List Buckets ->
   Per Bucket Process
@@ -9,10 +9,9 @@ List Buckets ->
       Per Key Thread (from pool)
 
 """
-from concurrent.futures import (
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
-    as_completed)
+
+
+
 from botocore.exceptions import ClientError
 
 import json
@@ -22,11 +21,14 @@ import os
 import time
 import threading
 
+from janitor import executor
 from janitor.manager import ResourceManager
 from janitor.rate import TokenBucket
 
 
 log = logging.getLogger('maid.s3')
+
+        
 
 
 class S3(ResourceManager):
@@ -35,58 +37,50 @@ class S3(ResourceManager):
         super(S3, self).__init__(session_factory, data, config)
         self.rate_limit = {
             'key_process_rate': TokenBucket(2000),
-#            'list_objects': TokenBucket(12),
-#            'get_object': TokenBucket(50),
-#            'head_object': TokenBucket(50),
-#            'copy_object': TokenBucket(20),
         }
 
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
 
-    def resources(self):
+    def resources(self, matches=None):
         c = self.session_factory().client('s3')
 
         log.debug('Retrieving buckets')
         response = c.list_buckets()
         buckets = response['Buckets']
         log.debug('Got %d buckets' % len(buckets))
-        
-        log.debug('Assembling bucket documents')
-        with ThreadPoolExecutor(max_workers=15) as w:
-            futures = [w.submit(
-                assemble_bucket, self.session_factory, b) for b in buckets]
-            for f in as_completed(futures):
-                b = f.result()
 
-        log.info("Processed")
-        return buckets
+        if matches:
+            buckets = filter(lambda x: x['Name'] in matches, buckets)
+            log.debug("Filtered to %d buckets" % len(buckets))
+
+        log.debug('Assembling bucket documents')
+        with executor.name('thread', max_workers=15) as w:
+            results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
+            results = list(results)
+        return results
 
     
-def assemble_bucket(factory, b):
+def assemble_bucket(item):
     """Assemble a document representing all the config state around a bucket.
     """
-    # TODO make suffix addressing for bucket instead of host in us-east-1
-    # running into a few issues with subdomain addressing and dots
-    if '.' in b['Name']:
-        log.warning("Skipping %s due to nested subdomain addressing" % b['Name'])
-        return b
+    factory, b = item
 
     s = factory()
     c = s.client('s3')
 
     methods = [
-#        ('get_bucket_location', 'Location'),
+        ('get_bucket_location', 'Location'),
         ('get_bucket_tagging', 'Tags'),
         ('get_bucket_acl', 'Acl'),
-#        ('get_bucket_cors', 'Cors'),
         ('get_bucket_policy',  'Policy'),
+#        ('get_bucket_cors', 'Cors'),        
 #        ('get_bucket_versioning', 'Versioning'),
 #        ('get_bucket_replication', 'Replication'),
 #        ('get_bucket_lifecycle', 'Lifecycle'),
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
-         
+    
     for m, k in methods:
         try:
             method = getattr(c, m)
@@ -98,11 +92,10 @@ def assemble_bucket(factory, b):
                 v = None
             elif code == 'PermanentRedirect':
                 log.error(e.response)
-#                s = factory()
-#                c = s.client(
-#                    's3', region_name="us-east-1",
-#                    endpoint_url="https://%s" % e.response['Error']['Endpoint'])
-#                methods.append((m, k))
+                s = factory()
+                c = s.client(
+                    's3', region_name=b['Location'].get('LocationConstraint', 'us-east-1'))
+                methods.append((m, k))
                 continue
             else:
                 log.error(e.response)
@@ -116,7 +109,9 @@ def assemble_bucket(factory, b):
 
 ## Actions
 
-class EncryptedPrefix(object):
+class BucketActionBase(object):
+
+    executor_factory = executor.ThreadPoolExecutor
 
     def __init__(self, data, manager):
         self.data = data
@@ -124,53 +119,121 @@ class EncryptedPrefix(object):
 
     def process(self, buckets):
         pass
-    
+        
+        
+class EncryptedPrefix(BucketActionBase):
 
-class EncryptedPolicy(object):
+    def process(self, buckets):
+        prefix = self.data.get('prefix')
+        with self.executor_factory(max_workers=5) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
+
+    def process_bucket(self, b):
+        pass
+
+
+class NoGlobalGrants(BucketActionBase):
+
+    GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
+    AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+    
+    executor_factory = executor.MainThreadExecutor
+    
+    def process(self, buckets):
+        with self.executor_factory(max_workers=5) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
+
+    def process_bucket(self, b):
+        acl = b.get('Acl', {'Grants': []})
+
+        results = []
+        for grant in acl['Grants']:
+            if not 'URI' in grant.get("Grantee", {}):
+                continue
+            if grant['Grantee']['URI'] in [self.AUTH_ALL, self.GLOBAL_ALL]:
+                results.append(grant['Permission'])
+
+        s = self.manager.session_factory()
+        c = s.client('s3', region_name=b.get(
+            'Location', {'LocationConstraint': 'us-east-1'}
+        ).get('LocationConstraint', 'us-east-1'))
+
+        remediate = True
+
+        # Handle valid case of website
+        if results == ['READ']:
+            website = c.get_bucket_website(Bucket=b['Name'])
+            website.pop('ResponseMetadata')
+            if website:
+                remediate = False
+        if not results:
+            return None
+        if results and remediate:
+            # TODO / For now reporting is okay
+            pass
+        return {'Bucket': b['Name'], 'GlobalPermissions': results, 'Website': not remediate}
+
+
+        
+class EncryptedPolicy(BucketActionBase):
 
     def __init__(self, data=None, manager=None):
         self.data = data or {}
         self.manager = manager
         
     def process(self, buckets):
-        results = []
-        with ThreadPoolExecutor(max_workers=3) as w:
-            futures = [w.submit(
-                self.process_bucket, b) for b in buckets]
-            for f in as_completed(futures):
-                results.append(f.result())
-        return results
+        with executor.MainThreadExecutor(max_workers=3) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
 
     def process_bucket(self, b):
-        log.info("Attaching Encryption Policy bucket:%s" % b['Name'])
         p = b['Policy']
-        if p is not None:
-            statements = p['Statements']
-
+        if p is None:
+            log.info("No policy found, creating new")
+            p = {'Version': "2012-10-17", "Statements": []}
+        else:
+            p = json.loads(p['Policy'])
+            
+        statements = p.get('Statement', [])
         found = False
-        for s in statements:
-            if s['Sid'] == 'EncryptionPolicy':
-                found = True
-                log.info("Found extant Encryption Policy")
+        for s in list(statements):
+            if s['Sid'] == 'RequireEncryptedPutObject':
                 return
-
+            # Migration from manual
+            if s['Sid'] == 'DenyUnEncryptedObjectUploads':
+                return
+                found = True
+                log.info(
+                    "Bucket:%s Found extant Encryption Policy" % b['Name'])
+                statements.remove(s)
+        
         session = self.manager.session_factory()
         s3 = session.client('s3')
-        
+
         statements.append(
-            {'Sid': 'EncryptionPolicy',
-             'Effect': 'Allow',
+            {'Sid': 'RequireEncryptedPutObject',
+             'Effect': 'Deny',
+             'Principal': '*',
              'Action': 's3:PutObject',
              "Resource":"arn:aws:s3:::%s/*" % b['Name'],
              "Condition":{
+                 # AWS Managed Keys or KMS keys, note policy language
+                 # does not support customer supplied keys.
                  "StringNotEquals":{
-                     "s3:x-amz-server-side-encryption":"AES256"
-                 }
-             }})
-        log.debug('policy \n %s\n\n' % json.dumps(statements))
-#        s3.put_bucket_policy(
-#            Bucket=b['Name'],
-#            Policy=json.dumps(p))
+                     "s3:x-amz-server-side-encryption": ["AES256", "aws:kms"]}}
+             })
+        p['Statement'] = statements
+        log.info('Bucket:%s attached encryption policy' % b['Name'])
+
+        s3.put_bucket_policy(
+            Bucket=b['Name'],
+            Policy=json.dumps(p))
+        return {'Name': b['Name'], 'State': 'PolicyAttached'}
 
         
 class BucketScanLog(object):
@@ -200,52 +263,6 @@ class BucketScanLog(object):
             self.fh.write(v)
 
 
-class MainThreadExecutor(object):
-    # For Dev/Unit Testing with concurrent.futures
-    def __init__(self, *args, **kw):
-        self.args = args
-        self.kw = kw
-
-    def map(self, func, iterable):
-        for args in iterable:
-            yield func(args)
-
-    def submit(self, func, *args, **kw):
-        return
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    
-class MainThreadFuture(object):
-    # For Dev/Unit Testing with concurrent.futures
-
-    def __init__(self, value):
-        self.value = value
-        
-    def cancel(self):
-        return False
-
-    def cancelled(self):
-        return False
-
-    def exception(self):
-        return None
-
-    def done(self):
-        return True
-
-    def result(self, timeout=None):
-        return self.value
-
-    def add_done_callback(self, fn):
-        return fn(self)
-        
-            
-
 class ScanBucket(object):
 
     #executor_factory = ProcessPoolExecutor
@@ -261,12 +278,7 @@ class ScanBucket(object):
         results = []
         with self.executor_factory(max_workers=3) as w:
             results.extend(
-                f for f in w.map(self.process_bucket, buckets))
-#            futures = [w.submit(
-#                self.process_bucket, b) for b in buckets]
-#            for f in as_completed(futures):
-#                results.append(f.result())
-
+                f for f in w.map(self, buckets))
         return results
 
     def process_bucket(self, b):
@@ -279,7 +291,9 @@ class ScanBucket(object):
         with BucketScanLog(self.log_dir, b['Name']) as key_log:
             with self.executor_factory(max_workers=10) as w:
                 return self._process_bucket(b, p, key_log, w)
-                
+
+    __call__ = process_bucket
+    
     def _process_bucket(self, b, p, key_log, w):
         count = 0
         results = []
@@ -310,14 +324,20 @@ class ScanBucket(object):
     
 class EncryptExtantKeys(ScanBucket):
 
+    customer_keys = None
+    
     def process_key(self, params):
         key, bucket = params
         k = key['Key']
-        s3 = local_session(self.manager.session_factory).client('s3')
+        b = bucket['Name']
+        s3 = local_session(self.manager.session_factory).client(
+            's3')
+
         data = s3.head_object(Bucket=b, Key=k)
 
         if 'ServerSideEncryption' in data:
             return None
+
         # Aborted attempt to put back acls            
         # acl = s3.get_object_acl(Bucket=b, Key=k)
         # log.debug("Remediating object %s" % k)
@@ -370,13 +390,20 @@ def main():
     s = S3(lambda x=None: boto3.Session(), None, None)
     t = time.time()
 
-    #log.debug("Starting resource collection")
-    #buckets = s.resources()
-    #log.debug("Fetched %d in %s" % (len(buckets), time.time()-t))
+    log.debug("Starting resource collection")
+    buckets = s.resources()
+    log.debug("Fetched %d in %s" % (len(buckets), time.time()-t))
     #bucket_map = dict([(b['Name'], b) for b in buckets])
 
-    scanner = EncryptExtantKeys({}, s, 'logs')
-    results = scanner.process([{"Name": 'c1-logs'}])
+    results = buckets
+    
+    #scanner = NoGlobalGrants({}, s)
+    #results = scanner.process(buckets)
+    
+    scanner = EncryptedPolicy({}, s)
+    results = scanner.process(buckets)
+    #scanner = EncryptExtantKeys({}, s, 'logs')
+    #results = scanner.process([{"Name": 'c1-logs'}])
 
     import pprint
     pprint.pprint(results)
