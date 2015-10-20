@@ -94,7 +94,8 @@ def assemble_bucket(item):
                 log.error(e.response)
                 s = factory()
                 c = s.client(
-                    's3', region_name=b['Location'].get('LocationConstraint', 'us-east-1'))
+                    's3', region_name=b['Location'].get(
+                        'LocationConstraint', 'us-east-1'))
                 methods.append((m, k))
                 continue
             else:
@@ -265,9 +266,7 @@ class BucketScanLog(object):
 
 class ScanBucket(object):
 
-    #executor_factory = ProcessPoolExecutor
-    executor_factory = ThreadPoolExecutor
-    #executor_factory = MainThreadExecutor    
+    executor_factory = executor.ThreadPoolExecutor
     
     def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
@@ -338,6 +337,9 @@ class EncryptExtantKeys(ScanBucket):
         if 'ServerSideEncryption' in data:
             return None
 
+        if self.data.get('report-only'):
+            return k
+        
         # Aborted attempt to put back acls            
         # acl = s3.get_object_acl(Bucket=b, Key=k)
         # log.debug("Remediating object %s" % k)
@@ -393,17 +395,15 @@ def main():
     log.debug("Starting resource collection")
     buckets = s.resources()
     log.debug("Fetched %d in %s" % (len(buckets), time.time()-t))
-    #bucket_map = dict([(b['Name'], b) for b in buckets])
-
-    results = buckets
     
     #scanner = NoGlobalGrants({}, s)
     #results = scanner.process(buckets)
     
-    scanner = EncryptedPolicy({}, s)
-    results = scanner.process(buckets)
+    #scanner = EncryptedPolicy({}, s)
+    #results = scanner.process(buckets)
+
     #scanner = EncryptExtantKeys({}, s, 'logs')
-    #results = scanner.process([{"Name": 'c1-logs'}])
+    #results = scanner.process(buckets)
 
     import pprint
     pprint.pprint(results)
