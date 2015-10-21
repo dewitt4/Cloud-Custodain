@@ -1,14 +1,9 @@
 """
-EC2 Instance Filtering Logic
-
+Resource Filtering Logic
 """
-from dateutil.parser import parse as parse_date
-from dateutil.tz import tzutc
+
 
 import jmespath
-
-from datetime import datetime, timedelta
-import logging
 import operator
 
 from janitor.registry import Registry
@@ -30,41 +25,44 @@ OPERATORS = {
     'lt': operator.lt}
 
 
-def parse(data):
-    results = []
-    for d in data:
-        f = factory(d)
-        results.append(f)
-    return results
+class FilterRegistry(Registry):
+
+    def __init__(self, *args, **kw):
+        super(FilterRegistry, self).__init__(*args, **kw)
+        self.register_class('value', ValueFilter)
+        self.register_class('or', Or)
+        
+    def parse(self, data):
+        return map(self.factory, data)
+
+    register = Registry.register_class
+    
+    def factory(self, data):
+        """Factory func for filters."""
+
+        # Make the syntax a little nicer for common cases.
+        if len(data) == 1 and not 'type' in data:
+            if data.keys()[0] == 'or':
+                return Or(data)
+            return ValueFilter(data).validate()
+
+        filter_type = data.get('type')
+        if not filter_type:
+            raise FilterValidationError(
+                "%s Invalid Filter %s" % (
+                    self.plugin_type, data))
+        filter_class = self.get(filter_type)
+        if filter_class is not None:
+            return filter_class(data).validate()
+        else:
+            raise FilterValidationError(
+                "%s Invalid filter type %s" % (
+                    self.plugin_type, data))
 
 
-def factory(data):
-    """Factory func for filters."""
+# Really should be an abstract base class (abc) or
+# zope.interface
 
-    # Make the syntax a little nicer for common cases.
-    if len(data) == 1 and not 'type' in data:
-        if data.keys()[0] == 'or':
-            return Or(data)
-        return ValueFilter(data).validate()
-
-    filter_type = data.get('type')
-    if not filter_type:
-        raise FilterValidationError(
-            "EC2 Invalid Filter %s" % data)
-
-    filter_class = _filters.get(filter_type)
-    if filter_class is not None:
-        return filter_class(data).validate()
-    else:
-        raise FilterValidationError(
-            "EC2 Invalid filter type %s" % data)
-
-
-_filters = Registry('ec2.filters')
-register_filter = _filters.register_class
-
-
-# Really should be an abstract base class (abc) or zope.interface
 class Filter(object):
 
     def __init__(self, data):
@@ -96,63 +94,8 @@ class Or(Filter):
             if f(i):
                 return True
         return False
-
-            
-@register_filter('instance-age')        
-class InstanceAgeFilter(Filter):
-
-    threshold_date = None
-    
-    def __call__(self, i):
-        if not self.threshold_date:
-            days = self.data.get('days', 60)
-            n = datetime.now(tz=tzutc())
-            self.threshold_date = n - timedelta(days)            
-        return self.threshold_date > i['LaunchTime']
-                
-
-@register_filter('marked-for-op')
-class MarkedForOp(Filter):
-
-    log = logging.getLogger("maid.ec2.filters.marked_for_op")
-
-    current_date = None
-
-    def __call__(self, i):
-        tag = self.data.get('tag', 'maid_status')
-        op = self.data.get('op', 'stop')
-        
-        v = None
-        for n in i.get('Tags', ()):
-            if n['Key'] == tag:
-                v = n['Value']
-                break
-
-        if v is None:
-            return False
-        if not ':' in v or not '@' in v:
-            return False
-
-        msg, tgt = v.rsplit(':', 1)
-        action, action_date_str = tgt.strip().split('@', 1)
-
-        if action != op:
-            return False
-        
-        try:
-            action_date = parse_date(action_date_str)
-        except:
-            self.log.warning("%s could not parse tag:%s value:%s" % (
-                i['InstanceId'], tag, v))
-
-        if self.current_date is None:
-            self.current_date = datetime.now()
-
-        return self.current_date >= action_date
-        
         
 
-@register_filter('value')
 class ValueFilter(Filter):
 
     expr = None

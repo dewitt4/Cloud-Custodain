@@ -20,7 +20,6 @@ def _default_options(p):
     p.add_argument("-p", "--cache-period", default=5, type=int,
                    help="Cache validity in seconds (Default 5)")
 
-
     p.add_argument(
         "-o", "--output", dest="output_path", default="-",
         help="Save csv output to file")
@@ -55,8 +54,10 @@ def main():
     parser = setup_parser()
     options = parser.parse_args()
 
-    level = options.verbose and logging.DEBUG or logging.WARNING
-    logging.basicConfig(level=level)
+    level = options.verbose and logging.DEBUG or logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
     logging.getLogger('botocore').setLevel(logging.ERROR)    
     
     config = policy.load(options, options.config)

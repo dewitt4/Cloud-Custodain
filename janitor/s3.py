@@ -1,16 +1,28 @@
 """
 S3 Resource Manager
 
-Scanning buckets is io and cpu bound
+Actions:
 
-List Buckets ->
-  Per Bucket Process
-    List Objects ->
-      Per Key Thread (from pool)
+ encrypt-prefix  
+
+   Useful for aws log storage, basically encrypt the prefix key
+   like 'AWSLogs' and that will inherit any keys with that prefix.
+
+ encrypt-keys
+
+   Scan all keys in a bucket and optionally encrypt them in place.
+
+ global-grants
+
+   Check bucket acls for global grants
+  
+ encryption-policy
+
+   Attach an encryption required policy to a bucket, this will break
+   applications that are not using encryption, including aws log
+   delivery.
 
 """
-
-
 
 from botocore.exceptions import ClientError
 
@@ -22,13 +34,17 @@ import time
 import threading
 
 from janitor import executor
+from janitor.actions import ActionRegistry, BaseAction
+from janitor.filters import FilterRegistry, Filter
+
 from janitor.manager import ResourceManager
 from janitor.rate import TokenBucket
 
 
 log = logging.getLogger('maid.s3')
 
-        
+filters = FilterRegistry('s3.filters')
+actions = ActionRegistry('s3.actions')
 
 
 class S3(ResourceManager):
@@ -38,7 +54,9 @@ class S3(ResourceManager):
         self.rate_limit = {
             'key_process_rate': TokenBucket(2000),
         }
-
+        self.filters = filters.parse(
+            self.data.get('filters', []))
+        
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
 
@@ -74,9 +92,9 @@ def assemble_bucket(item):
         ('get_bucket_tagging', 'Tags'),
         ('get_bucket_acl', 'Acl'),
         ('get_bucket_policy',  'Policy'),
+        ('get_bucket_replication', 'Replication'),        
 #        ('get_bucket_cors', 'Cors'),        
 #        ('get_bucket_versioning', 'Versioning'),
-#        ('get_bucket_replication', 'Replication'),
 #        ('get_bucket_lifecycle', 'Lifecycle'),
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
@@ -93,37 +111,38 @@ def assemble_bucket(item):
             elif code == 'PermanentRedirect':
                 log.error(e.response)
                 s = factory()
-                c = s.client(
-                    's3', region_name=b['Location'].get(
-                        'LocationConstraint', 'us-east-1'))
+                c = bucket_client(s, b)
+                # Requeue with the correct region given location constraint
                 methods.append((m, k))
                 continue
             else:
                 log.error(e.response)
                 v = None
         b[k] = v
-    log.debug('Processed %s' % b['Name'])
     return b
 
-## Filters
+
+def bucket_client(s, b):
+    region = b.get(
+        'Location',
+        {'LocationConstraint': 'us-east-1'}).get(
+            'LocationConstraint', 'us-east-1'))
+    return s.client('s3', region_name=region)
 
 
-## Actions
-
-class BucketActionBase(object):
+class BucketActionBase(BaseAction):
 
     executor_factory = executor.ThreadPoolExecutor
 
-    def __init__(self, data, manager):
-        self.data = data
-        self.manager = manager
+    def get_permissions(self):
+        return self.permissions
 
-    def process(self, buckets):
-        pass
-        
-        
+
+@actions.register('encrypted-prefix')
 class EncryptedPrefix(BucketActionBase):
 
+    permissions = ("s3:GetObject", "s3:PutObject")
+    
     def process(self, buckets):
         prefix = self.data.get('prefix')
         with self.executor_factory(max_workers=5) as w:
@@ -132,11 +151,25 @@ class EncryptedPrefix(BucketActionBase):
             return results
 
     def process_bucket(self, b):
-        pass
+        s3 = bucket_client(self.manager.session_factory(), b)
+        k = self.data.get('prefix', 'AWSLogs')
+
+        # Check if already exists
+        content = "Path Prefix Object For Sub Path Encryption"
+        s3.put_object(
+            Bucket=b,
+            Key=k,
+            ACL="bucket-owner-full-control",
+            Body=content,
+            ContentLength=len(content),
+            ServerSideEncryption="AES256")
 
 
+@actions.register('global-grants')        
 class NoGlobalGrants(BucketActionBase):
 
+    permissions = ("s3:GetBucketACL", "s3:SetBucketACL")
+    
     GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
     AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
     
@@ -158,11 +191,7 @@ class NoGlobalGrants(BucketActionBase):
             if grant['Grantee']['URI'] in [self.AUTH_ALL, self.GLOBAL_ALL]:
                 results.append(grant['Permission'])
 
-        s = self.manager.session_factory()
-        c = s.client('s3', region_name=b.get(
-            'Location', {'LocationConstraint': 'us-east-1'}
-        ).get('LocationConstraint', 'us-east-1'))
-
+        c = bucket_client(self.manager.session_factory(), b)
         remediate = True
 
         # Handle valid case of website
@@ -171,17 +200,21 @@ class NoGlobalGrants(BucketActionBase):
             website.pop('ResponseMetadata')
             if website:
                 remediate = False
-        if not results:
+        elif not results:
             return None
+        
         if results and remediate:
             # TODO / For now reporting is okay
             pass
         return {'Bucket': b['Name'], 'GlobalPermissions': results, 'Website': not remediate}
 
 
-        
-class EncryptedPolicy(BucketActionBase):
 
+@actions.register('encryption-policy')    
+class EncryptionRequiredPolicy(BucketActionBase):
+
+    permissions = ("s3:GetBucketPolicy", "s3:PutBucketPolicy")
+                           
     def __init__(self, data=None, manager=None):
         self.data = data or {}
         self.manager = manager
@@ -204,14 +237,13 @@ class EncryptedPolicy(BucketActionBase):
         found = False
         for s in list(statements):
             if s['Sid'] == 'RequireEncryptedPutObject':
-                return
-            # Migration from manual
-            if s['Sid'] == 'DenyUnEncryptedObjectUploads':
-                return
-                found = True
-                log.info(
+                log.debug(
                     "Bucket:%s Found extant Encryption Policy" % b['Name'])
-                statements.remove(s)
+                return
+            # Migration from manual in digital-dev
+            #if s['Sid'] == 'DenyUnEncryptedObjectUploads':
+            #    found = True
+            #    statements.remove(s)
         
         session = self.manager.session_factory()
         s3 = session.client('s3')
@@ -238,7 +270,12 @@ class EncryptedPolicy(BucketActionBase):
 
         
 class BucketScanLog(object):
-
+    """Offload remediated key ids to a disk file in batches
+    
+    A bucket keyspace is effectively infinite, we need to store partial
+    results out of memory, this class provides for a json log on disk
+    with partial write support.
+    """
     def __init__(self, log_dir, name):
         self.log_dir = log_dir
         self.name = name
@@ -264,14 +301,10 @@ class BucketScanLog(object):
             self.fh.write(v)
 
 
-class ScanBucket(object):
+class ScanBucket(BucketActionBase):
 
+    permissions = ("s3:ListBucket",)
     executor_factory = executor.ThreadPoolExecutor
-    
-    def __init__(self, data=None, manager=None, log_dir=None):
-        self.data = data or {}
-        self.manager = manager
-        self.log_dir = log_dir
     
     def process(self, buckets):
         results = []
@@ -320,9 +353,10 @@ class ScanBucket(object):
         return None
 
 
-    
+@actions.register('encrypt-keys')    
 class EncryptExtantKeys(ScanBucket):
 
+    permissions = ("s3:PutObject", "s3:GetObject")
     customer_keys = None
     
     def process_key(self, params):
@@ -339,20 +373,14 @@ class EncryptExtantKeys(ScanBucket):
 
         if self.data.get('report-only'):
             return k
-        
-        # Aborted attempt to put back acls            
-        # acl = s3.get_object_acl(Bucket=b, Key=k)
-        # log.debug("Remediating object %s" % k)
 
+        crypto_method = self.data.get('crypto', 'AES256')
+        # Not on copy we lose individual key acl grants        
         s3.copy_object(
             Bucket=b, Key=k,
             CopySource="/%s/%s" % (b, k),
             MetadataDirective='COPY',
-            ServerSideEncryption="AES256")
-
-        # Aborted attempt to put back acls            
-        # acl = s3.get_object_acl(Bucket=b, Key=k)
-        # log.debug("Remediating object %s" % k)
+            ServerSideEncryption=crypto_method)
         return k
 
     
@@ -377,13 +405,13 @@ def local_session(factory):
     CONN_CACHE.time = n
     return s
 
+
     
 def main():
     import boto3
     import time
     import logging
 
-    
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
@@ -396,23 +424,12 @@ def main():
     buckets = s.resources()
     log.debug("Fetched %d in %s" % (len(buckets), time.time()-t))
     
-    #scanner = NoGlobalGrants({}, s)
-    #results = scanner.process(buckets)
-    
-    #scanner = EncryptedPolicy({}, s)
-    #results = scanner.process(buckets)
-
-    #scanner = EncryptExtantKeys({}, s, 'logs')
-    #results = scanner.process(buckets)
+    scanner = EncryptExtantKeys({}, s, 'logs')
+    results = scanner.process(buckets)
 
     import pprint
     pprint.pprint(results)
+
     
 if __name__ == '__main__':
-    try:
-        main()
-    except:
-        raise
-        import pdb, traceback, sys
-        traceback.print_exc()
-        pdb.post_mortem(sys.exc_info()[-1])
+    main()

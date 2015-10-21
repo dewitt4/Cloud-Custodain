@@ -7,12 +7,18 @@ class Registry(object):
         self.plugin_type = plugin_type
         self.data = {}
 
-    def register_class(self, name):
+    def register_class(self, name, klass=None):
+        if klass:
+            self.data[name] = klass
+            return
+
         def _register_class(klass):
             self.data[name] = klass
             return klass
         return _register_class
 
+    register = register_class
+    
     def get(self, name):
         return self.data.get(name)
 

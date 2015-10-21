@@ -21,6 +21,10 @@ class Policy(object):
         self.data = data
         self.options = options
 
+    def validate(self):
+        assert 'name' in self.data
+        assert 'resource' in self.data
+
     def session_factory(self):
         return boto3.Session(region_name=self.options.region)
 
