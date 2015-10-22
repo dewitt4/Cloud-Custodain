@@ -24,6 +24,7 @@ Actions:
 
 """
 
+
 from botocore.exceptions import ClientError
 
 import json
@@ -50,6 +51,7 @@ actions = ActionRegistry('s3.actions')
 @resources.register('s3')
 class S3(ResourceManager):
 
+
     def __init__(self, session_factory, data, config):
         super(S3, self).__init__(session_factory, data, config)
         self.rate_limit = {
@@ -57,10 +59,15 @@ class S3(ResourceManager):
         }
         self.filters = filters.parse(
             self.data.get('filters', []))
+        self.actions = actions.parse(
+            self.data.get('actions', []), self)
         
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
 
+    def format_json(self, resources):
+        return [r['Name'] for r in resources]
+        
     def resources(self, matches=None):
         c = self.session_factory().client('s3')
 
@@ -74,9 +81,13 @@ class S3(ResourceManager):
             log.debug("Filtered to %d buckets" % len(buckets))
 
         log.debug('Assembling bucket documents')
-        with executor.name('thread', max_workers=15) as w:
+        with executor.ThreadPoolExecutor(max_workers=15) as w:
             results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
             results = list(results)
+
+        for f in self.filters:
+            results = filter(f, results)
+        log.debug("Filtered to %d buckets" % len(results))
         return results
 
     
@@ -110,7 +121,7 @@ def assemble_bucket(item):
             if code.startswith("NoSuch") or "NotFound" in code:
                 v = None
             elif code == 'PermanentRedirect':
-                log.error(e.response)
+                log.warning(e.response)
                 s = factory()
                 c = bucket_client(s, b)
                 # Requeue with the correct region given location constraint

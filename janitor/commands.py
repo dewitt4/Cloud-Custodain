@@ -13,15 +13,15 @@ def _serialize(options, manager):
         manager.format_csv(manager.resources(), fh)
     
 
-def identify(options, policy):
-    manager = policy.resource_manager()
-    _serialize(options, manager)
+def identify(options, policy_collection):
+    for policy in policy_collection:
+        manager = policy.resource_manager
+        resources = manager.resources()
+        print manager.format_json(resources)
 
     
-def run(options, policy):
-    manager = policy.resource_manager()
-    resources = manager.resources()
-    for a in manager.actions:
-        a.process(resources)
-    _serialize(options, manager)
+def run(options, policy_collection):
+    for policy in policy_collection:
+        policy()
+        
 

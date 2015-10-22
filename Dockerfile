@@ -2,9 +2,12 @@ FROM pypy:2
 
 RUN apt-get update && apt-get install -y python-virtualenv
 
-ADD . /janitor
+ADD . /src
 RUN virtualenv -p /usr/local/bin/pypy /janitor
-RUN /janitor/bin/pip install -r /janitor/requirements.txt
+
+WORKDIR /src
+RUN /janitor/bin/pip install -r requirements.txt
+RUN /janitor/bin/python setup.py develop
 
 VOLUME ["/var/log/cloud-maid", "/etc/cloud-maid"]
 

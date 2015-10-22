@@ -9,6 +9,7 @@ from janitor.registry import Registry
 
 
 class ActionRegistry(Registry):
+
     def parse(self, data, manager):
         results = []
         for d in data:
@@ -39,9 +40,10 @@ class BaseAction(object):
     
     log = logging.getLogger(__name__)
     
-    def __init__(self, data=None, manager=None):
+    def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
         self.manager = manager
+        self.log_dir = log_dir
 
     def process(self, resources):
         raise NotImplemented(
