@@ -1,6 +1,7 @@
 """
-Actions to take on ec2 instances
+Actions to take on resources
 """
+
 import logging
 from botocore.exceptions import ClientError
 
@@ -34,6 +35,8 @@ class ActionRegistry(Registry):
     
 class BaseAction(object):
 
+    permissions = ()
+    
     log = logging.getLogger(__name__)
     
     def __init__(self, data=None, manager=None):
@@ -44,6 +47,9 @@ class BaseAction(object):
         raise NotImplemented(
             "Base action class does not implement behavior")
 
+    def get_permissions(self):
+        return self.permissions
+    
     def _run_api(self, cmd, *args, **kw):
         try:
             return cmd(*args, **kw)

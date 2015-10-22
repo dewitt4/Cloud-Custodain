@@ -4,7 +4,8 @@ from dateutil import tz
 from datetime import datetime, timedelta
 import unittest
 
-from janitor import filters
+from janitor import filters as base_filters
+from janitor.resources.ec2 import filters
 from janitor.utils import annotation
 from .common import instance
 
@@ -30,11 +31,11 @@ class TestFilter(unittest.TestCase):
         self.assertTrue(
             isinstance(
                 filters.factory({'tag:ASV': 'absent'}),
-                filters.ValueFilter))
+                base_filters.ValueFilter))
 
     def test_filter_validation(self):
         self.assertRaises(
-            filters.FilterValidationError,
+            base_filters.FilterValidationError,
             filters.factory, {'type': 'ax', 'xyz': 1})
             
 
@@ -104,14 +105,14 @@ class TestInstanceValue(BaseFilterTest):
         self.assertFilter(
             {'tag:ASV': 'def'}, i, False)
         self.assertEqual(
-            annotation(i, filters.ANNOTATION_KEY), ())
+            annotation(i, base_filters.ANNOTATION_KEY), ())
 
         i = instance(Tags=[
             {'Key': 'CMDB', 'Value': 'abcd'}])
         self.assertFilter(
             {'tag:ASV': 'absent'}, i, True)
         self.assertEqual(
-            annotation(i, filters.ANNOTATION_KEY), ['tag:ASV'])
+            annotation(i, base_filters.ANNOTATION_KEY), ['tag:ASV'])
 
     def test_jmespath(self):
         self.assertFilter(
@@ -126,17 +127,17 @@ class TestInstanceValue(BaseFilterTest):
 
     def test_complex_validator(self):
         self.assertRaises(
-            filters.FilterValidationError,
+            base_filters.FilterValidationError,
             filters.factory,
             {"key": "xyz",
              "type": "value"})
         self.assertRaises(
-            filters.FilterValidationError,
+            base_filters.FilterValidationError,
             filters.factory,
             {"value": "xyz",
              "type": "value"})        
         self.assertRaises(
-            filters.FilterValidationError,
+            base_filters.FilterValidationError,
             filters.factory,
             {"key": "xyz",
              "value": "xyz",

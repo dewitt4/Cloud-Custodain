@@ -16,21 +16,36 @@ conformant with the organizations tag or security group policy.
 
 First a policy file needs to be created in yaml format, as an example:
 
+
 ```yaml
 
-ec2:
-  query:
-    - instance-state-name: running
-  filters:
-    - "tag:CMDBEnvironment": absent
-    - "tag:ASV": absent
-	- or:
-   	   - "tag:OwnerContact": absent
-	   - "tag:OwnerEID": absent
-  actions:
-    - type: mark-for-op
-      op: stop
-      days: 4
+policies:
+ - name: remediate-extant-keys
+   resources: s3
+   actions:
+     - 
+   
+ - name: old-instances
+   resource: ec2
+   query:
+     - instance-state-name: running
+   filters:
+     - type: instance-age
+        
+ - name: tag-compliance
+   resources: ec2
+   query:
+     - instance-state-name: running
+   filters:
+     - "tag:CMDBEnvironment": absent
+     - "tag:ASV": absent
+     - or:
+       - "tag:OwnerContact": absent
+   	   - "tag:OwnerEID": absent
+   actions:
+     - type: mark-for-op
+       op: stop
+       days: 4
 
 ```
 

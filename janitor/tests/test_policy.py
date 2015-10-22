@@ -4,6 +4,7 @@ import boto
 import yaml
 
 from janitor import policy, manager
+from janitor.resources.ec2 import EC2
 
 from janitor.tests.common import BaseTest, Config
 
@@ -22,4 +23,6 @@ class TestPolicy(BaseTest):
              ]}})
 
         self.assertTrue(
-            isinstance(p.resource_manager('ec2'), manager.EC2))
+            isinstance(p.resource_manager('ec2'), EC2))
+
+        

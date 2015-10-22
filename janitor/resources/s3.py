@@ -37,7 +37,7 @@ from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, Filter
 
-from janitor.manager import ResourceManager
+from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
 
 
@@ -47,6 +47,7 @@ filters = FilterRegistry('s3.filters')
 actions = ActionRegistry('s3.actions')
 
 
+@resources.register('s3')
 class S3(ResourceManager):
 
     def __init__(self, session_factory, data, config):
@@ -123,10 +124,11 @@ def assemble_bucket(item):
 
 
 def bucket_client(s, b):
-    region = b.get(
-        'Location',
-        {'LocationConstraint': 'us-east-1'}).get(
-            'LocationConstraint', 'us-east-1'))
+    location = b.get('Location')
+    if location is None:
+        region = 'us-east-1'
+    else:
+        region = location['LocationConstraint'] or 'us-east-1'
     return s.client('s3', region_name=region)
 
 
@@ -356,7 +358,7 @@ class ScanBucket(BucketActionBase):
 @actions.register('encrypt-keys')    
 class EncryptExtantKeys(ScanBucket):
 
-    permissions = ("s3:PutObject", "s3:GetObject")
+    permissions = ("s3:PutObject", "s3:GetObject",) + ScanBucket.permissions
     customer_keys = None
     
     def process_key(self, params):

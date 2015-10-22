@@ -1,6 +1,10 @@
 import logging
 
 from janitor import cache
+from janitor.registry import Registry
+
+
+resources = Registry('resources')
 
 
 class ResourceManager(object):

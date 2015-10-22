@@ -43,7 +43,7 @@ class FilterRegistry(Registry):
         # Make the syntax a little nicer for common cases.
         if len(data) == 1 and not 'type' in data:
             if data.keys()[0] == 'or':
-                return Or(data)
+                return Or(data, self)
             return ValueFilter(data).validate()
 
         filter_type = data.get('type')
@@ -85,9 +85,10 @@ class Filter(object):
 
 class Or(Filter):
 
-    def __init__(self, data):
+    def __init__(self, data, registry):
         super(Or, self).__init__(data)
-        self.filters = parse(self.data.values()[0])
+        self.registry = registry
+        self.filters = registry.parse(self.data.values()[0])
 
     def __call__(self, i):
         for f in self.filters:

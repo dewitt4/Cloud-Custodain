@@ -3,7 +3,7 @@ import os
 import boto3
 import yaml
 
-from janitor.manager import EC2
+from janitor.manager import resources
 
 
 def load(options, path):
@@ -13,6 +13,16 @@ def load(options, path):
     with open(path) as fh:
         data = yaml.load(fh, Loader=yaml.SafeLoader)
     return Policy(data, options)
+
+
+class PolicyCollection(object):
+
+    def __init__(self, data, options):
+        self.data = data
+        self.options = options
+
+    def policies(self):
+        return [Policy(p, self.options) for p in self.data.get('policies', [])]
     
 
 class Policy(object):
@@ -26,10 +36,12 @@ class Policy(object):
         assert 'resource' in self.data
 
     def session_factory(self):
-        return boto3.Session(region_name=self.options.region)
+        return boto3.Session(
+            region_name=self.options.region,
+            profile_name=self.options.profile)
 
     def resource_manager(self, resource_type='ec2'):
-        # TODO make lookup via res mgr registry
-        return EC2(self.session_factory,
-                   self.data.get(resource_type),
-                   self.options)
+        factory = resources.get(resource_type)
+        return factory(self.session_factory,
+                       self.data,
+                       self.options)
