@@ -363,11 +363,13 @@ class ScanBucket(BucketActionBase):
         count = 0
         results = []
         for key_set in p:
-            count += len(key_set['Contents'])
+            count += len(key_set.get('Contents', []))
             log.info("Scan Progress bucket:%s keys:%d remediated:%d %s" % (
                 b['Name'], count, key_log.count,
                 key_set['IsTruncated'] and '...' or ' Complete'
             ))
+            if not count:
+                return  {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
             for batch in chunks(key_set):
                 now = time.time()
                 slow = self.manager.incr('key_process_rate', len(batch))
