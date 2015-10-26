@@ -51,9 +51,12 @@ actions = ActionRegistry('s3.actions')
 @resources.register('s3')
 class S3(ResourceManager):
 
+    executor_factory = executor.ThreadPoolExecutor
 
-    def __init__(self, session_factory, data, config):
-        super(S3, self).__init__(session_factory, data, config)
+    def __init__(self, session_factory, data, config, log_dir):
+        super(S3, self).__init__(
+            session_factory, data, config, log_dir)
+        self.log_dir = log_dir
         self.rate_limit = {
             'key_process_rate': TokenBucket(2000),
         }
@@ -81,12 +84,13 @@ class S3(ResourceManager):
             log.debug("Filtered to %d buckets" % len(buckets))
 
         log.debug('Assembling bucket documents')
-        with executor.ThreadPoolExecutor(max_workers=15) as w:
+        with self.executor_factory(max_workers=10) as w:
             results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
             results = list(results)
 
         for f in self.filters:
             results = filter(f, results)
+
         log.debug("Filtered to %d buckets" % len(results))
         return results
 
@@ -121,7 +125,7 @@ def assemble_bucket(item):
             if code.startswith("NoSuch") or "NotFound" in code:
                 v = None
             elif code == 'PermanentRedirect':
-                log.warning(e.response)
+                #log.warning(e.response)
                 s = factory()
                 c = bucket_client(s, b)
                 # Requeue with the correct region given location constraint
@@ -167,17 +171,37 @@ class EncryptedPrefix(BucketActionBase):
         s3 = bucket_client(self.manager.session_factory(), b)
         k = self.data.get('prefix', 'AWSLogs')
 
-        # Check if already exists
-        content = "Path Prefix Object For Sub Path Encryption"
-        s3.put_object(
-            Bucket=b,
-            Key=k,
-            ACL="bucket-owner-full-control",
-            Body=content,
-            ContentLength=len(content),
-            ServerSideEncryption="AES256")
+        create = True
+        try:
+            data = s3.head_object(Bucket=b, Key=k)
+            create = False
+            if 'ServerSideEncryption' in data:
+                return None
+        except ClientError, e:
+            if e.response['Error']['Code'] != '404':
+                raise
 
+        crypto_method = self.data.get('crypto', 'AES256')
+        if create:
+            content = "Path Prefix Object For Sub Path Encryption"
+            s3.put_object(
+                Bucket=b,
+                Key=k,
+                ACL="bucket-owner-full-control",
+                Body=content,
+                ContentLength=len(content),
+                ServerSideEncryption=crypto_method)
+            return {'Bucket': b, 'Prefix': k, 'State': 'Created'}
 
+        # Note on copy we lose individual key acl grants        
+        s3.copy_object(
+            Bucket=b, Key=k,
+            CopySource="/%s/%s" % (b, k),
+            MetadataDirective='COPY',
+            ServerSideEncryption=crypto_method)
+        return {'Bucket': b, 'Prefix': k, 'State': 'Updated'}
+        
+            
 @actions.register('global-grants')        
 class NoGlobalGrants(BucketActionBase):
 
@@ -185,8 +209,6 @@ class NoGlobalGrants(BucketActionBase):
     
     GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
     AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
-    
-    executor_factory = executor.MainThreadExecutor
     
     def process(self, buckets):
         with self.executor_factory(max_workers=5) as w:
@@ -222,7 +244,6 @@ class NoGlobalGrants(BucketActionBase):
         return {'Bucket': b['Name'], 'GlobalPermissions': results, 'Website': not remediate}
 
 
-
 @actions.register('encryption-policy')    
 class EncryptionRequiredPolicy(BucketActionBase):
 
@@ -233,7 +254,7 @@ class EncryptionRequiredPolicy(BucketActionBase):
         self.manager = manager
         
     def process(self, buckets):
-        with executor.MainThreadExecutor(max_workers=3) as w:
+        with self.executor_factory(max_workers=3) as w:
             results = w.map(self.process_bucket, buckets)
             results = filter(None, list(results))
             return results
@@ -259,7 +280,7 @@ class EncryptionRequiredPolicy(BucketActionBase):
             #    statements.remove(s)
         
         session = self.manager.session_factory()
-        s3 = session.client('s3')
+        s3 = bucket_client(session, b)
 
         statements.append(
             {'Sid': 'RequireEncryptedPutObject',
@@ -317,7 +338,6 @@ class BucketScanLog(object):
 class ScanBucket(BucketActionBase):
 
     permissions = ("s3:ListBucket",)
-    executor_factory = executor.ThreadPoolExecutor
     
     def process(self, buckets):
         results = []
@@ -331,9 +351,9 @@ class ScanBucket(BucketActionBase):
             "Scanning bucket:%s visitor:%s" % (
                 b['Name'], self.__class__.__name__))
         s = self.manager.session_factory()
-        s3 = s.client('s3')
+        s3 = bucket_client(s, b)
         p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
-        with BucketScanLog(self.log_dir, b['Name']) as key_log:
+        with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
             with self.executor_factory(max_workers=10) as w:
                 return self._process_bucket(b, p, key_log, w)
 
@@ -344,8 +364,8 @@ class ScanBucket(BucketActionBase):
         results = []
         for key_set in p:
             count += len(key_set['Contents'])
-            log.info("Scan Progress bucket:%s %d%s" % (
-                b['Name'], count,
+            log.info("Scan Progress bucket:%s keys:%d remediated:%d %s" % (
+                b['Name'], count, key_log.count,
                 key_set['IsTruncated'] and '...' or ' Complete'
             ))
             for batch in chunks(key_set):
@@ -376,8 +396,8 @@ class EncryptExtantKeys(ScanBucket):
         key, bucket = params
         k = key['Key']
         b = bucket['Name']
-        s3 = local_session(self.manager.session_factory).client(
-            's3')
+        s3 = bucket_client(
+            local_session(self.manager.session_factory), b)
 
         data = s3.head_object(Bucket=b, Key=k)
 

@@ -2,17 +2,28 @@
 from concurrent.futures import (
     ProcessPoolExecutor, ThreadPoolExecutor)
 
+from janitor.registry import Registry
 
-def executor(name, max_workers=1):
+class ExecutorRegistry(Registry):
 
-    name_worker = {
-        'process': ProcessPoolExecutor,
-        'thread': ThreadPoolExecutor,
-        'main': MainThreadExecutor,
-        }
+    def __init__(self, plugin_type):
+        super(ExecutorRegistry, self).__init__(plugin_type)
 
-    assert name in name_worker
-    return name_worker[name](max_workers=max_workers)
+        self.register_class('process', ProcessPoolExecutor)
+        self.register_class('thread', ProcessPoolExecutor)
+        self.register_class('main', ProcessPoolExecutor)
+
+
+executors = ExecutorRegistry('executor')
+executors.load_plugins()
+
+
+def executor(name, **kw):
+    factory = executors.get(name)
+    factory.validate(kw)
+    if factory is None:
+        raise ValueError("No Such Executor %s" % name)
+    return factory(**kw)
 
 
 class MainThreadExecutor(object):

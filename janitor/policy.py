@@ -36,14 +36,19 @@ class Policy(object):
 
     def __init__(self, data, options):
         self.data = data
+        assert "name" in self.data
         self.options = options
+        self.output = output.S3Output(
+            self.session_factory,
+            output.s3_path_join(
+                self.options.s3_path, self.data.get("name")))
         self.resource_manager = self.get_resource_manager()
-
+        
     def __call__(self):
-        with output.S3Output(self.session_factory, self.options.s3_path):
+        with self.output: 
             resources = self.resource_manager.resources()
-            for a in self.resource_manager.actions():
-                a(resources)
+            for a in self.resource_manager.actions:
+                a.process(resources)
 
     def session_factory(self):
         return boto3.Session(
@@ -53,6 +58,10 @@ class Policy(object):
     def get_resource_manager(self):
         resource_type = self.data.get('resource')
         factory = resources.get(resource_type)
+        if not factory:
+            raise ValueError(
+                "Invalid resource type: %s" % resource_type)
         return factory(self.session_factory,
                        self.data,
-                       self.options)
+                       self.options,
+                       self.output.root_dir)

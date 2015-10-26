@@ -5,7 +5,7 @@ from janitor.tests.common import BaseTest, instance
 class TestEC2Manager(BaseTest):
 
     def get_manager(self, data, config=None, session_factory=None):
-        return EC2(session_factory, data, config)
+        return EC2(session_factory, data, config, None)
 
     def test_manager_invalid_data_type(self):
         self.assertRaises(

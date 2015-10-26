@@ -25,7 +25,17 @@ class LambdaAction(BaseAction):
     def generate_lambda(self):
         return
 
+    
+class KappaAction(LambdaAction):
 
+    def generate_lambda(self):
+        kappa_dir = os.path.abspath(self.data.get('kappa_dir'))
+        if not os.path.isdir(kappa_dir):
+            raise AssertionError(
+                "Could not find kappa/lambda dir %s" % kappa_dir)
+        return Context(os.path.join(kappa_dir))
+    
+        
 class S3Crypter(LambdaAction):
 
     files = ('s3crypter.py',)

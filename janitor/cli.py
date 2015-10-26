@@ -7,14 +7,16 @@ from janitor import policy, commands
 
 def _default_options(p):
     p.add_argument("-r", "--region", default="us-east-1",
-                   help="AWS Region to target")
+                   help="AWS Region to target (Default: us-east-1)")
     p.add_argument("--profile", default=None,
                    help="AWS Account Config File Profile to utilize")
     p.add_argument("-c", "--config", required=True,
                    help="Policy Configuration File")
     p.add_argument("-v", "--verbose", action="store_true",
                    help="Verbose Logging")
-    p.add_argument("-s" "--s3-path", required=True,
+    p.add_argument("--debug", action="store_true",
+                   help="Dev Debug")
+    p.add_argument("-s", "--s3-path", required=True,
                    help="S3 Bucket URL For Policy Output")
     p.add_argument("-f", "--cache", default="~/.cache/cloud-janitor.cache")
     p.add_argument("--cache-period", default=60, type=int,
@@ -53,7 +55,16 @@ def main():
     logging.getLogger('botocore').setLevel(logging.ERROR)    
     
     config = policy.load(options, options.config)
-    options.command(options, config)
+    try:
+        options.command(options, config)
+    except Exception, e:
+        if not options.debug:
+            raise
+        import traceback, pdb, sys
+        traceback.print_exc()
+        pdb.post_mortem(sys.exc_info()[-1])
+        
+
     
 
 if __name__ == '__main__':

@@ -17,10 +17,9 @@
      - <date>
          - <file.log.gz>
          - <file.json.gz>
-    
+         - maid
 
-Actions have output
-
+Actions have output / or even state 
 
 
 Every policy gets a temp directory
@@ -41,24 +40,50 @@ from boto3.s3.transfer import S3Transfer
 log = logging.getLogger('maid.output.s3')
 
 
-class S3Output(object):
+class S3OutputReader(object):
 
+    def __init__(self, session_factory, s3_path):
+        pass
+
+    def read_last(self, policy_name, path):
+        pass
+
+    def read_last_log(self, policy_name):
+        pass
+    
+
+def s3_path_join(*parts):
+    return "/".join([s.strip('/') for s in parts])
+
+
+class S3Output(object):
+    """
+    Usage::
+
+    with S3Output(session_factory, 's3://bucket/prefix'):
+        log.info('xyz')  # -> log messages sent to maid-run.log.gz
+    """
+
+    permissions = ()
+    
     def __init__(self, session_factory, s3_path):
         if not s3_path.startswith('s3://'):
             raise ValueError("invalid s3 path")
-        self.bucket = s3_path[5:s3_path.find('/', 5)]
+        ridx = s3_path.find('/', 5)
+        if ridx == -1:
+            ridx = None
+        self.bucket = s3_path[5:ridx]
         self.s3_path = s3_path.rstrip('/')
-        self.key_prefix = s3_path[s3_path.find('/', 5):]
+        if ridx is None:
+            self.key_prefix = ""
+        else:
+            self.key_prefix = s3_path[s3_path.find('/', 5):]
         
         self.session_factory = session_factory
         self.root_dir = tempfile.mkdtemp()
         self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
         self.transfer = None
         self.handler = None
-
-    @staticmethod
-    def path_join(self, *parts):
-        return "/".join([s.strip('/') for s in parts])
     
     def __enter__(self):
         self.join_log()
@@ -87,7 +112,7 @@ class S3Output(object):
         self.handler.flush()
         mlog = logging.getLogger('maid')
         mlog.removeHandler(self.handler)
-        
+
     def compress(self):
         # Compress files individually so thats easy to walk them, without
         # downloading tar and extracting.
@@ -107,6 +132,7 @@ class S3Output(object):
                     self.date_path,
                     "%s/%s" % (
                         root[len(self.root_dir):], f))
+                key = key.strip('/')
                 self.transfer.upload_file(
                     os.path.join(root, f), self.bucket, key,
                     extra_args={

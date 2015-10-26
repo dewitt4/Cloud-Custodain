@@ -22,8 +22,8 @@ actions = ActionRegistry('ec2.actions')
 @resources.register('ec2')
 class EC2(ResourceManager):
 
-    def __init__(self, session_factory, data, config):
-        super(EC2, self).__init__(session_factory, data, config)
+    def __init__(self, session_factory, data, config, log_dir):
+        super(EC2, self).__init__(session_factory, data, config, log_dir)
         if not isinstance(self.data, dict):
             raise ValueError(
                 "Invalid format, expecting dictionary found %s" % (
