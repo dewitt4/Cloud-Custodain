@@ -1,18 +1,11 @@
-import unittest
-
-import boto
-import yaml
-
-from janitor import actions
-from janitor.manager import EC2
-
-from janitor.tests.common import BaseTest, Config, instance
+from janitor.resources.ec2 import EC2, Mark
+from janitor.tests.common import BaseTest, instance
 
 
-class TestECManager(BaseTest):
+class TestEC2Manager(BaseTest):
 
     def get_manager(self, data, config=None, session_factory=None):
-        return EC2(session_factory, data, config)
+        return EC2(session_factory, data, config, None)
 
     def test_manager_invalid_data_type(self):
         self.assertRaises(
@@ -51,7 +44,7 @@ class TestECManager(BaseTest):
         # a simple action by string
         ec2 = self.get_manager({'actions': ['mark']})
         self.assertEqual(len(ec2.actions), 1)
-        self.assertTrue(isinstance(ec2.actions[0], actions.Mark))
+        self.assertTrue(isinstance(ec2.actions[0], Mark))
 
         # a configured action with dict
         ec2 = self.get_manager({
@@ -59,7 +52,7 @@ class TestECManager(BaseTest):
                 {'type': 'mark',
                  'msg': 'Missing proper tags'}]})
         self.assertEqual(len(ec2.actions), 1)
-        self.assertTrue(isinstance(ec2.actions[0], actions.Mark))
+        self.assertTrue(isinstance(ec2.actions[0], Mark))
         self.assertEqual(ec2.actions[0].data,
                          {'msg': 'Missing proper tags', 'type': 'mark'})
         

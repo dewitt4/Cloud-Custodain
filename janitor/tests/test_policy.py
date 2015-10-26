@@ -4,6 +4,7 @@ import boto
 import yaml
 
 from janitor import policy, manager
+from janitor.resources.ec2 import EC2
 
 from janitor.tests.common import BaseTest, Config
 
@@ -15,11 +16,15 @@ class TestPolicy(BaseTest):
             ValueError, policy.load, Config.empty(), "/asdf12")
 
     def test_get_resource_manager(self):
-        p = self.load_policy(
-            {'ec2':
-             {'filters': [
-                 {'tag-key': 'CMDBEnvironment'}
-             ]}})
-
+        collection = self.load_policy(
+            {'policies': [
+                {'name': 'query-instances',
+                 'resource': 'ec2',
+                 'filters': [
+                     {'tag-key': 'CMDBEnvironment'}
+                 ]}]})
+        p = collection.policies()[0]
         self.assertTrue(
-            isinstance(p.resource_manager('ec2'), manager.EC2))
+            isinstance(p.get_resource_manager(), EC2))
+
+        

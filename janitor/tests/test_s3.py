@@ -1,21 +1,44 @@
-
+import mock
 
 from unittest import TestCase
 
-from janitor.s3 import assemble_bucket, S3
+from janitor.resources.s3 import (
+    EncryptedPrefix,
+    NoGlobalGrants,
+    EncryptionRequiredPolicy,
+    EncryptExtantKeys,
+    BucketScanLog)
 
-from mock import Mock
-
-
-class S3ManagerTest(TestCase):
-
-    def test_no_resources(self):
-        factory = Mock()
-        factory().client('s3').list_buckets().return_value = {'Buckets': []}
-        s3 = S3(factory, {}, {})
-        self.assertEqual(s3.resources(), [])
-
-    def test_assembler_bucket(self):
-        pass
+from janitor.resources import s3 as s3_resource
+    
 
 
+
+class BucketAction(TestCase):
+
+    def setUp(self):
+        self.client = mock.Mock()
+        self.client_factory = mock.patch(
+            'janitor.resources.s3.bucket_client',
+            return_value=self.client)
+        self.client_factory.start()
+        
+    def tearDown(self):
+        self.client_factory.stop()
+
+    def bucket(self, data):
+        self.assertEqual(
+            s3_resource.bucket_client(None, None),
+            self.client)
+
+        
+#class EncryptedPrefixTest(BucketAction):
+#    pass
+
+
+#class GlobalGrantsTest(BucketAction):
+#    pass
+
+
+#class EncryptExtantKeyTest(BucketAction):
+#    pass
