@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 
 import boto3
 import yaml
@@ -34,6 +36,8 @@ class PolicyCollection(object):
 
 class Policy(object):
 
+    log = logging.getLogger('maid.policy')
+
     def __init__(self, data, options):
         self.data = data
         assert "name" in self.data
@@ -43,12 +47,29 @@ class Policy(object):
             output.s3_path_join(
                 self.options.s3_path, self.data.get("name")))
         self.resource_manager = self.get_resource_manager()
-        
+
+    @property
+    def name(self):
+        return self.data['name']
+
+    @property
+    def resource_type(self):
+        return self.data['resource']
+
     def __call__(self):
         with self.output: 
             resources = self.resource_manager.resources()
+            self.log.info(
+                "policy: %s resource:%s has count:%s resources" % (
+                    self.name, self.resource_type, len(resources)))
+            
             for a in self.resource_manager.actions:
-                a.process(resources)
+                s = time.time()
+                results = a.process(resources)
+                self.log.info(
+                    "policy: %s action: %s execution_time: %0.2f" % (
+                        self.name, a.name, time.time()-s))
+                    
 
     def session_factory(self):
         return boto3.Session(

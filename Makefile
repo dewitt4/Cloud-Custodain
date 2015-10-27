@@ -2,7 +2,8 @@
 install:
 	virtualenv .
 	source bin/activate && pip install -r requirements.txt
-
+	source bin/activate && python setup.py develop
 
 coverage:
 	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover janitor
+

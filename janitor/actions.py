@@ -39,12 +39,16 @@ class BaseAction(object):
     permissions = ()
     
     log = logging.getLogger(__name__)
-    
+
     def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
         self.manager = manager
         self.log_dir = log_dir
 
+    @property
+    def name(self):
+        return self.__class__.__name__
+    
     def process(self, resources):
         raise NotImplemented(
             "Base action class does not implement behavior")

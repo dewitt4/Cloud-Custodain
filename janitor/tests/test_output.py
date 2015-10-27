@@ -6,7 +6,7 @@ import unittest
 import shutil
 import os
 
-from janitor.output import S3Output, s3_path_join
+from janitor.output import MetricsOutput, S3Output, s3_path_join
 
 
 class S3OutputTest(unittest.TestCase):

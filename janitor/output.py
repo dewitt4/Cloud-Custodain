@@ -33,9 +33,12 @@ import gzip
 import logging
 import shutil
 import tempfile
+import time
 import os
 
 from boto3.s3.transfer import S3Transfer
+from janitor.utils import local_session
+
 
 log = logging.getLogger('maid.output.s3')
 
@@ -56,6 +59,60 @@ def s3_path_join(*parts):
     return "/".join([s.strip('/') for s in parts])
 
 
+class ExecutionContext(object):
+
+    def __init__(self, session_factory, policy_name, s3_path):
+        self.policy_name = policy_name
+        self.s3_path = s3_path
+        self.session_factory = session_factory
+        self.metrics = MetricsOutput(self.session_factory, self.policy_name)
+        self.output = S3Output(self.session_factory)
+        self.start_time = None
+
+    @property
+    def log_dir(self):
+        return self.output.root_dir    
+
+    def __enter__(self):
+        self.output.__enter__()
+        self.start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        self.output.__exit__()
+        self.metrics.put_metric('ExecutionTime', time.time()-self.start_time)
+
+        
+
+class MetricsOutput(object):
+    """
+    Usage:
+      Metrics output
+    """
+    def __init__(self, session_factory, prefix, namespace="CloudMaid"):
+        self.session_factory = session_factory
+        self.namespace = namespace
+        self.prefix = prefix
+
+    def metric(self, key, value, units=None, value_type=None):
+        watch = local_session(self.session_factory).client('cloudwatch')
+        d = {
+            "MetricName": "%s.%s" % (self.prefix, key),
+            "Timestamp": datetime.datetime.now(),
+            "Value": self,
+            "Unit": units}
+        if units:
+            d['Unit'] = units
+        if value_type:
+            d["StatisticValues"] = {value_type: value}
+        else:
+            d["Dimensions"] = [{"Name": key, "Value": value}]
+        return watch.put_metric(
+            Namespace=self.namespace,
+            MetricData=d)
+
+        
+
 class S3Output(object):
     """
     Usage::
@@ -67,23 +124,27 @@ class S3Output(object):
     permissions = ()
     
     def __init__(self, session_factory, s3_path):
-        if not s3_path.startswith('s3://'):
-            raise ValueError("invalid s3 path")
-        ridx = s3_path.find('/', 5)
-        if ridx == -1:
-            ridx = None
-        self.bucket = s3_path[5:ridx]
-        self.s3_path = s3_path.rstrip('/')
-        if ridx is None:
-            self.key_prefix = ""
-        else:
-            self.key_prefix = s3_path[s3_path.find('/', 5):]
-        
+        self.s3_path, self.bucket, self.key_prefix = self.parse_s3(s3_path)
         self.session_factory = session_factory
         self.root_dir = tempfile.mkdtemp()
         self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
         self.transfer = None
         self.handler = None
+
+    @staticmethod
+    def parse_s3(s3_path):
+        if not s3_path.startswith('s3://'):
+            raise ValueError("invalid s3 path")
+        ridx = s3_path.find('/', 5)
+        if ridx == -1:
+            ridx = None
+        bucket = s3_path[5:ridx]
+        s3_path = s3_path.rstrip('/')
+        if ridx is None:
+            key_prefix = ""
+        else:
+            key_prefix = s3_path[s3_path.find('/', 5):]
+        return s3_path, bucket, key_prefix
     
     def __enter__(self):
         self.join_log()

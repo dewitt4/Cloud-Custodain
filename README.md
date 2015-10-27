@@ -23,16 +23,16 @@ policies:
  - name: remediate-extant-keys
    resources: s3
    actions:
-     - 
-   
- - name: old-instances
+     - encrypt-keys
+
+- name: old-instances
    resource: ec2
    query:
      - instance-state-name: running
    filters:
      - type: instance-age
-        
- - name: tag-compliance
+
+- name: tag-compliance
    resources: ec2
    query:
      - instance-state-name: running

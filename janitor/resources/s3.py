@@ -22,6 +22,13 @@ Actions:
    applications that are not using encryption, including aws log
    delivery.
 
+# Todo ? / Not Implemented
+Filters
+  path-exists
+  
+Query
+  name
+
 """
 
 
@@ -32,14 +39,15 @@ import itertools
 import logging
 import os
 import time
-import threading
 
 from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter
+from janitor.filters import (
+    FilterRegistry, Filter, FilterValidationError)
 
 from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
+from janitor.utils import chunks, local_session
 
 
 log = logging.getLogger('maid.s3')
@@ -73,7 +81,6 @@ class S3(ResourceManager):
         
     def resources(self, matches=None):
         c = self.session_factory().client('s3')
-
         log.debug('Retrieving buckets')
         response = c.list_buckets()
         buckets = response['Buckets']
@@ -86,7 +93,7 @@ class S3(ResourceManager):
         log.debug('Assembling bucket documents')
         with self.executor_factory(max_workers=10) as w:
             results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
-            results = list(results)
+            results = filter(None, results)
 
         for f in self.filters:
             results = filter(f, results)
@@ -106,8 +113,8 @@ def assemble_bucket(item):
     methods = [
         ('get_bucket_location', 'Location'),
         ('get_bucket_tagging', 'Tags'),
+        ('get_bucket_policy',  'Policy'),        
         ('get_bucket_acl', 'Acl'),
-        ('get_bucket_policy',  'Policy'),
         ('get_bucket_replication', 'Replication'),        
 #        ('get_bucket_cors', 'Cors'),        
 #        ('get_bucket_versioning', 'Versioning'),
@@ -132,8 +139,15 @@ def assemble_bucket(item):
                 methods.append((m, k))
                 continue
             else:
-                log.error(e.response)
-                v = None
+                log.error("Bucket:%s unable to invoke method:%s error:%s " % (
+                    b['Name'], m, e.response['Error']['Message']))
+                #buf = StringIO.StringIO()
+                #pprint.pprint(b, buf)                
+                #if e.response['Error']['Code'] != 'AccessDenied':
+                #    log.error("Error: %s" % buf.getvalue())
+
+                #v = None
+                return None
         b[k] = v
     return b
 
@@ -147,6 +161,16 @@ def bucket_client(s, b):
     return s.client('s3', region_name=region)
 
 
+class HasKey(Filter):
+
+    def validate(self):
+        if not 'key' in self.data:
+            raise FilterValidationError(
+                "Missing 'key' for HasKey filter")
+
+    def __call__(self, b):
+        pass
+    
 class BucketActionBase(BaseAction):
 
     executor_factory = executor.ThreadPoolExecutor
@@ -352,10 +376,20 @@ class ScanBucket(BucketActionBase):
                 b['Name'], self.__class__.__name__))
         s = self.manager.session_factory()
         s3 = bucket_client(s, b)
+
+        # The bulk of _process_bucket function executes inline in
+        # calling thread/worker context, neither paginator nor
+        # bucketscan log should be used across worker boundary.
         p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
-        with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
-            with self.executor_factory(max_workers=10) as w:
-                return self._process_bucket(b, p, key_log, w)
+        with self.executor_factory(max_workers=10) as w:
+            try:
+                with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
+                    return self._process_bucket(b, p, key_log, w)
+            except ClientError, e:
+                log.exception("Error processing bucket:%s paginator:%s" % (
+                    b['Name'], p)
+                )
+            return None
 
     __call__ = process_bucket
     
@@ -417,29 +451,6 @@ class EncryptExtantKeys(ScanBucket):
             MetadataDirective='COPY',
             ServerSideEncryption=crypto_method)
         return k
-
-    
-
-def chunks(iterable, size=50):
-    iterable = iter(iterable)
-    while True:
-        yield [next(iterable) for n in range(size)]
-
-        
-CONN_CACHE = threading.local()
-
-
-def local_session(factory):
-    s = getattr(CONN_CACHE, 'session', None)
-    t = getattr(CONN_CACHE, 'time', 0)
-    n = time.time()
-    if s is not None and t + 3600 > n:
-        return s
-    s = factory()
-    CONN_CACHE.session = s
-    CONN_CACHE.time = n
-    return s
-
 
     
 def main():
