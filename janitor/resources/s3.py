@@ -79,7 +79,7 @@ class S3(ResourceManager):
     def format_json(self, resources):
         return [r['Name'] for r in resources]
         
-    def resources(self, matches=('preview-config-rules',)):
+    def resources(self, matches=()):
         c = self.session_factory().client('s3')
         log.debug('Retrieving buckets')
         response = c.list_buckets()
