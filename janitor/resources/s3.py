@@ -190,7 +190,7 @@ class EncryptedPrefix(BucketActionBase):
 
         create = True
         try:
-            data = s3.head_object(Bucket=b, Key=k)
+            data = s3.head_object(Bucket=b['Name'], Key=k)
             create = False
             if 'ServerSideEncryption' in data:
                 return None
@@ -202,21 +202,20 @@ class EncryptedPrefix(BucketActionBase):
         if create:
             content = "Path Prefix Object For Sub Path Encryption"
             s3.put_object(
-                Bucket=b,
+                Bucket=b['Name'],
                 Key=k,
                 ACL="bucket-owner-full-control",
                 Body=content,
-                ContentLength=len(content),
                 ServerSideEncryption=crypto_method)
-            return {'Bucket': b, 'Prefix': k, 'State': 'Created'}
+            return {'Bucket': b['Name'], 'Prefix': k, 'State': 'Created'}
 
         # Note on copy we lose individual key acl grants        
         s3.copy_object(
-            Bucket=b, Key=k,
+            Bucket=b['Name'], Key=k,
             CopySource="/%s/%s" % (b, k),
             MetadataDirective='COPY',
             ServerSideEncryption=crypto_method)
-        return {'Bucket': b, 'Prefix': k, 'State': 'Updated'}
+        return {'Bucket': b['Name'], 'Prefix': k, 'State': 'Updated'}
         
             
 @actions.register('global-grants')        
@@ -360,7 +359,7 @@ class ScanBucket(BucketActionBase):
         results = []
         with self.executor_factory(max_workers=3) as w:
             results.extend(
-                f for f in w.map(self, buckets))
+                f for f in w.map(self, buckets) if f)
         return results
 
     def process_bucket(self, b):
@@ -382,7 +381,7 @@ class ScanBucket(BucketActionBase):
                 log.exception("Error processing bucket:%s paginator:%s" % (
                     b['Name'], p)
                 )
-            return None
+                return None
 
     __call__ = process_bucket
     

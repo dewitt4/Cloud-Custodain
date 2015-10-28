@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 
-from janitor.resources.s3 import S3, EncryptExtantKeys
+from janitor.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
 
 
 TEST_S3_BUCKET = os.environ.get('TEST_BUCKET', "cloud-maid-ftest")
@@ -59,7 +59,8 @@ class BaseFTest(unittest.TestCase):
             logger.setLevel(old_logger_level)
 
         return log_file
-            
+
+    
 class S3Functional(BaseFTest):
 
     def setUp(self):
@@ -95,6 +96,15 @@ class S3Functional(BaseFTest):
         subprocess.check_output(
             ['aws', 's3', 'rb', '--force', "s3://%s" % self.b])
 
+    def test_encrypted_prefix(self):
+        self.generate_contents()
+        manager = S3(session_factory, {}, None, self.log_dir)
+        visitor = EncryptedPrefix({'prefix': 'AWSLogs'}, manager, self.log_dir)
+        result = visitor.process([{"Name": self.b}])
+        self.assertEqual(
+            result,
+            [{'Bucket': self.b, 'Prefix': 'AWSLogs', 'State': 'Created'}])
+        
     def test_bucket_scan_empty_bucket(self):
         manager = S3(session_factory, {}, None, self.log_dir)
         visitor = EncryptExtantKeys({'report-only': True}, manager, self.log_dir)
