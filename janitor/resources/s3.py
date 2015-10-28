@@ -79,7 +79,7 @@ class S3(ResourceManager):
     def format_json(self, resources):
         return [r['Name'] for r in resources]
         
-    def resources(self, matches=None):
+    def resources(self, matches=('preview-config-rules',)):
         c = self.session_factory().client('s3')
         log.debug('Retrieving buckets')
         response = c.list_buckets()
@@ -161,19 +161,9 @@ def bucket_client(s, b):
     return s.client('s3', region_name=region)
 
 
-class HasKey(Filter):
-
-    def validate(self):
-        if not 'key' in self.data:
-            raise FilterValidationError(
-                "Missing 'key' for HasKey filter")
-
-    def __call__(self, b):
-        pass
-    
 class BucketActionBase(BaseAction):
 
-    executor_factory = executor.ThreadPoolExecutor
+    executor_factory = executor.MainThreadExecutor
 
     def get_permissions(self):
         return self.permissions
@@ -398,13 +388,12 @@ class ScanBucket(BucketActionBase):
         results = []
         for key_set in p:
             count += len(key_set.get('Contents', []))
-            log.info("Scan Progress bucket:%s keys:%d remediated:%d %s" % (
-                b['Name'], count, key_log.count,
-                key_set['IsTruncated'] and '...' or ' Complete'
-            ))
-            if not count:
-                return  {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
-            for batch in chunks(key_set):
+            # Empty bucket check
+            if not 'Contents' in key_set:
+                return {'Bucket': b['Name'],
+                        'Remediated': key_log.count,
+                        'Count': count}
+            for batch in chunks(key_set['Contents']):
                 now = time.time()
                 slow = self.manager.incr('key_process_rate', len(batch))
                 if slow:
@@ -412,10 +401,18 @@ class ScanBucket(BucketActionBase):
                         "Rate Limit BackOff:object_rate Bucket:%s delay:%s" % (
                             b['Name'], slow))
                     time.sleep(slow)
-                futures = w.map(self.process_key,
-                                zip(key_set['Contents'], itertools.repeat(b['Name'])))
+                futures = w.map(
+                    self.process_key,
+                    zip(key_set['Contents'], itertools.repeat(b)))
                 key_log.add([f for f in futures if f])
         result = {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
+
+        # Log completion at info level, progress at debug level
+        ellipis = key_set['IsTruncated'] and '...' or ' Complete'
+        log_method = ellipis == ' Complete' and 'info' or 'debug'
+        getattr(log, log_method)(
+            "Scan Progress bucket:%s keys:%d remediated:%d %s" % (
+                b['Name'], count, key_log.count, ellipis))
         return result
 
     def process_key(self, params):
@@ -433,9 +430,10 @@ class EncryptExtantKeys(ScanBucket):
         k = key['Key']
         b = bucket['Name']
         s3 = bucket_client(
-            local_session(self.manager.session_factory), b)
+            local_session(self.manager.session_factory), bucket)
 
         data = s3.head_object(Bucket=b, Key=k)
+        log.debug("Bucket:%s key:%s" % (b, k))
 
         if 'ServerSideEncryption' in data:
             return None
@@ -451,31 +449,3 @@ class EncryptExtantKeys(ScanBucket):
             MetadataDirective='COPY',
             ServerSideEncryption=crypto_method)
         return k
-
-    
-def main():
-    import boto3
-    import time
-    import logging
-
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
-    logging.getLogger('botocore').setLevel(level=logging.ERROR)
-    
-    s = S3(lambda x=None: boto3.Session(), None, None)
-    t = time.time()
-
-    log.debug("Starting resource collection")
-    buckets = s.resources()
-    log.debug("Fetched %d in %s" % (len(buckets), time.time()-t))
-    
-    scanner = EncryptExtantKeys({}, s, 'logs')
-    results = scanner.process(buckets)
-
-    import pprint
-    pprint.pprint(results)
-
-    
-if __name__ == '__main__':
-    main()

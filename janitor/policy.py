@@ -3,6 +3,7 @@ import os
 import time
 
 import boto3
+#import bson
 import yaml
 
 from janitor.manager import resources
@@ -62,6 +63,7 @@ class Policy(object):
             self.log.info(
                 "policy: %s resource:%s has count:%s resources" % (
                     self.name, self.resource_type, len(resources)))
+            #self._write_file('resources.bson', bson.dumps(resources))
             
             for a in self.resource_manager.actions:
                 s = time.time()
@@ -69,8 +71,13 @@ class Policy(object):
                 self.log.info(
                     "policy: %s action: %s execution_time: %0.2f" % (
                         self.name, a.name, time.time()-s))
+                #self._write_file("action-%s" % a.name, bson.dumps(results))
+                
+    def _write_file(self, rel_p, value):
+        with open(
+                os.path.join(self.output.root_dir, rel_p), 'w') as fh:
+            fh.write(value)
                     
-
     def session_factory(self):
         return boto3.Session(
             region_name=self.options.region,

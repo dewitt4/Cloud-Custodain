@@ -3,9 +3,15 @@ import time
 
 
 def chunks(iterable, size=50):
-    iterable = iter(iterable)
-    while True:
-        yield [next(iterable) for n in range(size)]
+    """Break an iterable into lists of size"""
+    batch = []
+    for n in iterable:
+        batch.append(n)
+        if len(batch) % size == 0:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
 
         
 CONN_CACHE = threading.local()
