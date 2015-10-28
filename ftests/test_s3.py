@@ -104,6 +104,26 @@ class S3Functional(BaseFTest):
         self.assertEqual(
             result,
             [{'Bucket': self.b, 'Prefix': 'AWSLogs', 'State': 'Created'}])
+
+        self.assertTrue(
+            'ServerSideEncryption' in self.client.head_object(
+                Bucket=self.b, Key='AWSLogs'))
+        
+        prefix_check_path = 'AWSLogs/xyz.txt'
+        # new objects we add should be encrypted
+        self.client.put_object(
+            Bucket=self.b,
+            Key=prefix_check_path,
+            Body='hello cruel world',
+            ACL="bucket-owner-full-control")
+
+        #self.assertTrue(
+        #    'ServerSideEncryption' in self.client.head_object(
+        #        Bucket=self.b, Key='AWSLogs/2015/10/10'))
+        
+        self.assertTrue(
+            'ServerSideEncryption' in self.client.head_object(
+                Bucket=self.b, Key=prefix_check_path))
         
     def test_bucket_scan_empty_bucket(self):
         manager = S3(session_factory, {}, None, self.log_dir)
@@ -140,7 +160,7 @@ class S3Functional(BaseFTest):
         result = visitor.process([{"Name": self.b}])
         self.assertEqual(
             result, [{'Count': 3, 'Remediated': 3, 'Bucket': self.b}])
-        
+
         # Assert that we get the right remediated counts in the log
         self.assertTrue(
             "keys:3 remediated:3" in self.output.getvalue())

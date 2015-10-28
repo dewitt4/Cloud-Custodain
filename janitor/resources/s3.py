@@ -166,7 +166,7 @@ def bucket_client(s, b):
 
 class BucketActionBase(BaseAction):
 
-    executor_factory = executor.MainThreadExecutor
+    executor_factory = executor.ThreadPoolExecutor
 
     def get_permissions(self):
         return self.permissions
