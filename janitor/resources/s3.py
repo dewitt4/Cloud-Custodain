@@ -31,7 +31,7 @@ Query
 
 """
 
-
+from botocore.client import Config
 from botocore.exceptions import ClientError
 
 import json
@@ -158,7 +158,10 @@ def bucket_client(s, b):
         region = 'us-east-1'
     else:
         region = location['LocationConstraint'] or 'us-east-1'
-    return s.client('s3', region_name=region)
+    return s.client(
+        's3', region_name=region,
+        # Need v4 for aws:kms crypto
+        config=Config(signature_version='s3v4'))
 
 
 class BucketActionBase(BaseAction):

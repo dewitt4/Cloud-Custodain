@@ -91,7 +91,6 @@ class S3Functional(BaseFTest):
         generateBucketContents(
             self.s3, self.b, contents)
 
-        
     def tearDown(self):
         subprocess.check_output(
             ['aws', 's3', 'rb', '--force', "s3://%s" % self.b])
@@ -139,9 +138,24 @@ class S3Functional(BaseFTest):
             'ServerSideEncryption' in self.client.head_object(
                 Bucket=self.b, Key='home.txt'))
 
+    def test_encrypt_keys_kms(self):
+        self.generate_contents()
+
+        manager = S3(session_factory, {}, None, self.log_dir)
+        visitor = EncryptExtantKeys({'crypto': 'aws:kms'}, manager, self.log_dir)
+        result = visitor.process([{"Name": self.b}])
+
+        self.assertEqual(
+            result, [{'Count': 3, 'Remediated': 3, 'Bucket': self.b}])
+        
+        # Assert that we get the right remediated counts in the log
+        self.assertTrue(
+            "keys:3 remediated:3" in self.output.getvalue())
+        self.assertTrue(
+            'ServerSideEncryption' in self.client.head_object(
+                Bucket=self.b, Key='home.txt'))
 
     
-        
 if __name__ == '__main__':
     unittest.main()
 
