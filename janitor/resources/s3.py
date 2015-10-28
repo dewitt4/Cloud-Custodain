@@ -349,6 +349,7 @@ class BucketScanLog(object):
         self.count += len(keys)
         for v in map(json.dumps, keys):
             self.fh.write(v)
+            self.fh.write(",")            
 
 
 class ScanBucket(BucketActionBase):
@@ -435,7 +436,6 @@ class EncryptExtantKeys(ScanBucket):
             local_session(self.manager.session_factory), bucket)
 
         data = s3.head_object(Bucket=b, Key=k)
-        log.debug("Bucket:%s key:%s" % (b, k))
 
         if 'ServerSideEncryption' in data:
             return None
