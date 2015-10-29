@@ -1,5 +1,3 @@
-**Under active development, config format will change**
-
 # Cloud Maid
 
 Cloud maid is a rules engine that provides for querying, filtering,
@@ -11,6 +9,14 @@ starting them in the morning or terminating instances that aren't
 conformant with the organizations tag or security group policy.
 
 
+# Links
+
+- [Architecture](docs/architecture.md)
+- [Developer Install](docs/developer.md)
+- Resource Guides
+  - [EC2](docs/ec2.md)
+  - [S3](docs/s3.md)
+ 
 
 # Usage
 
@@ -74,27 +80,6 @@ access to perform the requested actions.
   $ janitor run -c policy.yml --dryrun
 ```
 
-# Operations
-
-## Mark
-
-Will mark instances matching filters with a 'Maid' tag and configurable message
-
-
-## Start
-
-Start a set of instances (presumably) already stopped.
-
-## Stop
-
-Will stop the instance. Stopped instances do not incur ec2 instance costs.
-
-## Terminate
-
-Will terminate the instance. Use with caution!
-
-# Todo List
-
 For email notification to owner, we'll need the following.
 
 - [ ] Access to CloudTrail bucket for account
@@ -118,34 +103,6 @@ http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-D
 Note state: absent filters are done via post processing instances in
 memory. The -j option allows switching from the filter operator from
 or to and.
-
-
-
-# Install
-
-You'll need python-dev and python-virtualenv packages installed already on linux, on
-OSX the default install comes with the nesc requirements.
-
-First clone the repository:
-
-$ git clone https://github.kdc.capitalone.com/ylv522/cloud-janitor.git
-
-Also recommended is to use a virtualenv to sandbox this install from your system packages:
-
-$ virtualenv cloud-maid
-$ source cloud-maid/bin/activate
-
-And then install the dependencies
-
-$ pip install -f requirements.txt
-
-And then the maid itself
-
-$ python setup.py develop
-
-You should have the cloud-maid command available now.
-
-$ cloud-maid -h
 
 
 

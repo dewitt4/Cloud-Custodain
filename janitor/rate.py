@@ -44,17 +44,3 @@ class TokenBucket:
                 return 0
             else:
                 return -self.tokens / self.rate
-
-
-if __name__ == '__main__':
-    import sys
-    from time import sleep
-    one_kb = 1024 * 1024
-    bucket = TokenBucket()
-    bucket.set_rate(one_kb)
-    for _ in range(10):
-        nap = bucket.consume(1024 * 512)
-        print "nap", nap
-        sleep(nap + 0.1)
-        print(".")
-    sys.exit(0)
