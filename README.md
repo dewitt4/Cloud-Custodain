@@ -12,6 +12,7 @@ conformant with the organizations tag or security group policy.
 # Links
 
 - [Architecture](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
 - [Developer Install](docs/developer.md)
 - Resource Guides
   - [EC2](docs/ec2.md)

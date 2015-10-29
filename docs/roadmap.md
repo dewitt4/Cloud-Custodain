@@ -1,34 +1,40 @@
 
 Roadmap
 
-X - Profile and Region Policy Spec
+ - [x] Profile and Region Policy Spec
 
-X - PolicyCollection management
+ - [x] PolicyCollection management
 
-I - Lambda Provisioning
+ - [] Lambda Provisioning (In Progress)
  
-- Tag Value Validation, CMDB Integration (Plugin)
+ - [] Tag Value Validation, CMDB Integration (Plugin)
 
-X - S3 Output
+ - [x] S3 Output
 
-- Cloudwatch Metrics
+ - [] Cloudwatch Metrics (In Progress)
 
-I - IAM Role Generation
+ - [] IAM Role Generation (In Progress)
 
-- Functional Tests
+ - [x] Functional Tests
 
-- Policy Visualization ( aws analytics or d3 chart lib)
+ - Policy Visualization ( aws analytics or d3 chart lib)
 
-- API Gateway / Lambda
+ - API Gateway / Lambda
 
-- Terraform Resource Generation ? / kappa does a bit
+ - Terraform Resource Generation ? / kappa does a bit
 
 Code Health
 
-- Element base for filter and actions
+ - [] Element base for filter and actions
 
-- valid attributes on elements
+ - [] Validate schema from yaml
 
-- exec context abstraction for managers and elements
+ - [] exec context abstraction for managers and elements
 
-- External plugin loading point
+ - [] External plugin loading point
+
+Todo
+
+- [] Outbound Email
+
+- [] Cloud Trail Access
