@@ -375,13 +375,13 @@ class ScanBucket(BucketActionBase):
         # bucketscan log should be used across worker boundary.
         p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
         with self.executor_factory(max_workers=10) as w:
-            try:
-                with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
+            with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:            
+                try:
                     return self._process_bucket(b, p, key_log, w)
-            except ClientError, e:
-                log.exception("Error processing bucket:%s paginator:%s" % (
-                    b['Name'], p)
-                )
+                except ClientError, e:
+                    log.exception(
+                        "Error processing bucket:%s paginator:%s" % (
+                            b['Name'], p))
                 return None
 
     __call__ = process_bucket

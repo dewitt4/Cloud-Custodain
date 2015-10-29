@@ -97,6 +97,11 @@ class S3Functional(BaseFTest):
             ['aws', 's3', 'rb', '--force', "s3://%s" % self.b])
 
     def test_encrypted_prefix(self):
+        """Creating a prefix for logs. 
+
+        So this is a confirmation that encrypting a prefix key does nothing for
+        either previous objects or new objects under that prefix :-(
+        """
         self.generate_contents()
         manager = S3(session_factory, {}, None, self.log_dir)
         visitor = EncryptedPrefix({'prefix': 'AWSLogs'}, manager, self.log_dir)
@@ -105,6 +110,7 @@ class S3Functional(BaseFTest):
             result,
             [{'Bucket': self.b, 'Prefix': 'AWSLogs', 'State': 'Created'}])
 
+        # Verify prefix is encrypted
         self.assertTrue(
             'ServerSideEncryption' in self.client.head_object(
                 Bucket=self.b, Key='AWSLogs'))
@@ -117,11 +123,13 @@ class S3Functional(BaseFTest):
             Body='hello cruel world',
             ACL="bucket-owner-full-control")
 
-        #self.assertTrue(
-        #    'ServerSideEncryption' in self.client.head_object(
-        #        Bucket=self.b, Key='AWSLogs/2015/10/10'))
-        
-        self.assertTrue(
+        # Previous object still unencrypted
+        self.assertFalse(
+            'ServerSideEncryption' in self.client.head_object(
+                Bucket=self.b, Key='AWSLogs/2015/10/10'))
+
+        # New object still unecrypted
+        self.assertFalse(
             'ServerSideEncryption' in self.client.head_object(
                 Bucket=self.b, Key=prefix_check_path))
         
