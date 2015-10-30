@@ -1,12 +1,11 @@
-"""
-S3 Resource Manager
+"""S3 Resource Manager
+
+The generic Values filters (jmespath) expression and Or filter are
+available with S3 Buckets, we include several additonal bucket data
+(Tags, Replication, Acl, Policy) as keys within a bucket
+representation.
 
 Actions:
-
- encrypt-prefix  
-
-   Useful for aws log storage, basically encrypt the prefix key
-   like 'AWSLogs' and that will inherit any keys with that prefix.
 
  encrypt-keys
 
@@ -21,13 +20,6 @@ Actions:
    Attach an encryption required policy to a bucket, this will break
    applications that are not using encryption, including aws log
    delivery.
-
-# Todo ? / Not Implemented
-Filters
-  path-exists
-  
-Query
-  name
 
 """
 
@@ -76,8 +68,8 @@ class S3(ResourceManager):
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
 
-    def format_json(self, resources):
-        return [r['Name'] for r in resources]
+    def format_json(self, resources, fh):
+        json.dumps([r['Name'] for r in resources], fh)
         
     def resources(self, matches=()):
         c = self.session_factory().client('s3')
@@ -141,12 +133,6 @@ def assemble_bucket(item):
             else:
                 log.error("Bucket:%s unable to invoke method:%s error:%s " % (
                     b['Name'], m, e.response['Error']['Message']))
-                #buf = StringIO.StringIO()
-                #pprint.pprint(b, buf)                
-                #if e.response['Error']['Code'] != 'AccessDenied':
-                #    log.error("Error: %s" % buf.getvalue())
-
-                #v = None
                 return None
         b[k] = v
     return b
@@ -166,7 +152,7 @@ def bucket_client(s, b):
 
 class BucketActionBase(BaseAction):
 
-    executor_factory = executor.ThreadPoolExecutor
+    executor_factory = executor.MainThreadExecutor
 
     def get_permissions(self):
         return self.permissions
@@ -290,10 +276,6 @@ class EncryptionRequiredPolicy(BucketActionBase):
                 log.debug(
                     "Bucket:%s Found extant Encryption Policy" % b['Name'])
                 return
-            # Migration from manual in digital-dev
-            #if s['Sid'] == 'DenyUnEncryptedObjectUploads':
-            #    found = True
-            #    statements.remove(s)
         
         session = self.manager.session_factory()
         s3 = bucket_client(session, b)
@@ -411,11 +393,13 @@ class ScanBucket(BucketActionBase):
         result = {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
 
         # Log completion at info level, progress at debug level
-        ellipis = key_set['IsTruncated'] and '...' or ' Complete'
-        log_method = ellipis == ' Complete' and 'info' or 'debug'
-        getattr(log, log_method)(
-            "Scan Progress bucket:%s keys:%d remediated:%d %s" % (
-                b['Name'], count, key_log.count, ellipis))
+        if key_set['IsTruncated']:
+            import pdb; pdb.set_trace()
+            log.debug('Scan progress bucket:%s keys:%d remediated:%d ...',
+                      b['Name'], count, key_log.count)
+        else:
+            log.info('Scan Complete bucket:%s keys:%d remediated:%d',
+                     b['Name'], count, key_log.count)
         return result
 
     def process_key(self, params):
@@ -427,7 +411,24 @@ class EncryptExtantKeys(ScanBucket):
 
     permissions = ("s3:PutObject", "s3:GetObject",) + ScanBucket.permissions
     customer_keys = None
-    
+
+    def process(self, buckets):
+        t = time.time()
+        results = super(EncryptExtantKeys, self).process(buckets)
+        run_time = time.time() - t
+        remediated_count = object_count = 0
+        for r in results:
+            object_count += r['Count']
+            remediated_count += r['Remediated']
+        log.info(
+            "EncryptExtant Complete keys:%d remediated:%d rate:%0.2f/s time:%0.2fs",
+            object_count,
+            remediated_count,
+            float(object_count) / run_time,
+            run_time)
+
+        return results
+
     def process_key(self, params):
         key, bucket = params
         k = key['Key']
@@ -444,7 +445,7 @@ class EncryptExtantKeys(ScanBucket):
             return k
 
         crypto_method = self.data.get('crypto', 'AES256')
-        # Not on copy we lose individual key acl grants        
+        # Not on copy we lose individual object acl grants
         s3.copy_object(
             Bucket=b, Key=k,
             CopySource="/%s/%s" % (b, k),
