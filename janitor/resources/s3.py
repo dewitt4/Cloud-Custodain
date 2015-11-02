@@ -152,7 +152,7 @@ def bucket_client(s, b):
 
 class BucketActionBase(BaseAction):
 
-    executor_factory = executor.MainThreadExecutor
+    executor_factory = executor.ThreadPoolExecutor
 
     def get_permissions(self):
         return self.permissions
@@ -433,7 +433,7 @@ class EncryptExtantKeys(ScanBucket):
         k = key['Key']
         b = bucket['Name']
         s3 = bucket_client(
-            local_session(self.manager.session_factory), bucket)
+            self.manager.session_factory, bucket)
 
         data = s3.head_object(Bucket=b, Key=k)
 
