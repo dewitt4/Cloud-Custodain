@@ -82,7 +82,7 @@ class ExecutionContext(object):
         self.output.__exit__()
         self.metrics.put_metric('ExecutionTime', time.time()-self.start_time)
 
-        
+
 
 class MetricsOutput(object):
     """

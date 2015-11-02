@@ -394,9 +394,8 @@ class ScanBucket(BucketActionBase):
 
         # Log completion at info level, progress at debug level
         if key_set['IsTruncated']:
-            import pdb; pdb.set_trace()
-            log.debug('Scan progress bucket:%s keys:%d remediated:%d ...',
-                      b['Name'], count, key_log.count)
+            log.info('Scan progress bucket:%s keys:%d remediated:%d ...',
+                     b['Name'], count, key_log.count)
         else:
             log.info('Scan Complete bucket:%s keys:%d remediated:%d',
                      b['Name'], count, key_log.count)

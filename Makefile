@@ -7,3 +7,8 @@ install:
 coverage:
 	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover janitor
 
+tests:
+	./bin/nosetests -s -v janitor
+
+ftests:
+	./bin/nosetests -s -v ftests

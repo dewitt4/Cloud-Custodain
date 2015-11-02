@@ -39,10 +39,6 @@ class TestActions(unittest.TestCase):
             ec2.Stop)
 
         self.assertIsInstance(
-            actions.factory('notify-owner', None),
-            ec2.NotifyOwner)        
-
-        self.assertIsInstance(
             actions.factory('terminate', None),
             ec2.Terminate)        
 

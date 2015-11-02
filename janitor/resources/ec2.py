@@ -287,16 +287,6 @@ class MarkForOp(BaseAction):
                  "Value": msg}],
             DryRun=self.manager.config.dryrun)
 
-        
-@actions.register('notify-owner')
-class NotifyOwner(BaseAction):
-
-    def process(self, instances):
-        raise NotImplemented(
-            "Waiting on access to appropriate s3 buckets to map instances to eids")
-
-
-    
 
 
 # Valid EC2 Query Filters

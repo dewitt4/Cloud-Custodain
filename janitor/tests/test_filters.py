@@ -153,8 +153,13 @@ class TestInstanceValue(BaseFilterTest):
             instance(),
             True)
 
-    
-
+    def xtest_not_null_filter(self):
+        self.assertFilter(
+            {"key": "aws:cloudformation:stack-name:",
+             "value": "not-null",
+             "type": "value"},
+            instance(),
+            True)
 
 if __name__ == '__main__':
     unittest.main()

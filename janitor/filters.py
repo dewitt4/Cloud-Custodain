@@ -125,7 +125,6 @@ class ValueFilter(Filter):
         return matched
         
     def match(self, i):
-
         if self.v is None and len(self.data) == 1:
             [(self.k, self.v)] = self.data.items()
         elif self.v is None: 

@@ -1,7 +1,22 @@
+from datetime import datetime
+
+import json
 import threading
 import time
 
 
+def dumps(data):
+    return json.dumps(data, cls=DateTimeEncoder)
+
+
+class DateTimeEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return json.JSONEncoder.default(self, obj)
+
+    
 def chunks(iterable, size=50):
     """Break an iterable into lists of size"""
     batch = []
