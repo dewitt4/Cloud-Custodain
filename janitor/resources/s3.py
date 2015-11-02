@@ -397,7 +397,8 @@ class ScanBucket(BucketActionBase):
 
             for f in as_completed(futures):
                 if f.exception():
-                    log.exception("Exception Processing key batch %s" % (f.exception()))
+                    log.exception("Exception Processing bucket:%s key batch %s" % (
+                        b['Name'], f.exception()))
                     continue
                 key_log.add(f.result())
 
@@ -443,9 +444,8 @@ class EncryptExtantKeys(ScanBucket):
         crypto_method = self.data.get('crypto', 'AES256')
         b = bucket['Name']
         s3 = bucket_client(
-            local_session(self.manager.session_factory), bucket,
-            kms = (crypto_method == 'aws:kms')
-            )
+            self.manager.session_factory(), bucket,
+            kms = (crypto_method == 'aws:kms'))
         results = []
         for key in batch:
             k = key['Key']
