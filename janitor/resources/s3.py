@@ -25,6 +25,8 @@ Actions:
 
 from botocore.client import Config
 from botocore.exceptions import ClientError
+from concurrent.futures import as_completed
+
 
 import json
 import itertools
@@ -113,6 +115,8 @@ def assemble_bucket(item):
 #        ('get_bucket_lifecycle', 'Lifecycle'),
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
+
+    b_location = c_location = location = "us-east-1"
     
     for m, k in methods:
         try:
@@ -134,20 +138,30 @@ def assemble_bucket(item):
                 log.error("Bucket:%s unable to invoke method:%s error:%s " % (
                     b['Name'], m, e.response['Error']['Message']))
                 return None
+        if k == 'Location':
+            b_location = v.get('LocationConstraint')
+            if v and v != c_location:
+                c = s.client('s3', region_name=b_location)
+            elif c_location != location:
+                c = s.client('s3', region_name=location)
         b[k] = v
     return b
 
 
-def bucket_client(s, b):
+def bucket_client(s, b, kms=False):
     location = b.get('Location')
     if location is None:
         region = 'us-east-1'
     else:
         region = location['LocationConstraint'] or 'us-east-1'
+    if kms:
+        config = Config(signature_version='s3v4')
+    else:
+        config = None
     return s.client(
         's3', region_name=region,
         # Need v4 for aws:kms crypto
-        config=Config(signature_version='s3v4'))
+        config=config)
 
 
 class BucketActionBase(BaseAction):
@@ -329,9 +343,8 @@ class BucketScanLog(object):
         
     def add(self, keys):
         self.count += len(keys)
-        for v in map(json.dumps, keys):
-            self.fh.write(v)
-            self.fh.write(",")            
+        self.fh.write(json.dumps(keys))
+        self.fh.write(",\n")
 
 
 class ScanBucket(BucketActionBase):
@@ -369,41 +382,39 @@ class ScanBucket(BucketActionBase):
     __call__ = process_bucket
     
     def _process_bucket(self, b, p, key_log, w):
+        batch_loop = 0
         count = 0
         results = []
         for key_set in p:
-            count += len(key_set.get('Contents', []))
             # Empty bucket check
             if not 'Contents' in key_set:
                 return {'Bucket': b['Name'],
                         'Remediated': key_log.count,
                         'Count': count}
-            for batch in chunks(key_set['Contents']):
-                now = time.time()
-                slow = self.manager.incr('key_process_rate', len(batch))
-                if slow:
-                    log.info(
-                        "Rate Limit BackOff:object_rate Bucket:%s delay:%s" % (
-                            b['Name'], slow))
-                    time.sleep(slow)
-                futures = w.map(
-                    self.process_key,
-                    zip(key_set['Contents'], itertools.repeat(b)))
-                key_log.add([f for f in futures if f])
-        result = {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
+            futures = []
+            for batch in chunks(key_set['Contents'], size=100):
+                futures.append(w.submit(self.process_chunk, batch, b))
 
-        # Log completion at info level, progress at debug level
-        if key_set['IsTruncated']:
-            log.info('Scan progress bucket:%s keys:%d remediated:%d ...',
-                     b['Name'], count, key_log.count)
-        else:
-            log.info('Scan Complete bucket:%s keys:%d remediated:%d',
-                     b['Name'], count, key_log.count)
-        return result
+            for f in as_completed(futures):
+                if f.exception():
+                    log.exception("Exception Processing key batch %s" % (f.exception()))
+                    continue
+                key_log.add(f.result())
 
-    def process_key(self, params):
+            count += len(key_set.get('Contents', []))
+
+            # Log completion at info level, progress at debug level
+            if key_set['IsTruncated']:
+                log.debug('Scan progress bucket:%s keys:%d remediated:%d ...',
+                         b['Name'], count, key_log.count)
+            else:
+                log.info('Scan Complete bucket:%s keys:%d remediated:%d',
+                         b['Name'], count, key_log.count)
+        return {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
+
+    def process_chunk(self, batch, bucket):
         return None
-
+    
 
 @actions.register('encrypt-keys')    
 class EncryptExtantKeys(ScanBucket):
@@ -428,26 +439,28 @@ class EncryptExtantKeys(ScanBucket):
 
         return results
 
-    def process_key(self, params):
-        key, bucket = params
-        k = key['Key']
+    def process_chunk(self, batch, bucket):
+        crypto_method = self.data.get('crypto', 'AES256')
         b = bucket['Name']
         s3 = bucket_client(
-            self.manager.session_factory, bucket)
-
-        data = s3.head_object(Bucket=b, Key=k)
-
-        if 'ServerSideEncryption' in data:
-            return None
-
-        if self.data.get('report-only'):
-            return k
-
-        crypto_method = self.data.get('crypto', 'AES256')
-        # Not on copy we lose individual object acl grants
-        s3.copy_object(
-            Bucket=b, Key=k,
-            CopySource="/%s/%s" % (b, k),
-            MetadataDirective='COPY',
-            ServerSideEncryption=crypto_method)
-        return k
+            local_session(self.manager.session_factory), bucket,
+            kms = (crypto_method == 'aws:kms')
+            )
+        results = []
+        for key in batch:
+            k = key['Key']
+            data = s3.head_object(Bucket=b, Key=k)
+            if 'ServerSideEncryption' in data:
+                continue
+            if self.data.get('report-only'):
+                results.append(k)
+                continue
+            crypto_method = self.data.get('crypto', 'AES256')
+            # Not on copy we lose individual object acl grants
+            s3.copy_object(
+                Bucket=b, Key=k,
+                CopySource="/%s/%s" % (b, k),
+                MetadataDirective='COPY',
+                ServerSideEncryption=crypto_method)
+            results.append(k)
+        return results
