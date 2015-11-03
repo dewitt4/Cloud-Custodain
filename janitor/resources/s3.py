@@ -27,7 +27,7 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 from concurrent.futures import as_completed
 
-
+import gc
 import json
 import itertools
 import logging
@@ -138,6 +138,7 @@ def assemble_bucket(item):
                 log.error("Bucket:%s unable to invoke method:%s error:%s " % (
                     b['Name'], m, e.response['Error']['Message']))
                 return None
+        # As soon as we learn location (which generally works)
         if k == 'Location':
             b_location = v.get('LocationConstraint')
             if v and v != c_location:
@@ -369,8 +370,8 @@ class ScanBucket(BucketActionBase):
         # calling thread/worker context, neither paginator nor
         # bucketscan log should be used across worker boundary.
         p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
-        with self.executor_factory(max_workers=10) as w:
-            with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:            
+        with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
+            with self.executor_factory(max_workers=10) as w:
                 try:
                     return self._process_bucket(b, p, key_log, w)
                 except ClientError, e:
@@ -382,9 +383,9 @@ class ScanBucket(BucketActionBase):
     __call__ = process_bucket
     
     def _process_bucket(self, b, p, key_log, w):
-        batch_loop = 0
         count = 0
-        results = []
+        loop_count = 0
+        
         for key_set in p:
             # Empty bucket check
             if not 'Contents' in key_set:
@@ -400,9 +401,16 @@ class ScanBucket(BucketActionBase):
                     log.exception("Exception Processing bucket:%s key batch %s" % (
                         b['Name'], f.exception()))
                     continue
-                key_log.add(f.result())
+                r = f.result()
+                if r:
+                    key_log.add(r)
 
             count += len(key_set.get('Contents', []))
+
+            # On pypy we need more explicit memory collection to avoid pressure
+            loop_count += 1
+            if loop_count % 10 == 0:
+                gc.collect()
 
             # Log completion at info level, progress at debug level
             if key_set['IsTruncated']:
@@ -411,6 +419,7 @@ class ScanBucket(BucketActionBase):
             else:
                 log.info('Scan Complete bucket:%s keys:%d remediated:%d',
                          b['Name'], count, key_log.count)
+
         return {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
 
     def process_chunk(self, batch, bucket):
