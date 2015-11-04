@@ -335,6 +335,9 @@ class BucketScanLog(object):
         return self
     
     def __exit__(self, exc_type=None, exc_value=None, exc_frame=None):
+        # we need an empty marker to avoid trailing commas
+        self.fh.write("[]")
+        # and close the surrounding list
         self.fh.write("\n]")
         self.fh.close()
         if not self.count:
@@ -408,6 +411,7 @@ class ScanBucket(BucketActionBase):
             count += len(key_set.get('Contents', []))
 
             # On pypy we need more explicit memory collection to avoid pressure
+            # and excess open files/sockets.
             loop_count += 1
             if loop_count % 10 == 0:
                 gc.collect()
