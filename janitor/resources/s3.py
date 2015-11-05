@@ -329,8 +329,12 @@ class BucketScanLog(object):
         self.fh = None
         self.count = 0
 
+    @property
+    def path(self):
+        return os.path.join(self.log_dir, "%s.json" % self.name)
+    
     def __enter__(self):
-        self.fh = open(os.path.join(self.log_dir, "%s.json" % self.name), 'w')
+        self.fh = open(self.path, 'w')
         self.fh.write("[\n")
         return self
     
@@ -411,7 +415,7 @@ class ScanBucket(BucketActionBase):
             count += len(key_set.get('Contents', []))
 
             # On pypy we need more explicit memory collection to avoid pressure
-            # and excess open files/sockets.
+            # and excess open files/sockets. every thousand objects
             loop_count += 1
             if loop_count % 10 == 0:
                 gc.collect()
@@ -469,7 +473,7 @@ class EncryptExtantKeys(ScanBucket):
                 results.append(k)
                 continue
             crypto_method = self.data.get('crypto', 'AES256')
-            # Not on copy we lose individual object acl grants
+            # Note on copy we lose individual object acl grants
             s3.copy_object(
                 Bucket=b, Key=k,
                 CopySource="/%s/%s" % (b, k),
