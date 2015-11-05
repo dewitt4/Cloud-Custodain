@@ -56,7 +56,7 @@ policies:
 
 ```
 
-Given that, you can run the janitor via
+Given that, you can run cloud-maid via
 
 ```
   $ cloud-maid run -c policy.yml
@@ -71,28 +71,22 @@ the *identify* subcommand. Default output is to stdout, controlled with the
 '-o' option.
 
 ```
-  $ janitor identify -c policy.yml -o instances.json --format=json
+  $ cloud-maid identify -c policy.yml -o instances.json
 ```
 
 You can also use run directly in dryrun mode, in which case it will verify api
-access to perform the requested actions.
+access to perform the requested actions. Note S3 does not support dry run operations.
+
 
 ```
-  $ janitor run -c policy.yml --dryrun
+  $ cloud-maid run -c policy.yml --dryrun
 ```
-
-For email notification to owner, we'll need the following.
-
-- [ ] Access to CloudTrail bucket for account
-- [ ] Email Relay (PonyEx) 
-- [ ] Mapping of EID to email address.
-
-For ASV and CMDBEnvironment verification we'll need access to an API over hp service manager.
 
 
 # Credentials
 
-All credentials are sourced from environment variables or IAM Role
+All credentials are sourced from environment variables, IAM Role, or aws config. You
+can specify a profile name to use via cli parameter.
 
 # Querying
 
