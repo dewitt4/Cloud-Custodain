@@ -43,10 +43,10 @@ class Policy(object):
         self.data = data
         assert "name" in self.data
         self.options = options
-        self.output = output.S3Output(
+        factory = output.select(self.options.output_dir)
+        self.output = factory(
             self.session_factory,
-            output.s3_path_join(
-                self.options.s3_path, self.data.get("name")))
+            factory.join(self.options.output_dir, self.name))
         self.resource_manager = self.get_resource_manager()
 
     @property

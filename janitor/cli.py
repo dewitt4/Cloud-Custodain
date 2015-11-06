@@ -16,8 +16,8 @@ def _default_options(p):
                    help="Verbose Logging")
     p.add_argument("--debug", action="store_true",
                    help="Dev Debug")
-    p.add_argument("-s", "--s3-path", required=True,
-                   help="S3 Bucket URL For Policy Output")
+    p.add_argument("-s", "--output-dir", required=True,
+                   help="Directory or S3 URL For Policy Output")
     p.add_argument("-f", "--cache", default="~/.cache/cloud-janitor.cache")
     p.add_argument("--cache-period", default=60, type=int,
                    help="Cache validity in seconds (Default 60)")
