@@ -55,10 +55,6 @@ class S3OutputReader(object):
         pass
     
 
-def s3_path_join(*parts):
-    return "/".join([s.strip('/') for s in parts])
-
-
 class ExecutionContext(object):
 
     def __init__(self, session_factory, policy_name, s3_path):
@@ -111,9 +107,68 @@ class MetricsOutput(object):
             Namespace=self.namespace,
             MetricData=d)
 
-        
 
-class S3Output(object):
+def select(path):
+    import pdb; pdb.set_trace()
+    if path.startswith('s3://'):
+        return S3Output
+    else:
+        return DirectoryOutput
+    
+    
+class DirectoryOutput(object):
+
+    permissions = ()
+
+    def __init__(self, session_factory, path=None):
+        self.session_factory = session_factory
+        if path is not None:
+            if not os.path.exists(path):
+                os.makedirs(path)
+        self.root_dir = path or tempfile.mkdtemp()
+        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
+        self.handler = None        
+        
+    def __enter__(self):
+        log.info("Storing output to %s" % self.root_dir)
+        self.join_log()
+        return self
+
+    @staticmethod
+    def join(self, *parts):
+        return os.path.join(*parts)
+    
+    def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        self.leave_log()
+
+    def join_log(self):
+        self.handler = logging.FileHandler(
+            os.path.join(self.root_dir, 'maid-run.log'))
+        self.handler.setLevel(logging.DEBUG)
+        self.handler.setFormatter(
+            logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        mlog = logging.getLogger('maid')
+        mlog.addHandler(self.handler)
+
+    def leave_log(self):
+        self.handler.flush()
+        mlog = logging.getLogger('maid')
+        mlog.removeHandler(self.handler)
+
+    def compress(self):
+        # Compress files individually so thats easy to walk them, without
+        # downloading tar and extracting.
+        for root, dirs, files in os.walk(self.root_dir):
+            for f in files:
+                fp = os.path.join(root, f)
+                with gzip.open(fp + ".gz", "wb", compresslevel=7) as zfh:
+                    with open(fp) as sfh:
+                        shutil.copyfileobj(sfh, zfh, length=2**15)
+                    os.remove(fp)
+
+    
+class S3Output(DirectoryOutput):
     """
     Usage::
 
@@ -121,15 +176,12 @@ class S3Output(object):
         log.info('xyz')  # -> log messages sent to maid-run.log.gz
     """
 
-    permissions = ()
+    permissions = ('S3:PutObject',)
     
     def __init__(self, session_factory, s3_path):
+        super(S3Output, self).__init__(session_factory)
         self.s3_path, self.bucket, self.key_prefix = self.parse_s3(s3_path)
-        self.session_factory = session_factory
-        self.root_dir = tempfile.mkdtemp()
-        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
         self.transfer = None
-        self.handler = None
 
     @staticmethod
     def parse_s3(s3_path):
@@ -158,32 +210,6 @@ class S3Output(object):
         self.upload()
         shutil.rmtree(self.root_dir)
         log.debug("Policy Logs uploaded")
-
-    def join_log(self):
-        self.handler = logging.FileHandler(
-            os.path.join(self.root_dir, 'maid-run.log'))
-        self.handler.setLevel(logging.DEBUG)
-        self.handler.setFormatter(
-            logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        mlog = logging.getLogger('maid')
-        mlog.addHandler(self.handler)
-
-    def leave_log(self):
-        self.handler.flush()
-        mlog = logging.getLogger('maid')
-        mlog.removeHandler(self.handler)
-
-    def compress(self):
-        # Compress files individually so thats easy to walk them, without
-        # downloading tar and extracting.
-        for root, dirs, files in os.walk(self.root_dir):
-            for f in files:
-                fp = os.path.join(root, f)
-                with gzip.open(fp + ".gz", "wb", compresslevel=7) as zfh:
-                    with open(fp) as sfh:
-                        shutil.copyfileobj(sfh, zfh, length=2**15)
-                    os.remove(fp)
 
     def upload(self):
         for root, dirs, files in os.walk(self.root_dir):
