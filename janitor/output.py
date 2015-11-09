@@ -82,10 +82,10 @@ class NullMetricsOutput(MetricsOutput):
 
     def __init__(self, ctx, namespace="CloudMaid"):
         super(NullMetricsOutput, self).__init__(ctx, namespace)
-        self.metrics = []
+        self.data = []
     
     def _put_metrics(self, ns, metrics):
-        self.metrics.append({'Namespace': ns, 'MetricData': metrics})
+        self.data.append({'Namespace': ns, 'MetricData': metrics})
     
 
         
