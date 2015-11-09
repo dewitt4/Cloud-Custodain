@@ -57,12 +57,12 @@ class S3OutputReader(object):
 
 class ExecutionContext(object):
 
-    def __init__(self, session_factory, policy_name, s3_path):
+    def __init__(self, session_factory, policy_name, output_path):
         self.policy_name = policy_name
-        self.s3_path = s3_path
+        self.output_path = output_path
         self.session_factory = session_factory
         self.metrics = MetricsOutput(self.session_factory, self.policy_name)
-        self.output = S3Output(self.session_factory)
+        self.output = select(output_path)(self.session_factory, output_path)
         self.start_time = None
 
     @property
@@ -76,7 +76,9 @@ class ExecutionContext(object):
 
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
         self.output.__exit__()
-        self.metrics.put_metric('ExecutionTime', time.time()-self.start_time)
+        self.metrics.put_metric(
+            'ExecutionTime',
+            time.time()-self.start_time)
 
 
 
@@ -90,7 +92,7 @@ class MetricsOutput(object):
         self.namespace = namespace
         self.prefix = prefix
 
-    def metric(self, key, value, units=None, value_type=None):
+    def put_metric(self, key, value, units=None, value_type=None):
         watch = local_session(self.session_factory).client('cloudwatch')
         d = {
             "MetricName": "%s.%s" % (self.prefix, key),
@@ -109,7 +111,6 @@ class MetricsOutput(object):
 
 
 def select(path):
-    import pdb; pdb.set_trace()
     if path.startswith('s3://'):
         return S3Output
     else:
@@ -135,7 +136,7 @@ class DirectoryOutput(object):
         return self
 
     @staticmethod
-    def join(self, *parts):
+    def join(*parts):
         return os.path.join(*parts)
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
@@ -184,6 +185,10 @@ class S3Output(DirectoryOutput):
         self.transfer = None
 
     @staticmethod
+    def join(*parts):
+        return "/".join([s.strip('/') for s in parts])
+    
+    @staticmethod
     def parse_s3(s3_path):
         if not s3_path.startswith('s3://'):
             raise ValueError("invalid s3 path")
@@ -197,10 +202,6 @@ class S3Output(DirectoryOutput):
         else:
             key_prefix = s3_path[s3_path.find('/', 5):]
         return s3_path, bucket, key_prefix
-    
-    def __enter__(self):
-        self.join_log()
-        return self
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
         log.debug("Uploading policy logs")

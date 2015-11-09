@@ -6,7 +6,11 @@ import unittest
 import shutil
 import os
 
-from janitor.output import MetricsOutput, S3Output, s3_path_join
+from janitor.output import MetricsOutput, S3Output
+
+
+class MetricsOutput(unittest.TestCase):
+    pass
 
 
 class S3OutputTest(unittest.TestCase):
@@ -14,15 +18,15 @@ class S3OutputTest(unittest.TestCase):
     def test_path_join(self):
 
         self.assertEqual(
-            s3_path_join('s3://xyz/', '/bar/'),
+            S3Output.join('s3://xyz/', '/bar/'),
             's3://xyz/bar')
 
         self.assertEqual(
-            s3_path_join('s3://xyz/', '/bar/', 'foo'),
+            S3Output.join('s3://xyz/', '/bar/', 'foo'),
             's3://xyz/bar/foo')
 
         self.assertEqual(
-            s3_path_join('s3://xyz/xyz/', '/bar/'),
+            S3Output.join('s3://xyz/xyz/', '/bar/'),
             's3://xyz/xyz/bar')
         
     

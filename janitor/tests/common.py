@@ -46,7 +46,7 @@ class Config(Bag):
         d.update({
             'region': "us-east-1",
             'cache': '',
-            's3_path': 's3://test-example/foo',
+            'output_dir': 's3://test-example/foo',
             'cache_period': 0,
             'dryrun': False})
         d.update(kw)
