@@ -5,6 +5,10 @@ import threading
 import time
 
 
+def loads(body):
+    return json.loads(body)
+
+
 def dumps(data):
     return json.dumps(data, cls=DateTimeEncoder)
 
