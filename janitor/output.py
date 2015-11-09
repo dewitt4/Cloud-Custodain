@@ -45,30 +45,50 @@ log = logging.getLogger('maid.output.s3')
 
 class MetricsOutput(object):
     """
-    Usage:
-      Metrics output
     """
+
+    permissions = ("cloudWatch:PutMetricData",)
+
+    @staticmethod
+    def select(metrics_enabled):
+        if metrics_enabled:
+            return MetricsOutput
+        return NullMetricsOutput
+    
     def __init__(self, ctx, namespace="CloudMaid"):
         self.ctx = ctx
         self.namespace = namespace
 
     def put_metric(self, key, value, unit):
-        watch = local_session(self.ctx.session_factory).client('cloudwatch')
         d = {
             "MetricName": key,
-            "Namespace": self.namespace,
             "Timestamp": datetime.datetime.now(),
-            "Value": self,
+            "Value": value,
             "Unit": unit}
         d["Dimensions"] = [
             {"Name": "Policy", "Value": self.ctx.policy.name},
-            {"Name": "ResType", "Value": self.ctx.policy.resource_type},
-        ]
-        return watch.put_metric(
-            Namespace=self.namespace,
-            MetricData=d)
+            {"Name": "ResType", "Value": self.ctx.policy.resource_type}]
 
+        self._put_metrics(self.namespace, [d])
+
+    def _put_metrics(self, ns, metrics):
+        watch = local_session(self.ctx.session_factory).client('cloudwatch')
+        return watch.put_metric_data(Namespace=ns, MetricData=metrics)
+
+
+class NullMetricsOutput(MetricsOutput):
+
+    permissions = ()
+
+    def __init__(self, ctx, namespace="CloudMaid"):
+        super(NullMetricsOutput, self).__init__(ctx, namespace)
+        self.metrics = []
     
+    def _put_metrics(self, ns, metrics):
+        self.metrics.append({'Namespace': ns, 'MetricData': metrics})
+    
+
+        
 class DirectoryOutput(object):
 
     permissions = ()

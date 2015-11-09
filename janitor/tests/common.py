@@ -9,12 +9,15 @@ from janitor import policy
 
 class BaseTest(unittest.TestCase):
 
-    def load_policy(self, data):
+    def load_policy(self, data, config=None):
         t = tempfile.NamedTemporaryFile()
         t.write(yaml.dump(data, Dumper=yaml.SafeDumper))
         t.flush()
         self.addCleanup(t.close)
-        e = Config.empty()
+        if config:
+            e = Config.empty(**config)
+        else:
+            e = Config.empty()
         return policy.load(e, t.name)
 
 
@@ -46,6 +49,8 @@ class Config(Bag):
         d.update({
             'region': "us-east-1",
             'cache': '',
+            'profile': None,
+            'metrics_enabled': False,
             'output_dir': 's3://test-example/foo',
             'cache_period': 0,
             'dryrun': False})

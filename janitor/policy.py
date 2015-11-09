@@ -43,8 +43,8 @@ class Policy(object):
         self.data = data
         self.options = options
         assert "name" in self.data
-        self.ctx = ExecutionContext(
-            self.name, self, self.options)
+        self.ctx = ExecutionContext(self.session_factory, self, self.options)
+            
         self.resource_manager = self.get_resource_manager()
 
     @property
@@ -55,7 +55,7 @@ class Policy(object):
     def resource_type(self):
         return self.data['resource']
 
-    def __call__(self, ctx):
+    def __call__(self):
         with self.ctx:
             resources = self.resource_manager.resources()
             self.log.info(

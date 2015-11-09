@@ -3,6 +3,7 @@
 concurrent.futures implementation over sqs
 
 
+Scatter/Gather  or Map/Reduce style over two sqs queues.
 
 """
 
