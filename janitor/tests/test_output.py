@@ -6,7 +6,10 @@ import unittest
 import shutil
 import os
 
+from janitor.ctx import ExecutionContext
 from janitor.output import MetricsOutput, S3Output
+
+from janitor.tests.common import Config, Bag
 
 
 class MetricsOutput(unittest.TestCase):
@@ -28,14 +31,21 @@ class S3OutputTest(unittest.TestCase):
         self.assertEqual(
             S3Output.join('s3://xyz/xyz/', '/bar/'),
             's3://xyz/xyz/bar')
-        
-    
-    def test_join_leave_log(self):
-        output = S3Output(None, 's3://cloud-maid/policies/xyz')
+
+    def get_s3_output(self):
+        output = S3Output(
+            ExecutionContext(
+                None,
+                Bag(name="xyz"),
+                Config.empty(output_dir="s3://cloud-maid/policies")))
         self.addCleanup(shutil.rmtree, output.root_dir)
 
-
+        return output
+        
+    def test_join_leave_log(self):
+        output = self.get_s3_output()
         output.join_log()
+        
         l = logging.getLogger('maid.s3')
 
         # recent versions of nose mess with the logging manager
@@ -54,8 +64,7 @@ class S3OutputTest(unittest.TestCase):
             self.assertTrue(content.endswith('hello world'))
 
     def test_compress(self):
-        output = S3Output(None, 's3://cloud-maid/policies/xyz')
-        self.addCleanup(shutil.rmtree, output.root_dir)
+        output = self.get_s3_output()
 
         with open(os.path.join(output.root_dir, 'foo.txt'), 'w') as fh:
             fh.write('abc')
@@ -73,8 +82,8 @@ class S3OutputTest(unittest.TestCase):
                     self.assertEqual(fh.read(), 'abc')
                     
     def test_upload(self):
-        output = S3Output(None, 's3://cloud-maid/policies/xyz')
-        self.addCleanup(shutil.rmtree, output.root_dir)
+        output = self.get_s3_output()
+        self.assertEqual(output.key_prefix, "/policies/xyz")
 
         with open(os.path.join(output.root_dir, 'foo.txt'), 'w') as fh:
             fh.write('abc')
@@ -91,8 +100,7 @@ class S3OutputTest(unittest.TestCase):
                 'ServerSideEncryption': 'AES256'})
 
     def test_sans_prefix(self):
-        output = S3Output(None, 's3://cloud-maid')
-        self.addCleanup(shutil.rmtree, output.root_dir)
+        output = self.get_s3_output()
 
         with open(os.path.join(output.root_dir, 'foo.txt'), 'w') as fh:
             fh.write('abc')
@@ -104,7 +112,7 @@ class S3OutputTest(unittest.TestCase):
         
         m.assert_called_with(
             fh.name, 'cloud-maid',
-            '%s/foo.txt' % output.date_path ,
+            'policies/xyz/%s/foo.txt' % output.date_path,
             extra_args={
                 'ServerSideEncryption': 'AES256'})
         

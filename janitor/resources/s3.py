@@ -55,10 +55,9 @@ class S3(ResourceManager):
 
     executor_factory = executor.ThreadPoolExecutor
 
-    def __init__(self, session_factory, data, config, log_dir):
-        super(S3, self).__init__(
-            session_factory, data, config, log_dir)
-        self.log_dir = log_dir
+    def __init__(self, ctx, data):
+        super(S3, self).__init__(ctx, data)
+        self.log_dir = ctx.log_dir
         self.rate_limit = {
             'key_process_rate': TokenBucket(2000),
         }
@@ -303,7 +302,7 @@ class EncryptionRequiredPolicy(BucketActionBase):
              "Resource":"arn:aws:s3:::%s/*" % b['Name'],
              "Condition":{
                  # AWS Managed Keys or KMS keys, note policy language
-                 # does not support customer supplied keys.
+                 # does not support custom kms (todo add issue)
                  "StringNotEquals":{
                      "s3:x-amz-server-side-encryption": ["AES256", "aws:kms"]}}
              })

@@ -33,7 +33,7 @@ import gzip
 import logging
 import shutil
 import tempfile
-import time
+
 import os
 
 from boto3.s3.transfer import S3Transfer
@@ -43,90 +43,49 @@ from janitor.utils import local_session
 log = logging.getLogger('maid.output.s3')
 
 
-class S3OutputReader(object):
-
-    def __init__(self, session_factory, s3_path):
-        pass
-
-    def read_last(self, policy_name, path):
-        pass
-
-    def read_last_log(self, policy_name):
-        pass
-    
-
-class ExecutionContext(object):
-
-    def __init__(self, session_factory, policy_name, output_path):
-        self.policy_name = policy_name
-        self.output_path = output_path
-        self.session_factory = session_factory
-        self.metrics = MetricsOutput(self.session_factory, self.policy_name)
-        self.output = select(output_path)(self.session_factory, output_path)
-        self.start_time = None
-
-    @property
-    def log_dir(self):
-        return self.output.root_dir    
-
-    def __enter__(self):
-        self.output.__enter__()
-        self.start_time = time.time()
-        return self
-
-    def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
-        self.output.__exit__()
-        self.metrics.put_metric(
-            'ExecutionTime',
-            time.time()-self.start_time)
-
-
-
 class MetricsOutput(object):
     """
     Usage:
       Metrics output
     """
-    def __init__(self, session_factory, prefix, namespace="CloudMaid"):
-        self.session_factory = session_factory
+    def __init__(self, ctx, namespace="CloudMaid"):
+        self.ctx = ctx
         self.namespace = namespace
-        self.prefix = prefix
 
-    def put_metric(self, key, value, units=None, value_type=None):
-        watch = local_session(self.session_factory).client('cloudwatch')
+    def put_metric(self, key, value, unit):
+        watch = local_session(self.ctx.session_factory).client('cloudwatch')
         d = {
-            "MetricName": "%s.%s" % (self.prefix, key),
+            "MetricName": key,
+            "Namespace": self.namespace,
             "Timestamp": datetime.datetime.now(),
             "Value": self,
-            "Unit": units}
-        if units:
-            d['Unit'] = units
-        if value_type:
-            d["StatisticValues"] = {value_type: value}
-        else:
-            d["Dimensions"] = [{"Name": key, "Value": value}]
+            "Unit": unit}
+        d["Dimensions"] = [
+            {"Name": "Policy", "Value": self.ctx.policy.name},
+            {"Name": "ResType", "Value": self.ctx.policy.resource_type},
+        ]
         return watch.put_metric(
             Namespace=self.namespace,
             MetricData=d)
 
-
-def select(path):
-    if path.startswith('s3://'):
-        return S3Output
-    else:
-        return DirectoryOutput
-    
     
 class DirectoryOutput(object):
 
     permissions = ()
 
-    def __init__(self, session_factory, path=None):
-        self.session_factory = session_factory
-        if path is not None:
-            if not os.path.exists(path):
-                os.makedirs(path)
-        self.root_dir = path or tempfile.mkdtemp()
+    @staticmethod
+    def select(path):
+        if path.startswith('s3://'):
+            return S3Output
+        else:
+            return DirectoryOutput
+    
+    def __init__(self, ctx):
+        self.ctx = ctx
+        if self.ctx.output_path is not None:
+            if not os.path.exists(self.ctx.output_path):
+                os.makedirs(self.ctx.output_path)
+        self.root_dir = self.ctx.output_path or tempfile.mkdtemp()
         self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
         self.handler = None        
         
@@ -179,9 +138,11 @@ class S3Output(DirectoryOutput):
 
     permissions = ('S3:PutObject',)
     
-    def __init__(self, session_factory, s3_path):
-        super(S3Output, self).__init__(session_factory)
-        self.s3_path, self.bucket, self.key_prefix = self.parse_s3(s3_path)
+    def __init__(self, ctx):
+        super(S3Output, self).__init__(ctx)
+        self.s3_path, self.bucket, self.key_prefix = self.parse_s3(
+            self.ctx.output_path)
+        self.root_dir = tempfile.mkdtemp()
         self.transfer = None
 
     @staticmethod
@@ -207,7 +168,7 @@ class S3Output(DirectoryOutput):
         log.debug("Uploading policy logs")
         self.leave_log()
         self.compress()
-        self.transfer = S3Transfer(self.session_factory().client('s3'))
+        self.transfer = S3Transfer(self.ctx.session_factory().client('s3'))
         self.upload()
         shutil.rmtree(self.root_dir)
         log.debug("Policy Logs uploaded")
