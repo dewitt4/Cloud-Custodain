@@ -1,11 +1,16 @@
+from janitor.ctx import ExecutionContext
 from janitor.resources.ec2 import EC2, Mark
-from janitor.tests.common import BaseTest, instance
+from janitor.tests.common import BaseTest, instance, Bag, Config
 
 
 class TestEC2Manager(BaseTest):
 
     def get_manager(self, data, config=None, session_factory=None):
-        return EC2(session_factory, data, config, None)
+        ctx = ExecutionContext(
+            session_factory,
+            Bag({'name':'test-policy'}),
+            config or Config.empty())
+        return EC2(ctx, data)
 
     def test_manager_invalid_data_type(self):
         self.assertRaises(

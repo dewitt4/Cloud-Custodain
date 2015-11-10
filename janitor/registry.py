@@ -18,7 +18,11 @@ class Registry(object):
         return _register_class
 
     register = register_class
-    
+
+    def unregister(self, name):
+        if name in self.data:
+            del self.data[name]
+        
     def get(self, name):
         return self.data.get(name)
 

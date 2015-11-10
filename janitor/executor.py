@@ -4,23 +4,21 @@ from concurrent.futures import (
 
 from janitor.registry import Registry
 
+
 class ExecutorRegistry(Registry):
 
     def __init__(self, plugin_type):
         super(ExecutorRegistry, self).__init__(plugin_type)
 
         self.register_class('process', ProcessPoolExecutor)
-        self.register_class('thread', ProcessPoolExecutor)
-        self.register_class('main', ProcessPoolExecutor)
-
-
-executors = ExecutorRegistry('executor')
-executors.load_plugins()
+        self.register_class('thread', ThreadPoolExecutor)
+        self.register_class('main', MainThreadExecutor)
 
 
 def executor(name, **kw):
     factory = executors.get(name)
-    factory.validate(kw)
+    # post element refactoring
+    #factory.validate(kw)
     if factory is None:
         raise ValueError("No Such Executor %s" % name)
     return factory(**kw)
@@ -69,3 +67,9 @@ class MainThreadFuture(object):
 
     def add_done_callback(self, fn):
         return fn(self)
+
+
+executors = ExecutorRegistry('executor')
+executors.load_plugins()
+
+    

@@ -13,6 +13,8 @@ import unittest
 
 from janitor.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
 
+from janitor.tests.common import BaseTest, Config, Bag
+
 
 TEST_S3_BUCKET = os.environ.get('TEST_BUCKET', "cloud-maid-ftest")
 
@@ -38,7 +40,7 @@ def generateBucketContents(s3, bucket, contents):
             ContentType='text/plain')
     
 
-class BaseFTest(unittest.TestCase):
+class BaseFTest(BaseTest):
 
 
     def capture_logging(
@@ -60,6 +62,7 @@ class BaseFTest(unittest.TestCase):
 
         return log_file
 
+
     
 class S3Functional(BaseFTest):
 
@@ -79,8 +82,16 @@ class S3Functional(BaseFTest):
             raise ValueError("Test Bucket %s already exists" % self.b)
 
         self.log_dir = tempfile.mkdtemp()
+        
         self.addCleanup(shutil.rmtree, self.log_dir)
         self.output = self.capture_logging('maid')
+        self.manager = S3(
+            self.get_context(
+                session_factory=session_factory,
+                policy=Bag({'name': 'cloud-maid-s3-ftest',
+                            'resource_type': 's3'}),
+                config=Config.empty(output_dir=self.log_dir)),
+            {})
         
     def generate_contents(self, contents=None):
         default_contents = {
@@ -97,13 +108,14 @@ class S3Functional(BaseFTest):
             ['aws', 's3', 'rb', '--force', "s3://%s" % self.b])
 
     def test_encrypted_prefix(self):
-        """Creating a prefix for logs. 
+        #
+        # Creating a prefix for logs. 
+        #
+        # So this is a confirmation that encrypting a prefix key does nothing for
+        # either previous objects or new objects under that prefix :-(
 
-        So this is a confirmation that encrypting a prefix key does nothing for
-        either previous objects or new objects under that prefix :-(
-        """
         self.generate_contents()
-        manager = S3(session_factory, {}, None, self.log_dir)
+        manager = self.manager
         visitor = EncryptedPrefix({'prefix': 'AWSLogs'}, manager, self.log_dir)
         result = visitor.process([{"Name": self.b}])
         self.assertEqual(
@@ -134,7 +146,7 @@ class S3Functional(BaseFTest):
                 Bucket=self.b, Key=prefix_check_path))
         
     def test_bucket_scan_empty_bucket(self):
-        manager = S3(session_factory, {}, None, self.log_dir)
+        manager = self.manager
         visitor = EncryptExtantKeys({'report-only': True}, manager, self.log_dir)
         result = visitor.process([{"Name": self.b}])
         # Assert that we get the right remediated counts
@@ -143,8 +155,7 @@ class S3Functional(BaseFTest):
         
     def test_encrypt_keys_read_only(self):
         self.generate_contents()
-        
-        manager = S3(session_factory, {}, None, self.log_dir)
+        manager = self.manager
         visitor = EncryptExtantKeys({'report-only': True}, manager, self.log_dir)
         result = visitor.process([{"Name": self.b}])
 
@@ -162,8 +173,7 @@ class S3Functional(BaseFTest):
         
     def test_encrypt_keys(self):
         self.generate_contents()
-
-        manager = S3(session_factory, {}, None, self.log_dir)
+        manager = self.manager
         visitor = EncryptExtantKeys({}, manager, self.log_dir)
         result = visitor.process([{"Name": self.b}])
         self.assertEqual(
@@ -179,7 +189,7 @@ class S3Functional(BaseFTest):
     def test_encrypt_keys_kms(self):
         self.generate_contents()
 
-        manager = S3(session_factory, {}, None, self.log_dir)
+        manager = self.manager
         visitor = EncryptExtantKeys({'crypto': 'aws:kms'}, manager, self.log_dir)
         result = visitor.process([{"Name": self.b}])
 
