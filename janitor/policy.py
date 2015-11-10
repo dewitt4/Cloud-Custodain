@@ -44,7 +44,6 @@ class Policy(object):
         self.options = options
         assert "name" in self.data
         self.ctx = ExecutionContext(self.session_factory, self, self.options)
-            
         self.resource_manager = self.get_resource_manager()
 
     @property

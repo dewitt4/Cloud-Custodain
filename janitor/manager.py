@@ -19,3 +19,4 @@ class ResourceManager(object):
         self.log = logging.getLogger('janitor.resources.%s' % (
             self.__class__.__name__.lower()))
 
+
