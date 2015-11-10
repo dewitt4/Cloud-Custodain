@@ -1,6 +1,5 @@
 import unittest
 
-import boto
 import yaml
 
 from janitor import policy, manager
