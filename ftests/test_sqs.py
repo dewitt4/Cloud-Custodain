@@ -32,7 +32,7 @@ class SQSExecFunctional(unittest.TestCase):
                     'QueueUrl']
         self.addCleanup(self.client.delete_queue, QueueUrl=self.reduce_queue)        
 
-    def test_executor(self):
+    def xtest_executor(self):
         with SQSExecutor(session_factory, self.map_queue, self.reduce_queue) as w:
             results = w.map(sum, [1,2,3,4])
             print list(results)

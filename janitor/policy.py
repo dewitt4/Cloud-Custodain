@@ -3,11 +3,11 @@ import os
 import time
 
 import boto3
-#import bson
 import yaml
 
+from janitor.ctx import ExecutionContext
 from janitor.manager import resources
-from janitor import output
+from janitor import output, utils
 
 # Trigger Registrations
 import janitor.resources
@@ -41,12 +41,9 @@ class Policy(object):
 
     def __init__(self, data, options):
         self.data = data
-        assert "name" in self.data
         self.options = options
-        factory = output.select(self.options.output_dir)
-        self.output = factory(
-            self.session_factory,
-            factory.join(self.options.output_dir, self.name))
+        assert "name" in self.data
+        self.ctx = ExecutionContext(self.session_factory, self, self.options)
         self.resource_manager = self.get_resource_manager()
 
     @property
@@ -58,38 +55,47 @@ class Policy(object):
         return self.data['resource']
 
     def __call__(self):
-        with self.output: 
+        with self.ctx:
+            s = time.time()
             resources = self.resource_manager.resources()
+            rt = time.time() - s
             self.log.info(
-                "policy: %s resource:%s has count:%s resources" % (
-                    self.name, self.resource_type, len(resources)))
-            #self._write_file('resources.bson', bson.dumps(resources))
-            
+                "policy: %s resource:%s has count:%d time:%0.2f" % (
+                    self.name, self.resource_type, len(resources), rt))
+            self.ctx.metrics.put_metric(
+                "ResourceCount", len(resources), "Count", Scope="Policy")
+            self.ctx.metrics.put_metric(
+                "ResourceTime", rt, "Seconds", Scope="Policy")
+            self._write_file('resources.json', utils.dumps(resources))
+
+            at = time.time()            
             for a in self.resource_manager.actions:
                 s = time.time()
                 results = a.process(resources)
                 self.log.info(
                     "policy: %s action: %s execution_time: %0.2f" % (
                         self.name, a.name, time.time()-s))
-                #self._write_file("action-%s" % a.name, bson.dumps(results))
-                
+                self._write_file("action-%s" % a.name, utils.dumps(results))
+            self.ctx.metrics.put_metric(
+                "ActionTime", time.time() - at, "Seconds", Scope="Policy")
+            
     def _write_file(self, rel_p, value):
         with open(
-                os.path.join(self.output.root_dir, rel_p), 'w') as fh:
+                os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:
             fh.write(value)
-                    
+
     def session_factory(self):
-        return boto3.Session(
+        session =  boto3.Session(
             region_name=self.options.region,
             profile_name=self.options.profile)
-
+        session._session.user_agent_name = "CloudMaid"
+        session._session.user_agent_version = "0.5"
+        return session
+        
     def get_resource_manager(self):
         resource_type = self.data.get('resource')
         factory = resources.get(resource_type)
         if not factory:
             raise ValueError(
                 "Invalid resource type: %s" % resource_type)
-        return factory(self.session_factory,
-                       self.data,
-                       self.options,
-                       self.output.root_dir)
+        return factory(self.ctx, self.data)

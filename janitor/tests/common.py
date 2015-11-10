@@ -2,19 +2,35 @@ import json
 import inspect
 import os
 import unittest
+import shutil
 import tempfile
 import yaml
 
 from janitor import policy
+from janitor.ctx import ExecutionContext
 
 class BaseTest(unittest.TestCase):
 
-    def load_policy(self, data):
+    def get_context(self, config=None, session_factory=None, policy=None):
+        if config is None:
+            self.context_output_dir = self.mkdtemp()
+            self.addCleanup(shutil.rmtree, self.context_output_dir)
+            config = Config.empty(output_dir=self.context_output_dir)
+        ctx = ExecutionContext(
+            session_factory,
+            policy or Bag({'name':'test-policy'}),
+            config)
+        return ctx
+    
+    def load_policy(self, data, config=None):
         t = tempfile.NamedTemporaryFile()
         t.write(yaml.dump(data, Dumper=yaml.SafeDumper))
         t.flush()
         self.addCleanup(t.close)
-        e = Config.empty()
+        if config:
+            e = Config.empty(**config)
+        else:
+            e = Config.empty()
         return policy.load(e, t.name)
 
 
@@ -46,7 +62,9 @@ class Config(Bag):
         d.update({
             'region': "us-east-1",
             'cache': '',
-            's3_path': 's3://test-example/foo',
+            'profile': None,
+            'metrics_enabled': False,
+            'output_dir': 's3://test-example/foo',
             'cache_period': 0,
             'dryrun': False})
         d.update(kw)

@@ -18,6 +18,9 @@ def _default_options(p):
                    help="Dev Debug")
     p.add_argument("-s", "--output-dir", required=True,
                    help="Directory or S3 URL For Policy Output")
+    p.add_argument("-m", "--metrics-enabled",
+                   default=False, action="store_true",
+                   help="Emit CloudWatch Metrics (default false)")    
     p.add_argument("-f", "--cache", default="~/.cache/cloud-janitor.cache")
     p.add_argument("--cache-period", default=60, type=int,
                    help="Cache validity in seconds (Default 60)")
