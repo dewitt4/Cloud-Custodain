@@ -23,7 +23,7 @@ class LambdaAction(BaseAction):
         ctx.create()
 
     def generate_lambda(self):
-        return
+        raise NotImplementedError("generate_lambda()")
 
     
 class KappaAction(LambdaAction):
@@ -35,7 +35,7 @@ class KappaAction(LambdaAction):
                 "Could not find kappa/lambda dir %s" % kappa_dir)
         return Context(os.path.join(kappa_dir))
     
-        
+
 class S3Crypter(LambdaAction):
 
     files = ('s3crypter.py',)
