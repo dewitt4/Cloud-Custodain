@@ -2,13 +2,26 @@ import json
 import inspect
 import os
 import unittest
+import shutil
 import tempfile
 import yaml
 
 from janitor import policy
+from janitor.ctx import ExecutionContext
 
 class BaseTest(unittest.TestCase):
 
+    def get_context(self, config=None, session_factory=None, policy=None):
+        if config is None:
+            self.context_output_dir = self.mkdtemp()
+            self.addCleanup(shutil.rmtree, self.context_output_dir)
+            config = Config.empty(output_dir=self.context_output_dir)
+        ctx = ExecutionContext(
+            session_factory,
+            policy or Bag({'name':'test-policy'}),
+            config)
+        return ctx
+    
     def load_policy(self, data, config=None):
         t = tempfile.NamedTemporaryFile()
         t.write(yaml.dump(data, Dumper=yaml.SafeDumper))

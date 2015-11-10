@@ -44,7 +44,7 @@ log = logging.getLogger('maid.output.s3')
 
 
 class MetricsOutput(object):
-    """
+    """Send metrics data to cloudwatch
     """
 
     permissions = ("cloudWatch:PutMetricData",)
@@ -58,8 +58,14 @@ class MetricsOutput(object):
     def __init__(self, ctx, namespace="CloudMaid"):
         self.ctx = ctx
         self.namespace = namespace
+        self.buf = []
 
-    def put_metric(self, key, value, unit):
+    def flush(self):
+        if self.buf:
+            self._put_metrics(self.namespace, self.buf)
+            self.buf = []
+    
+    def put_metric(self, key, value, unit, buffer=False, **dimensions):
         d = {
             "MetricName": key,
             "Timestamp": datetime.datetime.now(),
@@ -68,8 +74,15 @@ class MetricsOutput(object):
         d["Dimensions"] = [
             {"Name": "Policy", "Value": self.ctx.policy.name},
             {"Name": "ResType", "Value": self.ctx.policy.resource_type}]
+        for k, v in dimensions.items():
+            d['Dimensions'].append({"Name": k, "Value": v})
 
-        self._put_metrics(self.namespace, [d])
+        if buffer:
+            self.buf.append(d)
+            if len(self.buf) > 200:
+                self.flush()
+        else:
+            self._put_metrics(self.namespace, [d])
 
     def _put_metrics(self, ns, metrics):
         watch = local_session(self.ctx.session_factory).client('cloudwatch')
@@ -88,10 +101,7 @@ class NullMetricsOutput(MetricsOutput):
         self.data.append({'Namespace': ns, 'MetricData': metrics})
     
 
-        
-class DirectoryOutput(object):
-
-    permissions = ()
+class FSOutput(object):
 
     @staticmethod
     def select(path):
@@ -99,16 +109,13 @@ class DirectoryOutput(object):
             return S3Output
         else:
             return DirectoryOutput
-    
+        
     def __init__(self, ctx):
         self.ctx = ctx
-        if self.ctx.output_path is not None:
-            if not os.path.exists(self.ctx.output_path):
-                os.makedirs(self.ctx.output_path)
         self.root_dir = self.ctx.output_path or tempfile.mkdtemp()
         self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
         self.handler = None        
-        
+
     def __enter__(self):
         log.info("Storing output to %s" % self.root_dir)
         self.join_log()
@@ -135,7 +142,7 @@ class DirectoryOutput(object):
         self.handler.flush()
         mlog = logging.getLogger('maid')
         mlog.removeHandler(self.handler)
-
+        
     def compress(self):
         # Compress files individually so thats easy to walk them, without
         # downloading tar and extracting.
@@ -147,8 +154,19 @@ class DirectoryOutput(object):
                         shutil.copyfileobj(sfh, zfh, length=2**15)
                     os.remove(fp)
 
+                    
+class DirectoryOutput(FSOutput):
+
+    permissions = ()
+
+    def __init__(self, ctx):
+        super(DirectoryOutput, self).__init__(ctx)
+        if self.ctx.output_path is not None:
+            if not os.path.exists(self.ctx.output_path):
+                os.makedirs(self.ctx.output_path)
+
     
-class S3Output(DirectoryOutput):
+class S3Output(FSOutput):
     """
     Usage::
 

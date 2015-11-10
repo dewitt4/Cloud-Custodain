@@ -447,6 +447,20 @@ class EncryptExtantKeys(ScanBucket):
         for r in results:
             object_count += r['Count']
             remediated_count += r['Remediated']
+            self.ctx.metrics.put_metric(
+                "Unencrypted", r['Remediated'], "Count", Scope=r['Bucket'],
+                buffer=True)
+
+        self.ctx.metrics.put_metric(
+            "Unencrypted", remediated_count, "Count", Scope="Account",
+            buffer=True
+        )
+        self.ctx.metrics.put_metric(
+            "Total Keys", object_count, "Count", Scope="Account",
+            buffer=True
+        )
+        self.ctx.flush()
+                
         log.info(
             "EncryptExtant Complete keys:%d remediated:%d rate:%0.2f/s time:%0.2fs",
             object_count,

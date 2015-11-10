@@ -69,6 +69,6 @@ class TestPolicy(BaseTest):
             {'output_dir': self.output_dir})
         p = collection.policies()[0]
         p()
-        self.assertEqual(len(p.ctx.metrics.data), 1)
+        self.assertEqual(len(p.ctx.metrics.data), 3)
 
         

@@ -57,12 +57,19 @@ class Policy(object):
 
     def __call__(self):
         with self.ctx:
+            s = time.time()
             resources = self.resource_manager.resources()
+            rt = time.time() - s
             self.log.info(
-                "policy: %s resource:%s has count:%s resources" % (
-                    self.name, self.resource_type, len(resources)))
+                "policy: %s resource:%s has count:%d time:%0.2f" % (
+                    self.name, self.resource_type, len(resources), rt))
+            self.ctx.metrics.put_metric(
+                "ResourceCount", len(resources), "Count", Scope="Policy")
+            self.ctx.metrics.put_metric(
+                "ResourceTime", rt, "Seconds", Scope="Policy")
             self._write_file('resources.json', utils.dumps(resources))
-            
+
+            at = time.time()            
             for a in self.resource_manager.actions:
                 s = time.time()
                 results = a.process(resources)
@@ -70,7 +77,9 @@ class Policy(object):
                     "policy: %s action: %s execution_time: %0.2f" % (
                         self.name, a.name, time.time()-s))
                 self._write_file("action-%s" % a.name, utils.dumps(results))
-                
+            self.ctx.metrics.put_metric(
+                "ActionTime", time.time() - at, "Seconds", Scope="Policy")
+            
     def _write_file(self, rel_p, value):
         with open(
                 os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:
