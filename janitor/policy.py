@@ -66,6 +66,7 @@ class Policy(object):
 
     def __call__(self):
         with self.ctx:
+            self.log.info("Running policy %s" % self.name)
             s = time.time()
             resources = self.resource_manager.resources()
             rt = time.time() - s
