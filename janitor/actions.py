@@ -61,8 +61,8 @@ class BaseAction(object):
             return cmd(*args, **kw)
         except ClientError, e:
             if (e.response['Error']['Code'] == 'DryRunOperation'
-                and e.status == 412
-                and e.reason == 'Precondition Failed'):
+                and e.response['HTTPStatusCode'] == 412
+                and 'would have succeeded' in e.message:
                 return self.log.info(
                     "Dry run operation %s succeeded" % (
                         self.__class__.__name__.lower()))
