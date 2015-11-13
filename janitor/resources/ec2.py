@@ -287,6 +287,9 @@ class MarkForOp(BaseAction):
 
         self.log.info("Tagging %d instances for %s on %s" % (
             len(instances), op, stop_date.strftime('%Y/%m/%d')))
+
+        if not len(instances):
+            return
         
         self._run_api(
             self.manager.client.create_tags,
