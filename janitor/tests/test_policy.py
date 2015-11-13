@@ -40,6 +40,31 @@ class DummyResource(manager.ResourceManager):
 
 class TestPolicy(BaseTest):
 
+    def test_policy_name_filtering(self):
+
+        collection = self.load_policy(
+            {'policies': [
+                {'name': 's3-remediate',
+                 'resource': 's3'},
+                {'name': 's3-global-grants',
+                 'resource': 's3'},
+                {'name': 'ec2-tag-compliance-stop',
+                 'resource': 'ec2'},
+                {'name': 'ec2-tag-compliance-kill',
+                 'resource': 'ec2'},
+                {'name': 'ec2-tag-compliance-remove',
+                 'resource': 'ec2'}]},
+            )
+        self.assertEqual(
+            [p.name for p in collection.policies('s3*')],
+            ['s3-remediate', 's3-global-grants'])
+
+        self.assertEqual(
+            [p.name for p in collection.policies('ec2*')],
+            ['ec2-tag-compliance-stop',
+             'ec2-tag-compliance-kill',
+             'ec2-tag-compliance-remove'])
+                
     def test_file_not_found(self):
         self.assertRaises(
             ValueError, policy.load, Config.empty(), "/asdf12")
