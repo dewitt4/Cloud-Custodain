@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 import time
@@ -7,7 +8,7 @@ import yaml
 
 from janitor.ctx import ExecutionContext
 from janitor.manager import resources
-from janitor import output, utils
+from janitor import utils
 
 # Trigger Registrations
 import janitor.resources
@@ -28,8 +29,17 @@ class PolicyCollection(object):
         self.data = data
         self.options = options
         
-    def policies(self):
-        return [Policy(p, self.options) for p in self.data.get('policies', [])]
+    def policies(self, filters=None):
+        policies = [Policy(p, self.options) for p in self.data.get(
+            'policies', [])]
+        if not filters:
+            return policies
+
+        sort_order = [p.get('name') for p in self.data.get('policies', [])]
+        policy_map = dict([(p.name, p) for p in policies])
+        
+        matched = fnmatch.filter(policy_map.keys(), filters)
+        return [policy_map[n] for n in sort_order if n in matched]
 
     def __iter__(self):
         return iter(self.policies())
