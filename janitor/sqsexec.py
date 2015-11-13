@@ -8,7 +8,6 @@ Scatter/Gather or Map/Reduce style over two sqs queues.
 """
 
 import random
-from threading import Condition
 import logging
 import inspect
 
