@@ -201,6 +201,8 @@ class MarkedForOp(Filter):
 class Mark(BaseAction):
 
     def process(self, instances):
+        if not len(instances):
+            return
         msg = self.data.get(
             'msg', 'Instance does not meet ec2 policy guidelines')
         tag = self.data.get('tag', 'maid_status')
@@ -217,6 +219,8 @@ class Mark(BaseAction):
 class Unmark(BaseAction):
 
     def process(self, instances):
+        if not len(instances):
+            return
         tag = self.data.get('tag', 'maid_status')
         self._run_api(
             self.manager.client.create_tags,
@@ -230,6 +234,8 @@ class Unmark(BaseAction):
 class Start(BaseAction):
 
     def process(self, instances):
+        if not len(instances):
+            return
         self._run_api(
             self.manager.client.start_instances,
             InstanceIds=[i['InstanceId'] for i in instances],
@@ -240,7 +246,9 @@ class Start(BaseAction):
 class Stop(BaseAction):
 
     def process(self, instances):
-        self.log.info("Stopping %d instances" % len(instances))        
+        self.log.info("Stopping %d instances" % len(instances))
+        if not len(instances):
+            return
         self._run_api(
             self.manager.client.stop_instances,
             InstanceIds=[i['InstanceId'] for i in instances],
@@ -252,6 +260,8 @@ class Terminate(BaseAction):
 
     def process(self, instances):
         self.log.info("Terminating %d instances" % len(instances))
+        if not len(instances):
+            return
         self._run_api(
             self.manager.client.terminate_instances,
             InstanceIds=[i['InstanceId'] for i in instances],
