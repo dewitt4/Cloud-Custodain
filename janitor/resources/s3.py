@@ -41,7 +41,7 @@ from janitor.filters import (
 
 from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
-from janitor.utils import chunks, local_session
+from janitor.utils import chunks, local_session, dumps, set_annotation
 
 
 log = logging.getLogger('maid.s3')
@@ -70,7 +70,7 @@ class S3(ResourceManager):
         return self.rate_limit[m].consume(v)
 
     def format_json(self, resources, fh):
-        json.dumps([r['Name'] for r in resources], fh)
+        return dumps(resources, fh, indent=2)
         
     def resources(self, matches=()):
         c = self.session_factory().client('s3')
@@ -89,7 +89,7 @@ class S3(ResourceManager):
             results = filter(None, results)
 
         for f in self.filters:
-            results = filter(f, results)
+            results = f.process(results)
 
         log.debug("Filtered to %d buckets" % len(results))
         return results
@@ -167,8 +167,6 @@ def bucket_client(s, b, kms=False):
 @filters.register('global-grants')        
 class NoGlobalGrants(Filter):
 
-    permissions = ("s3:GetBucketACL", "s3:SetBucketACL")
-    
     GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
     AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
     
@@ -190,7 +188,9 @@ class NoGlobalGrants(Filter):
 
         c = bucket_client(self.manager.session_factory(), b)
 
-        return {'Bucket': b['Name'], 'GlobalPermissions': results}
+        if results:
+            set_annotation(b, 'GlobalPermissions', results)
+            return b
 
 
 class BucketActionBase(BaseAction):
@@ -464,7 +464,7 @@ class EncryptExtantKeys(ScanBucket):
         crypto_method = self.data.get('crypto', 'AES256')
         b = bucket['Name']
         s3 = bucket_client(
-            self.manager.session_factory(), bucket,
+            local_session(self.manager.session_factory), bucket,
             kms = (crypto_method == 'aws:kms'))
         results = []
         for key in batch:
