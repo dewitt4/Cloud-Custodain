@@ -2,6 +2,7 @@ import logging
 
 from janitor import cache
 from janitor.registry import Registry
+from janitor.utils import dumps
 
 
 resources = Registry('resources')
@@ -19,4 +20,6 @@ class ResourceManager(object):
         self.log = logging.getLogger('janitor.resources.%s' % (
             self.__class__.__name__.lower()))
 
-
+    def format_json(self, resources, fh):
+        return dumps(resources, fh, indent=2)
+        

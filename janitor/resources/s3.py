@@ -68,9 +68,6 @@ class S3(ResourceManager):
         
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
-
-    def format_json(self, resources, fh):
-        return dumps(resources, fh, indent=2)
         
     def resources(self, matches=()):
         c = self.session_factory().client('s3')
