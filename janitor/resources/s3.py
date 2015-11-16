@@ -41,7 +41,7 @@ from janitor.filters import (
 
 from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
-from janitor.utils import chunks, local_session
+from janitor.utils import chunks, local_session, dumps, set_annotation
 
 
 log = logging.getLogger('maid.s3')
@@ -62,7 +62,7 @@ class S3(ResourceManager):
             'key_process_rate': TokenBucket(2000),
         }
         self.filters = filters.parse(
-            self.data.get('filters', []))
+            self.data.get('filters', []), self)
         self.actions = actions.parse(
             self.data.get('actions', []), self)
         
@@ -70,7 +70,7 @@ class S3(ResourceManager):
         return self.rate_limit[m].consume(v)
 
     def format_json(self, resources, fh):
-        json.dumps([r['Name'] for r in resources], fh)
+        return dumps(resources, fh, indent=2)
         
     def resources(self, matches=()):
         c = self.session_factory().client('s3')
@@ -89,7 +89,7 @@ class S3(ResourceManager):
             results = filter(None, results)
 
         for f in self.filters:
-            results = filter(f, results)
+            results = f.process(results)
 
         log.debug("Filtered to %d buckets" % len(results))
         return results
@@ -164,14 +164,41 @@ def bucket_client(s, b, kms=False):
         config=config)
 
 
-class BucketActionBase(BaseAction):
+@filters.register('global-grants')        
+class NoGlobalGrants(Filter):
 
-    executor_factory = executor.ThreadPoolExecutor
+    GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
+    AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+    
+    def process(self, buckets):
+        with self.executor_factory(max_workers=5) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
+
+    def process_bucket(self, b):
+        acl = b.get('Acl', {'Grants': []})
+
+        results = []
+        for grant in acl['Grants']:
+            if not 'URI' in grant.get("Grantee", {}):
+                continue
+            if grant['Grantee']['URI'] in [self.AUTH_ALL, self.GLOBAL_ALL]:
+                results.append(grant['Permission'])
+
+        c = bucket_client(self.manager.session_factory(), b)
+
+        if results:
+            set_annotation(b, 'GlobalPermissions', results)
+            return b
+
+
+class BucketActionBase(BaseAction):
 
     def get_permissions(self):
         return self.permissions
 
-
+    
 @actions.register('encrypted-prefix')
 class EncryptedPrefix(BucketActionBase):
 
@@ -218,48 +245,6 @@ class EncryptedPrefix(BucketActionBase):
         return {'Bucket': b['Name'], 'Prefix': k, 'State': 'Updated'}
         
             
-@actions.register('global-grants')        
-class NoGlobalGrants(BucketActionBase):
-
-    permissions = ("s3:GetBucketACL", "s3:SetBucketACL")
-    
-    GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
-    AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
-    
-    def process(self, buckets):
-        with self.executor_factory(max_workers=5) as w:
-            results = w.map(self.process_bucket, buckets)
-            results = filter(None, list(results))
-            return results
-
-    def process_bucket(self, b):
-        acl = b.get('Acl', {'Grants': []})
-
-        results = []
-        for grant in acl['Grants']:
-            if not 'URI' in grant.get("Grantee", {}):
-                continue
-            if grant['Grantee']['URI'] in [self.AUTH_ALL, self.GLOBAL_ALL]:
-                results.append(grant['Permission'])
-
-        c = bucket_client(self.manager.session_factory(), b)
-        remediate = True
-
-        # Handle valid case of website
-        if results == ['READ']:
-            website = c.get_bucket_website(Bucket=b['Name'])
-            website.pop('ResponseMetadata')
-            if website:
-                remediate = False
-        elif not results:
-            return None
-        
-        if results and remediate:
-            # TODO / For now reporting is okay
-            pass
-        return {'Bucket': b['Name'], 'GlobalPermissions': results, 'Website': not remediate}
-
-
 @actions.register('encryption-policy')    
 class EncryptionRequiredPolicy(BucketActionBase):
 
@@ -321,6 +306,11 @@ class BucketScanLog(object):
     A bucket keyspace is effectively infinite, we need to store partial
     results out of memory, this class provides for a json log on disk
     with partial write support.
+
+    json output format:
+     - [list_of_serialized_keys],
+     - [] # Empty list of keys at end when we close the buffer
+    
     """
     def __init__(self, log_dir, name):
         self.log_dir = log_dir
@@ -338,7 +328,7 @@ class BucketScanLog(object):
         return self
     
     def __exit__(self, exc_type=None, exc_value=None, exc_frame=None):
-        # we need an empty marker to avoid trailing commas
+        # we need an empty marker list at end to avoid trailing commas
         self.fh.write("[]")
         # and close the surrounding list
         self.fh.write("\n]")
@@ -474,7 +464,7 @@ class EncryptExtantKeys(ScanBucket):
         crypto_method = self.data.get('crypto', 'AES256')
         b = bucket['Name']
         s3 = bucket_client(
-            self.manager.session_factory(), bucket,
+            local_session(self.manager.session_factory), bucket,
             kms = (crypto_method == 'aws:kms'))
         results = []
         for key in batch:

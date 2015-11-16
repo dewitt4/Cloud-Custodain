@@ -13,6 +13,7 @@ from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, Filter
 
 from janitor.manager import ResourceManager, resources
+from janitor import utils
 
 
 filters = FilterRegistry('ec2.filters')
@@ -29,7 +30,7 @@ class EC2(ResourceManager):
                 "Invalid format, expecting dictionary found %s" % (
                     type(self.data)))
         self._queries = QueryFilter.parse(self.data.get('query', []))
-        self._filters = filters.parse(self.data.get('filters', []))
+        self._filters = filters.parse(self.data.get('filters', []), self)
         self._actions = actions.parse(self.data.get('actions', []), self)
 
     @property
@@ -50,20 +51,14 @@ class EC2(ResourceManager):
         return self._actions
 
     ### End Test Helpers
- 
+
     def filter_resources(self, resources):
-        results = []
-        for i in resources:
-            matched = True
-            for f in self._filters:
-                if not f(i):
-                    matched = False
-                    break
-            if matched:
-                results.append(i)
+        original = len(resources)
+        for f in self._filters:
+            resources = f.process(resources)
         self.log.info("Filtered resources from %d to %d" % (
-            len(resources), len(results)))
-        return results
+            original, len(resources)))
+        return resources
     
     def resources(self): 
         qf = self.resource_query()
@@ -95,37 +90,8 @@ class EC2(ResourceManager):
     def format_json(self, resources, fh):
         resources = sorted(
             resources, key=operator.itemgetter('LaunchTime'))
-        json.dump({'ec2': [
-            {'instance-id': i['InstanceId'],
-             'tags': i.get('Tags'),
-             'ami': i['ImageId'],
-             'key': i.get('KeyName', ''),
-             'created': i['LaunchTime'].isoformat(),
-             'type': i['InstanceType']} for i in resources]},
-        fh, indent=2)
+        utils.dump(resources, fh, indent=2)
 
-    def format_csv(self, resources, fh):
-        writer = csv.writer(fh)
-        writer.writerow(
-            ('name',
-             'launch_time',
-             'instance_type',
-             'image_id',
-             'key_name',
-             'asv',
-             'cmdbenv'))
-        for i in resources:
-            writer.writerow((
-                i.get('Tags', {}).get('Name', "NA"),
-                i['LaunchTime'].isoformat(),
-                i['InstanceType'],
-                i['ImageId'],
-                i.get('KeyName', 'NA'),
-                i.get('Tags', {}).get("ASV", "NA"),
-                i.get('Tags', {}).get("CMDBEnvironment", "NA")                
-            ))
-        
-    
     def resource_query(self):
         qf = []
         qf_names = set()
@@ -196,7 +162,6 @@ class MarkedForOp(Filter):
         return self.current_date >= action_date
         
     
-
 @actions.register('mark')        
 class Mark(BaseAction):
 
@@ -257,11 +222,19 @@ class Stop(BaseAction):
         
 @actions.register('terminate')        
 class Terminate(BaseAction):
-
+    """ Terminate a set of instances.
+    
+    While ec2 offers a bulk delete api, any given instance can be configured
+    with api deletion termination protection, so we can't use the bulk call
+    reliabily, we need to process the instances individually. Additionally
+    If we're configured with 'force' then we'll turn off instance termination
+    protection.
+    """
     def process(self, instances):
         self.log.info("Terminating %d instances" % len(instances))
         if not len(instances):
             return
+
         self._run_api(
             self.manager.client.terminate_instances,
             InstanceIds=[i['InstanceId'] for i in instances],

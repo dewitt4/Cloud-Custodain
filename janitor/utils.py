@@ -5,8 +5,11 @@ import threading
 import time
 
 
-def dumps(data):
-    return json.dumps(data, cls=DateTimeEncoder)
+def dumps(data, fh=None, indent=0):
+    if fh:
+        return json.dump(data, fh, cls=DateTimeEncoder, indent=indent)
+    else:
+        return json.dumps(data, cls=DateTimeEncoder, indent=indent)
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -57,14 +60,15 @@ def set_annotation(i, k, v):
     """
     if not isinstance(i, dict):
         raise ValueError("Can only annotate dictionaries")
-    
+
+    if not isinstance(v, list):
+        v = [v]
+        
     if k in i:
         ev = i.get(k)
         if isinstance(ev, list):
             ev.extend(v)
-        else:
-            i[k] = [v]
     else:
-        i[k] = [v]
+        i[k] = v
 
     

@@ -6,6 +6,7 @@ Resource Filtering Logic
 import jmespath
 import operator
 
+from janitor.executor import ThreadPoolExecutor
 from janitor.registry import Registry
 from janitor.utils import set_annotation
 
@@ -32,19 +33,24 @@ class FilterRegistry(Registry):
         self.register_class('value', ValueFilter)
         self.register_class('or', Or)
         
-    def parse(self, data):
-        return map(self.factory, data)
+    def parse(self, data, manager):
+        results = []
+        for d in data:
+            results.append(self.factory(d, manager))
+        return results
 
-    register = Registry.register_class
-    
-    def factory(self, data):
-        """Factory func for filters."""
+    def factory(self, data, manager=None):
+        """Factory func for filters.
+
+        data - policy config for filters
+        manager - resource type manager (ec2, s3, etc)
+        """
 
         # Make the syntax a little nicer for common cases.
         if len(data) == 1 and not 'type' in data:
             if data.keys()[0] == 'or':
-                return Or(data, self)
-            return ValueFilter(data).validate()
+                return Or(data, self, manager)
+            return ValueFilter(data, manager).validate()
 
         filter_type = data.get('type')
         if not filter_type:
@@ -53,7 +59,7 @@ class FilterRegistry(Registry):
                     self.plugin_type, data))
         filter_class = self.get(filter_type)
         if filter_class is not None:
-            return filter_class(data).validate()
+            return filter_class(data, manager).validate()
         else:
             raise FilterValidationError(
                 "%s Invalid filter type %s" % (
@@ -65,30 +71,36 @@ class FilterRegistry(Registry):
 
 class Filter(object):
 
-    def __init__(self, data):
+    executor_factory = ThreadPoolExecutor
+    
+    def __init__(self, data, manager=None):
         self.data = data
+        self.manager = manager
 
     def validate(self):
+        """validate filter config, return validation error or self"""
         return self
 
     @property
-    def type(self):
-        pass
-
-    @property
     def name(self):
-        pass
-
+        """ Name of the filter"""
+        raise NotImplementedError()
+    
+    def process(self, resources):
+        """ Bulk process resources and return filtered set."""
+        return filter(self, resources)
+            
     def __call__(self, instance):
+        """ Process an individual resource."""
         raise NotImplementedError()
     
 
 class Or(Filter):
 
-    def __init__(self, data, registry):
+    def __init__(self, data, registry, manager):
         super(Or, self).__init__(data)
         self.registry = registry
-        self.filters = registry.parse(self.data.values()[0])
+        self.filters = registry.parse(self.data.values()[0], self.manager)
 
     def __call__(self, i):
         for f in self.filters:
