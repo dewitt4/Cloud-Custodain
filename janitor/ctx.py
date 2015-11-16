@@ -30,6 +30,7 @@ class ExecutionContext(object):
         return self
 
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        self.metrics.flush()        
         self.output.__exit__(exc_type, exc_value, exc_traceback)
-        self.metrics.flush()
+
             

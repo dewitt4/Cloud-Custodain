@@ -6,6 +6,7 @@ import logging
 from botocore.exceptions import ClientError
 
 from janitor.registry import Registry
+from janitor.executor import ThreadPoolExecutor
 
 
 class ActionRegistry(Registry):
@@ -39,6 +40,8 @@ class BaseAction(object):
     permissions = ()
     
     log = logging.getLogger(__name__)
+
+    executor_factory = ThreadPoolExecutor
 
     def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
