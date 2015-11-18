@@ -7,7 +7,7 @@ OSX the default install comes with the nesc requirements.
 
 First clone the repository:
 
-$ git clone https://github.kdc.capitalone.com/ylv522/cloud-janitor.git
+$ git clone https://github.kdc.capitalone.com/cloud-maid/cloud-maid.git
 
 Also recommended is to use a virtualenv to sandbox this install from your system packages:
 
