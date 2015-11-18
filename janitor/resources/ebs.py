@@ -1,11 +1,12 @@
 import logging
+import itertools
 
 from janitor import executor
 
-from janitor.actions import ActionRegistry, BaseCation
+from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, Filter
 
-from janitor.manager import ResourceManager
+from janitor.manager import ResourceManager, resources
 
 
 log = logging.getLogger('maid.ebs')
@@ -17,12 +18,12 @@ actions = ActionRegistry('ebs.actions')
 @resources.register('ebs')
 class EBS(ResourceManager):
 
-    def __init__(self, ctx, data);
-        super(S3, self).__init__(ctx, data)
+    def __init__(self, ctx, data):
+        super(EBS, self).__init__(ctx, data)
         self.filters = filters.parse(
             self.data.get('filters', []), self)
         self.actions = actions.parse(
-            self.data.get('actions', []), self)    
+            self.data.get('actions', []), self) 
 
     def resource_query(self):
         return []
@@ -37,7 +38,10 @@ class EBS(ResourceManager):
         return self.filter_resources(volumes)
         
     def filter_resources(self, resources):
-        for f in self._filters:
+        original = len(resources)
+        for f in self.filters:
             resources = f.process(resources)
+        self.log.info("Filtered from %d to %d volumes" % (
+            original, len(resources)))
         return resources
             
