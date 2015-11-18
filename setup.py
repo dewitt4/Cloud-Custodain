@@ -9,6 +9,5 @@ setup(
         'console_scripts': [
             'cloud-maid = janitor.cli:main']},
     requires=["boto", "pyyaml"],
-    test_requires=["mock"],
 )
 

@@ -79,7 +79,8 @@ class MetricsOutput(object):
 
         if buffer:
             self.buf.append(d)
-            if len(self.buf) > 200:
+            # Max metrics in a single request
+            if len(self.buf) == 20:
                 self.flush()
         else:
             self._put_metrics(self.namespace, [d])

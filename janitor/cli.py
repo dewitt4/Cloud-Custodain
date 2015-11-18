@@ -12,6 +12,8 @@ def _default_options(p):
                    help="AWS Account Config File Profile to utilize")
     p.add_argument("-c", "--config", required=True,
                    help="Policy Configuration File")
+    p.add_argument("-p", "--policies", default=None,
+                   help="Only execute named/matched policies")
     p.add_argument("-v", "--verbose", action="store_true",
                    help="Verbose Logging")
     p.add_argument("--debug", action="store_true",
