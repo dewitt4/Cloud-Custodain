@@ -18,7 +18,6 @@ class EBS(ResourceManager):
         if not isinstance(self.data, dict):
             raise ValueError("Invalid format, expecting dictionary found %s" % (type(self.data)))
                 
-        self._queries = QueryFilter.parse(self.data.get('query', []))
         self._filters = filters.parse(self.data.get('filters', []))
         self._actions = actions.parse(self.data.get('actions', []), self)
 
@@ -141,13 +140,13 @@ class VolumeEncryptFilter(Filter):
 class Mark(BaseAction):
 	def process(self, volumes):
 		msg = self.data.get('msg', 'EBS volume does not meet encryption guidelines')
-		tag = self.data.get('tag', 'maid_encrypted')
+		tag = self.data.get('tag', 'maid_status')
 		self.run_api(self.manager.client.create_tags, Resources=[i['VolumeId'] for i in volumes], Tags=[{'Key': tag, 'Value': msg}], DryRun=self.manager.config.dryrun)
 		
 @actions.register('unmark')
 class Unmark(BaseAction):
     def process(self, volumes):
-        tag = self.data.get('tag', 'maid_encrypted')
+        tag = self.data.get('tag', 'maid_status')
         self._run_api(self.manager.client.create_tags, Resources=[i['VolumeId'] for i in volumes], Tags=[{"Key": tag, "Value": None}],DryRun=self.manager.config.dryrun)
 
 @actions.register('start')
@@ -166,7 +165,7 @@ class MarkForEncryption(BaseAction):
 	def process(self, volumes):
 		msg_tmpl = self.data.get('msg', 'EBS volume does not meet encryption guidelines: {enc}@{stop_date}')
 		enc = self.data.get('enc', 'stop')
-		tag = self.data.get('tag', 'maid_encrypted')
+		tag = self.data.get('tag', 'maid_status')
 		date = self.data.get('days', 5)
 		
 		n = datetime.now(tz=tzutc())
@@ -181,7 +180,7 @@ class MarkedForEncryption(Filter):
 	log = logging.getLogger("maid.ec2.filters.marked_for_encryption")
 	current_date = None
 	def __call__(self, i):
-		tag = self.data.get('tag', 'maid_encrypted')
+		tag = self.data.get('tag', 'maid_status')
 		enc = self.data.get('enc', 'stop')
 		
 		v = None
