@@ -20,6 +20,7 @@ ANNOTATION_KEY = "MatchedFilters"
 
 OPERATORS = {
     'eq': operator.eq,
+    'ne': operator.ne,
     'gt': operator.gt,
     'ge': operator.ge,
     'le': operator.le,
