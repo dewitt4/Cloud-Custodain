@@ -7,6 +7,7 @@ from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, Filter
 
 from janitor.manager import ResourceManager, resources
+from janitor.utils import local_session
 
 
 log = logging.getLogger('maid.ebs')
@@ -44,4 +45,18 @@ class EBS(ResourceManager):
         self.log.info("Filtered from %d to %d volumes" % (
             original, len(resources)))
         return resources
-            
+
+
+@actions.register('delete')
+class Delete(BaseAction):
+
+    def process(self, volumes):
+        with self.executor_factory(max_workers=10) as w:
+            w.map(self.process_volume, volumes)
+                
+    def process_volume(self, volume):
+        client = local_session(self.manager.session_factory).client('ec2')
+        self._run_api(
+            client.delete_volume,
+            VolumeId=volume['VolumeId'],
+            DryRun=self.manager.config.dryrun)

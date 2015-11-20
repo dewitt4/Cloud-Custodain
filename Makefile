@@ -12,3 +12,8 @@ tests:
 
 ftests:
 	./bin/nosetests -s -v ftests
+
+depcache:
+	./bin/pip install -d deps -r requirements.txt
+	tar cvf maid-deps.tgz deps
+
