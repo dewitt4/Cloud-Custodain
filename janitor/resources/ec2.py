@@ -29,32 +29,17 @@ class EC2(ResourceManager):
             raise ValueError(
                 "Invalid format, expecting dictionary found %s" % (
                     type(self.data)))
-        self._queries = QueryFilter.parse(self.data.get('query', []))
-        self._filters = filters.parse(self.data.get('filters', []), self)
-        self._actions = actions.parse(self.data.get('actions', []), self)
+        self.queries = QueryFilter.parse(self.data.get('query', []))
+        self.filters = filters.parse(self.data.get('filters', []), self)
+        self.actions = actions.parse(self.data.get('actions', []), self)
 
     @property
     def client(self):
         return self.session_factory().client('ec2')
         
-    ### Begin Test Helpers
-    @property
-    def queries(self):
-        return self._queries
-
-    @property
-    def filters(self):
-        return self._filters
-
-    @property
-    def actions(self):
-        return self._actions
-
-    ### End Test Helpers
-
     def filter_resources(self, resources):
         original = len(resources)
-        for f in self._filters:
+        for f in self.filters:
             resources = f.process(resources)
         self.log.info("Filtered resources from %d to %d" % (
             original, len(resources)))
@@ -97,7 +82,7 @@ class EC2(ResourceManager):
         qf_names = set()
         # allow same name to be specified multiple times and append the queries
         # under the same name
-        for q in self._queries:
+        for q in self.queries:
             qd = q.query()
             if qd['Name'] in qf_names:
                 for qf in qf:

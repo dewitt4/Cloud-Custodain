@@ -1,9 +1,11 @@
 """S3 Resource Manager
 
+Filters:
+
 The generic Values filters (jmespath) expression and Or filter are
-available with S3 Buckets, we include several additonal bucket data
-(Tags, Replication, Acl, Policy) as keys within a bucket
-representation.
+available with all resources, including buckets, we include several
+additonal bucket data (Tags, Replication, Acl, Policy) as keys within
+a bucket representation.
 
 Actions:
 
@@ -36,12 +38,11 @@ import time
 
 from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import (
-    FilterRegistry, Filter, FilterValidationError)
+from janitor.filters import FilterRegistry, Filter
+    
 
 from janitor.manager import ResourceManager, resources
-from janitor.rate import TokenBucket
-from janitor.utils import chunks, local_session, dumps, set_annotation
+from janitor.utils import chunks, local_session, set_annotation
 
 
 log = logging.getLogger('maid.s3')
@@ -58,9 +59,6 @@ class S3(ResourceManager):
     def __init__(self, ctx, data):
         super(S3, self).__init__(ctx, data)
         self.log_dir = ctx.log_dir
-        self.rate_limit = {
-            'key_process_rate': TokenBucket(2000),
-        }
         self.filters = filters.parse(
             self.data.get('filters', []), self)
         self.actions = actions.parse(
@@ -68,28 +66,28 @@ class S3(ResourceManager):
         
     def incr(self, m, v=1):
         return self.rate_limit[m].consume(v)
-        
-    def resources(self, matches=()):
+
+    def filter_resources(self, resources):
+        original = len(resources)
+        for f in self.filters:
+            resources = f.process(resources)
+        log.debug("Filtered resources from %d to %d" % (
+            original, len(resources)))
+        return resources
+    
+    def resources(self):
         c = self.session_factory().client('s3')
         log.debug('Retrieving buckets')
         response = c.list_buckets()
         buckets = response['Buckets']
         log.debug('Got %d buckets' % len(buckets))
-
-        if matches:
-            buckets = filter(lambda x: x['Name'] in matches, buckets)
-            log.debug("Filtered to %d buckets" % len(buckets))
-
         log.debug('Assembling bucket documents')
         with self.executor_factory(max_workers=10) as w:
-            results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
+            results = w.map(
+                assemble_bucket,
+                zip(itertools.repeat(self.session_factory), buckets))
             results = filter(None, results)
-
-        for f in self.filters:
-            results = f.process(results)
-
-        log.debug("Filtered to %d buckets" % len(results))
-        return results
+        return self.filter_resources(results)
 
     
 def assemble_bucket(item):
@@ -112,6 +110,7 @@ def assemble_bucket(item):
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
 
+    # Bucket Location, Current Client Location, Default Location
     b_location = c_location = location = "us-east-1"
     
     for m, k in methods:
@@ -124,7 +123,7 @@ def assemble_bucket(item):
             if code.startswith("NoSuch") or "NotFound" in code:
                 v = None
             elif code == 'PermanentRedirect':
-                #log.warning(e.response)
+                # log.warning(e.response)
                 s = factory()
                 c = bucket_client(s, b)
                 # Requeue with the correct region given location constraint
@@ -145,19 +144,19 @@ def assemble_bucket(item):
     return b
 
 
-def bucket_client(s, b, kms=False):
+def bucket_client(session, b, kms=False):
     location = b.get('Location')
     if location is None:
         region = 'us-east-1'
     else:
         region = location['LocationConstraint'] or 'us-east-1'
     if kms:
+        # Need v4 signature for aws:kms crypto
         config = Config(signature_version='s3v4')
     else:
         config = None
-    return s.client(
-        's3', region_name=region,
-        # Need v4 for aws:kms crypto
+    return session.client(
+        's3', region_name=region,        
         config=config)
 
 

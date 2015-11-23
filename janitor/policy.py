@@ -1,4 +1,5 @@
 import fnmatch
+import json
 import logging
 import os
 import time
@@ -14,12 +15,15 @@ from janitor import utils
 import janitor.resources
 
 
-def load(options, path):
+def load(options, path, format='yaml'):
     if not os.path.exists(path):
         raise ValueError("Invalid path for config %r" % path)
     
     with open(path) as fh:
-        data = yaml.load(fh, Loader=yaml.SafeLoader)
+        if format == 'yaml':
+            data = yaml.load(fh, Loader=yaml.SafeLoader)
+        elif format == 'json':
+            data = json.load(fh)
     return PolicyCollection(data, options)
 
 
@@ -64,7 +68,16 @@ class Policy(object):
     def resource_type(self):
         return self.data['resource']
 
+    def process_event(self, event, lambda_ctx, resource):
+        """Run policy on single lambda event."""
+        results = self.resource_manager.filter_resources([resource])
+        if not results:
+            return
+        for a in self.resource_manager.actions:
+            a(results)
+
     def __call__(self):
+        """Run policy."""
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()

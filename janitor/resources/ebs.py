@@ -47,6 +47,16 @@ class EBS(ResourceManager):
         return resources
 
 
+@actions.register('encrypt')
+class Encrypt(BaseAction):
+
+    def process(self, volumes):
+        pass
+
+    def process_volume(self, volume):
+        pass
+    
+    
 @actions.register('delete')
 class Delete(BaseAction):
 

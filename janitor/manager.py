@@ -20,6 +20,12 @@ class ResourceManager(object):
         self.log = logging.getLogger('janitor.resources.%s' % (
             self.__class__.__name__.lower()))
 
+    @property
+    def actions(self):
+        raise NotImplementedError()
+    
     def format_json(self, resources, fh):
         return dumps(resources, fh, indent=2)
         
+    def filter_resources(self, resources):
+        raise NotImplementedError()
