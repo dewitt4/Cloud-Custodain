@@ -67,6 +67,10 @@ Mu is the letter after lambda, lambda is a keyword in python.
 Configuration
 -------------
 
+
+proposed syntax
+
+```
 policies:
   - name: s3-bucket-policy
     mode: 
@@ -83,7 +87,12 @@ policies:
       type: cloudwatch
       events:
       - CreateVolume
-      - 
+    actions:
+      - encrypt-instance-volume
+```
+
+alternatively we could associate relevant events to some
+actions, like encryption-policy.
   
 Event Sources
 -------------
@@ -280,7 +289,8 @@ class PolicyLambda(PythonFunction):
 
     @property
     def description(self):
-        return self.policy.data.get('description', 'cloud-maid lambda policy')
+        return self.policy.data.get(
+            'description', 'cloud-maid lambda policy')
     
     @property
     def memory_size(self):
@@ -296,7 +306,7 @@ class PolicyLambda(PythonFunction):
                 self.policy.data['mode']['type']))
             
     def __exit__(self, *args):
-        self.archive.__exit__()
+        self.archive.__exit__(*args)
         return
 
     
