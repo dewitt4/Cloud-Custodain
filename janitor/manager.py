@@ -17,7 +17,7 @@ class ResourceManager(object):
         self.data = data
         self.log_dir = ctx.log_dir
         self._cache = cache.factory(self.ctx.options)
-        self.log = logging.getLogger('janitor.resources.%s' % (
+        self.log = logging.getLogger('maid.resources.%s' % (
             self.__class__.__name__.lower()))
 
     def format_json(self, resources, fh):
