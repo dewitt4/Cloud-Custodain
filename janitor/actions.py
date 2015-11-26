@@ -39,7 +39,7 @@ class BaseAction(object):
 
     permissions = ()
     
-    log = logging.getLogger(__name__)
+    log = logging.getLogger("maid.actions")
 
     executor_factory = ThreadPoolExecutor
 
