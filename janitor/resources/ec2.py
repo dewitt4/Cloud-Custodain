@@ -90,7 +90,7 @@ class EC2(ResourceManager):
     def format_json(self, resources, fh):
         resources = sorted(
             resources, key=operator.itemgetter('LaunchTime'))
-        utils.dump(resources, fh, indent=2)
+        utils.dumps(resources, fh, indent=2)
 
     def resource_query(self):
         qf = []
@@ -195,10 +195,33 @@ class Unmark(BaseAction):
             DryRun=self.manager.config.dryrun)
 
 
+class StateTransitionAction(BaseAction):
+    """Filter instances by state.
+
+    Try to simplify construction for policy authors by
+    automatically filtering actions to the instances states
+    they are valid for.
+    
+    For more details see http://goo.gl/TZH9Q5 
+    """
+    valid_origin_states = ()
+
+    def filter_instance_state(self, instances):
+        orig_length = len(instances)
+        results = [i for i in instances
+                   if i['State']['Name'] in self.valid_origin_states]
+        self.log.info("%s %d of %d instances" % (
+            self.__class__.__name__, len(results), orig_length))
+        return results
+        
+    
 @actions.register('start')        
-class Start(BaseAction):
+class Start(StateTransitionAction):
+
+    valid_origin_states = ('stopped',)
 
     def process(self, instances):
+        instances = self.filter_instance_state(instances)
         if not len(instances):
             return
         self._run_api(
@@ -208,10 +231,12 @@ class Start(BaseAction):
 
 
 @actions.register('stop')
-class Stop(BaseAction):
+class Stop(StateTransitionAction):
 
+    valid_origin_states = ('running', 'pending')
+    
     def process(self, instances):
-        self.log.info("Stopping %d instances" % len(instances))
+        instances = self.filter_instance_state(instances)
         if not len(instances):
             return
         self._run_api(
@@ -221,7 +246,7 @@ class Stop(BaseAction):
 
         
 @actions.register('terminate')        
-class Terminate(BaseAction):
+class Terminate(StateTransitionAction):
     """ Terminate a set of instances.
     
     While ec2 offers a bulk delete api, any given instance can be configured
@@ -230,16 +255,35 @@ class Terminate(BaseAction):
     If we're configured with 'force' then we'll turn off instance termination
     protection.
     """
+
+    valid_origin_states = ('running', 'stopped', 'pending', 'stopping')
+    
     def process(self, instances):
-        self.log.info("Terminating %d instances" % len(instances))
+        instances = self.filter_instance_state(instances)
         if not len(instances):
             return
-
+        if self.data.get('force'):
+            self.log.info("Disabling termination protection on instances")
+            self.disable_deletion_protection(instances)
         self._run_api(
             self.manager.client.terminate_instances,
             InstanceIds=[i['InstanceId'] for i in instances],
             DryRun=self.manager.config.dryrun)
 
+    def disable_deletion_protection(self, instances):
+        def process_instance(i):
+            client = utils.local_session(
+                self.manager.session_factory).client('ec2')
+            self._run_api(
+                client.modify_instance_attribute,
+                InstanceId=i['InstanceId'],
+                Attribute='disableApiTermination',
+                Value='false',
+                DryRun=self.manager.config.dryrun)
+
+        with self.executor_factory(max_workers=10) as w:
+            w.map(process_instance, instances)
+            
         
 @actions.register('mark-for-op')
 class MarkForOp(BaseAction):

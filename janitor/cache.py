@@ -5,7 +5,7 @@ import os
 import logging
 import time
 
-log = logging.getLogger('janitor.cache')
+log = logging.getLogger('maid.cache')
 
 
 def factory(config):

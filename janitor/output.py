@@ -40,7 +40,7 @@ from boto3.s3.transfer import S3Transfer
 from janitor.utils import local_session
 
 
-log = logging.getLogger('maid.output.s3')
+log = logging.getLogger('maid.output')
 
 
 class MetricsOutput(object):
