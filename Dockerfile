@@ -1,4 +1,4 @@
-FROM pypy:2
+FROM python:2
 
 ADD . /src
 WORKDIR /src
