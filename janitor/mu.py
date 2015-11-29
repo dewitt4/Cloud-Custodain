@@ -92,7 +92,8 @@ policies:
 ```
 
 alternatively we could associate relevant events to some
-actions, like encryption-policy.
+actions, like encryption-keys with a list of events, and
+encryption-policy with a list of events.
   
 Event Sources
 -------------
@@ -109,23 +110,20 @@ actions, using dynamodb for results aggregation, and a periodic result checker.
 """
 import inspect
 from cStringIO import StringIO
+import fnmatch
 import json
 import logging
 import os
 import pprint
 import tempfile
 import sys
-import shutil
 import zipfile
 
-from kappa.context import Context
+from botocore.exceptions import ClientError
 
 import janitor
 
-from janitor.action import BaseAction
-from janitor import jobs
 from janitor.policy import load
-
 
 log = logging.getLogger('maid.lambda')
 
@@ -171,49 +169,68 @@ def cwe_handle(event, context):
 
 class PythonPackageArchive(object):
 
-    def __init__(self, src_path, virtualenv_dir):
+    def __init__(self, src_path, virtualenv_dir, skip=None):
         self.src_path = src_path
         self.virtualenv_dir = virtualenv_dir
         self._temp_archive_file = None
         self._zip_file = None
+        self._closed = False
+        self.skip = skip
 
     @property
     def path(self):
         return self._temp_archive_file.name
+
+    @property
+    def size(self):
+        if not self._closed:
+            raise ValueError("Archive not closed, size not accurate")
+        return os.stat(self._temp_archive_file.name).st_size
+
+    def filter_files(self, files):
+        if not self.skip:
+            return files
+        skip_files = set(fnmatch.filter(files, self.skip))
+        return [f for f in files if not f in skip_files]
     
     def create(self):
-        self.temp_archive_file = tempfile.NamedTemporaryFile()
+        self._temp_archive_file = tempfile.NamedTemporaryFile()
         self._zip_file = zipfile.ZipFile(
-            self.temp_archive_file, mode='w',
+            self._temp_archive_file, mode='w',
             compression=zipfile.ZIP_DEFLATED)
 
         prefix = os.path.dirname(self.src_path)
         # Package Source
         for root, dirs, files in os.walk(self.src_path):
             arc_prefix = os.path.relpath(root, os.path.dirname(self.src_path))
+            files = self.filter_files(files)
             for f in files:
                 self._zip_file.write(
                     os.path.join(root, f),
                     os.path.join(arc_prefix, f))
-
+            
         # Library Source
         venv_lib_path = os.path.join(
             self.virtualenv_dir, 'lib', 'python2.7', 'site-packages')
                     
         for root, dirs, files in os.walk(venv_lib_path):
             arc_prefix = os.path.relpath(root, venv_lib_path)
+            files = self.filter_files(files)
             for f in files:
                 self._zip_file.write(
                     os.path.join(root, f),
                     os.path.join(arc_prefix, f))
 
     def add_contents(self, dest, contents):
+        assert not self._closed, "Archive closed"
         self._zip_file.writestr(dest, contents)
 
     def close(self):
+        self._closed = True
         self._zip_file.close()
 
     def get_bytes(self):
+        assert self._closed, "Archive not closed"
         return open(self._temp_archive_file, 'rb').read()
     
         
@@ -223,9 +240,9 @@ class LambdaManager(object):
         self.session_factory = session_factory
         self.client = self.session_factory().client('lambda')
         
-    def publish(self, func, alias):
-        with self.func as archive:
-            self.client.create_function(
+    def publish(self, func, alias=None):
+        with func as archive:
+            result = self.client.create_function(
                 FunctionName=func.name,
                 Code={'ZipFile': archive.get_bytes()},
                 Runtime=func.runtime,
@@ -235,6 +252,13 @@ class LambdaManager(object):
                 Timeout=func.timeout,
                 MemorySize=func.memory_size
             )
+            if alias:
+                self.client.create_alias(
+                    FunctionName=func.name,
+                    Name=alias)
+        for e in func.events:
+            e.add(func)
+            
 
     def exists(self, func_name):
         try:
@@ -245,15 +269,13 @@ class LambdaManager(object):
         return result
 
     
-class LambdaFunction:
+class LambdaFunction(object):
     # name
     # runtime
     # events
     
     def process(self, resources):
-        config = self.generate_lambda(resources)
-        ctx = Context(**config)
-        ctx.create()
+        pass
 
     def generate_lambda(self):
         raise NotImplementedError("generate_lambda()")
@@ -271,6 +293,14 @@ def handler(event, ctx):
     mu.%s_handler(event, ctx)
 """
 
+def maid_archive(skip=None):
+    return PythonPackageArchive(
+        os.path.dirname(inspect.getabsfile(janitor)),
+        os.path.join(
+            os.path.dirname(sys.executable), '..'),
+        skip=skip)    
+    
+
 class PolicyLambda(PythonFunction):
 
     handler = "policy:handler"
@@ -278,10 +308,7 @@ class PolicyLambda(PythonFunction):
     
     def __init__(self, policy):
         self.policy = policy
-        self.archive = PythonPackageArchive(
-            os.path.dirname(inspect.getabsfile(janitor)),
-            os.path.join(
-                os.path.dirname(sys.executable), '..'))
+        self.archive = maid_archive()
 
     @property
     def name(self):
@@ -296,22 +323,28 @@ class PolicyLambda(PythonFunction):
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)
 
+    @property
+    def events(self):
+        for e in self.policy.data['mode'].get('events', []):
+            CloudWatchEventSource(e)
     def __enter__(self):
-
-        self.archive.__enter__()
+        self.archive.create()
         self.archive.add_contents(
             'config.json', json.dumps({'policies': self.policy.data}))
         self.archive.add_contents(
             'handler.py', PolicyHandlerTemplate % (
                 self.policy.data['mode']['type']))
-            
+        return self.archive
+    
     def __exit__(self, *args):
-        self.archive.__exit__(*args)
+        self.archive.close()
         return
 
     
 class CloudWatchEventSource(object):
     """
+    Modeled after kappa event source, such that it can be contributed
+    post cloudwatch events ga or public beta.
 
     Event Pattern for Instance State
 
@@ -332,22 +365,37 @@ class CloudWatchEventSource(object):
     }
     """
 
-    def __init__(self, session_factory, func):
+    def __init__(self, data, session_factory):
         self.session_factory = session_factory
-        self.client = self.session_factory('events')
-        self.func = func
+        self.client = self.session_factory.client('events')
 
-    def create(self):
+    def _make_notification_id(self, function_name):
+        return "maid-%s" % function_name
+
+    def exists(self, function):
+        try:
+            self.client.describe_rule(
+                Name=self._make_notification_id(function.name))
+            return True
+        except ClientError, e:
+            if e['Error']['Code'] == "ResourceNotFoundException":
+                return False
+            raise
+
+    def add(self, func):
+        schedule = self.data.get('schedule')
         self.client.put_rule(
-            Name=self.func.name,
-            ScheduleExpression="",
+            Name=func.name,
+            ScheduleExpression=schedule,
             EventPattern=json.dumps({}),
             State='ENABLED',
             RoleArn=self.func.role)
 
-    def update(self):
-        pass
+    def update(self, func):
+        self.add(func)
 
-    def remove(self):
-        pass
+    def remove(self, func):
+        self.client.delete_rule(
+            Name=func.name,
+        )
     
