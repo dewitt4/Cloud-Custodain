@@ -9,6 +9,7 @@ import yaml
 from janitor import policy
 from janitor.ctx import ExecutionContext
 
+
 class BaseTest(unittest.TestCase):
 
     def get_context(self, config=None, session_factory=None, policy=None):
@@ -33,7 +34,7 @@ class BaseTest(unittest.TestCase):
             e = Config.empty()
         return policy.load(e, t.name)
 
-
+    
 def instance(state=None, **kw):
     data = json.loads(open(
         os.path.join(
@@ -53,6 +54,7 @@ class Bag(dict):
             return self[k]
         except KeyError:
             raise AttributeError(k)
+
         
 class Config(Bag):
 
@@ -72,8 +74,9 @@ class Config(Bag):
 
     
 class Instance(Bag): pass
-class Reservation(Bag): pass
 
+
+class Reservation(Bag): pass
 
 
 class Client(object):
@@ -88,3 +91,4 @@ class Client(object):
             {'instances': [i for i in self.instances]})]
         
         
+
