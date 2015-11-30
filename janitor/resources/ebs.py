@@ -1,10 +1,8 @@
 import logging
 import itertools
 
-from janitor import executor
-
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter
+from janitor.filters import FilterRegistry
 
 from janitor.manager import ResourceManager, resources
 from janitor.utils import local_session
@@ -26,9 +24,6 @@ class EBS(ResourceManager):
         self.actions = actions.parse(
             self.data.get('actions', []), self) 
 
-    def resource_query(self):
-        return []
-    
     def resources(self):
         c = self.session_factory().client('ec2')
         query = self.resource_query()
@@ -38,13 +33,53 @@ class EBS(ResourceManager):
         volumes = list(itertools.chain(*[rp['Volumes'] for rp in results]))
         return self.filter_resources(volumes)
         
-    def filter_resources(self, resources):
-        original = len(resources)
-        for f in self.filters:
-            resources = f.process(resources)
-        self.log.info("Filtered from %d to %d volumes" % (
-            original, len(resources)))
-        return resources
+
+@actions.register('copy-instance-tags')
+class CopyInstanceTags(BaseAction):
+
+    def process(self, volumes):
+        volumes = [v for v in volumes if v['Attachments']]
+        with self.executor_factory(max_workers=10) as w:
+            w.map(self.process_volume, volumes)
+
+    def process_volume(self, volume):
+        client = local_session(self.manager.session_factory).client('ec2')
+        attachment = volume['Attachments'][0]
+        instance_id = attachment['InstanceId']
+        # Todo: We could bulk fetch these before processing individual
+        # volumes, we might run into request size limits though.
+        result = client.describe_instance(
+            Filters=[
+                {'Name': 'instance-id',
+                 'Value': [instance_id]}])
+        found = False
+        for r in result.get('Reservations', []):
+            for i in r['Instances']:
+                if i['InstanceId'] == instance_id:
+                    found = i
+                    break        
+        if not found:
+            log.debug("Could not find instance %s for volume %s" % (
+                instance_id, volume['VolumeId']))
+            return
+
+        copy_tags = []
+        extant_tags = [t['Name'] for t in volume.get('Tags', [])]
+        for t in found['Tags']:
+            if t['Name'] in extant_tags:
+                continue
+            if t['Name'].startswith('aws:'):
+                continue
+            copy_tags.append(t)
+        copy_tags.append(
+            {'Name': 'LastAttachTime', 'Value': attachment['AttachTime']})
+        copy_tags.append(
+            {'Name': 'LastAttachInstance', 'Value': attachment['InstanceId']})
+
+        client.create_tags(
+            Resources=[volume['VolumeId']],
+            Tags=copy_tags,
+            DryRun=self.manager.config.dryrun)
 
 
 @actions.register('delete')

@@ -22,4 +22,14 @@ class ResourceManager(object):
 
     def format_json(self, resources, fh):
         return dumps(resources, fh, indent=2)
-        
+
+    def resource_query(self):
+        return []
+    
+    def filter_resources(self, resources):
+        original = len(resources)
+        for f in self.filters:
+            resources = f.process(resources)
+        self.log.info("Filtered from %d to %d %s" % (
+            original, len(resources), self.__class__.__name__.lower()))
+        return resources
