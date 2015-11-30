@@ -52,7 +52,7 @@ class Suspend(BaseAction):
         """Multistep process to stop an asg aprori of setup
 
         - suspend processes
-        - note load balancer in tag,
+        - note load balancer in tag
         - detach load balancer
         - stop instances
         """
@@ -104,6 +104,13 @@ class Resume(BaseAction):
             w.map(self.process_asg, asgs)
                 
     def process_asg(self, asg):
+        """Multi-step process to resume
+
+        - Start any stopped ec2 instances
+        - Reattach ELB
+        - Resume ASG Processes
+
+        """
         session = local_session(self.manager.session_factory)
         asg_client = session.client('autoscaling')
         ec2_client = session.client('ec2')
@@ -123,5 +130,7 @@ class Resume(BaseAction):
         asg_client.attach_load_balancers(
             AutoScalingGroupName=asg['AutoScalingGroupName'],
             LoadBalancerNames=balancers)
-                    
+
+        asg_client.resume_processes(
+            AutoScalingGroupName=asg['AutoScalingGroupName'])
             
