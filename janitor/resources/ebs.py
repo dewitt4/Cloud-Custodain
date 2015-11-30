@@ -184,7 +184,7 @@ class EncryptVolume(BaseAction):
         ec2.detach_volume(VolumeId=v['VolumeId'])
         ec2.attach_volume(VolumeId=vol_id, Device=v['Attachments'][0]['Device'])
         ec2.start_instance(InstanceId=instance_id)
-
+        
     def get_encryption_key(self):
         kms = local_session(self.manager.session_factory).client('kms')
         key_alias = self.data.get('key')

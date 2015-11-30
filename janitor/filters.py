@@ -108,7 +108,7 @@ class Or(Filter):
             if f(i):
                 return True
         return False
-        
+
 
 class ValueFilter(Filter):
 

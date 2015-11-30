@@ -282,7 +282,7 @@ class Terminate(StateTransitionAction):
                 DryRun=self.manager.config.dryrun)
 
         with self.executor_factory(max_workers=10) as w:
-            w.map(process_instance, instances)
+            list(w.map(process_instance, instances))
             
         
 @actions.register('mark-for-op')
