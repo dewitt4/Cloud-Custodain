@@ -48,7 +48,7 @@ class CopyInstanceTags(BaseAction):
     def process(self, volumes):
         volumes = [v for v in volumes if v['Attachments']]
         with self.executor_factory(max_workers=10) as w:
-            w.map(self.process_volume, volumes)
+            list(w.map(self.process_volume, volumes))
 
     def process_volume(self, volume):
         client = local_session(self.manager.session_factory).client('ec2')
@@ -106,7 +106,7 @@ class EncryptVolume(BaseAction):
             self.log.warning("No key specificed for encrypt volume, skipping")
             return
         with self.executor_factory(max_workers=10) as w:
-            w.map(self.process_volume, volumes)
+            list(w.map(self.process_volume, volumes))
 
     def process_volume(self, v):
         """Encrypt extant unencrypted ebs volume
@@ -210,7 +210,7 @@ class Delete(BaseAction):
 
     def process(self, volumes):
         with self.executor_factory(max_workers=10) as w:
-            w.map(self.process_volume, volumes)
+            list(w.map(self.process_volume, volumes))
                 
     def process_volume(self, volume):
         client = local_session(self.manager.session_factory).client('ec2')
