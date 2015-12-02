@@ -2,6 +2,9 @@
 Resource Filtering Logic
 """
 
+from datetime import datetime, timedelta
+from dateutil.tz import tzutc
+from dateutil.parser import parse
 
 import jmespath
 import operator
@@ -172,3 +175,29 @@ class ValueFilter(Filter):
         elif r == self.v:
             return True
         return False
+
+
+class AgeFilter(Filter):
+
+    # filter instance cache of threshold date
+    threshold_date = None
+
+    # subclass override to determine date attribute
+    date_attribute = None
+
+    def validate(self):
+        if not self.date_attribute:
+            raise NotImplementedError(
+                "date_attribute must be overriden in subclass")
+        return self
+    
+    def __call__(self, i):
+        if not self.threshold_date:
+            days = self.data.get('days', 60)
+            n = datetime.now(tz=tzutc())
+            self.threshold_date = n - timedelta(days)
+        v = i[self.date_attribute]
+        if not isinstance(v, datetime):
+            v = parse(v)
+        return self.threshold_date > v
+

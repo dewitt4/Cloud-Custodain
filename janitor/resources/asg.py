@@ -84,10 +84,10 @@ class Suspend(BaseAction):
             "Key": self.LoadBalancerTagKey,
             "Value": tvalue,
             "PropogateAtLaunch": False,
-            "ResourceType": "auto-scaling-group"
+            "ResourceType": "auto-scaling-group",
             "ResourceId": asg['AutoScalingGroupName']
             }
-        asg_client.create_or_update_tags([elb_tag])
+        client.create_or_update_tags([elb_tag])
 
 
 @actions.register('resume')

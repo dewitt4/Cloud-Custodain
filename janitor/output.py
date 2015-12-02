@@ -100,8 +100,17 @@ class NullMetricsOutput(MetricsOutput):
     
     def _put_metrics(self, ns, metrics):
         self.data.append({'Namespace': ns, 'MetricData': metrics})
-    
+        for m in metrics:
+            if m['MetricName'] not in ('ActionTime', 'ResourceTime'):
+                log.debug(self.format_metric(m))
 
+    def format_metric(self, m):
+        l = "metric:%s %s:%s" % (m['MetricName'], m['Unit'], m['Value'])
+        for d in m['Dimensions']:
+            l += " %s:%s" % (d['Name'].lower(), d['Value'].lower())
+        return l
+
+    
 class FSOutput(object):
 
     @staticmethod
