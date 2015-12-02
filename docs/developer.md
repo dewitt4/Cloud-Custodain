@@ -21,7 +21,7 @@ $ source cloud-maid/bin/activate
 And then install the dependencies
 
 ```bash
-$ pip install -f requirements.txt
+$ pip install -r requirements.txt
 ```
 
 And then the maid itself
