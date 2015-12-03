@@ -175,7 +175,8 @@ class NoGlobalGrants(Filter):
 
     def process_bucket(self, b):
         acl = b.get('Acl', {'Grants': []})
-
+        if not acl or not acl['Grants']:
+            return
         results = []
         for grant in acl['Grants']:
             if not 'URI' in grant.get("Grantee", {}):

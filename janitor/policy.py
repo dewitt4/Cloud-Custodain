@@ -84,8 +84,8 @@ class Policy(object):
                 s = time.time()
                 results = a.process(resources)
                 self.log.info(
-                    "policy: %s action: %s execution_time: %0.2f" % (
-                        self.name, a.name, time.time()-s))
+                    "policy: %s action: %s resources: %d execution_time: %0.2f" % (
+                        self.name, a.name, len(resources), time.time()-s))
                 self._write_file("action-%s" % a.name, utils.dumps(results))
             self.ctx.metrics.put_metric(
                 "ActionTime", time.time() - at, "Seconds", Scope="Policy")

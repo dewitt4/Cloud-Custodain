@@ -46,7 +46,7 @@ class Suspend(BaseAction):
         self.log.debug("Filtered from %d to %d asgs with instances" % (
             original_count, len(asgs)))
         with self.executor_factory(max_workers=10) as w:
-            w.map(self.process_asg, asgs)
+            list(w.map(self.process_asg, asgs))
 
     def process_asg(self, asg):
         """Multistep process to stop an asg aprori of setup
@@ -84,10 +84,10 @@ class Suspend(BaseAction):
             "Key": self.LoadBalancerTagKey,
             "Value": tvalue,
             "PropogateAtLaunch": False,
-            "ResourceType": "auto-scaling-group"
+            "ResourceType": "auto-scaling-group",
             "ResourceId": asg['AutoScalingGroupName']
             }
-        asg_client.create_or_update_tags([elb_tag])
+        client.create_or_update_tags([elb_tag])
 
 
 @actions.register('resume')
@@ -101,7 +101,7 @@ class Resume(BaseAction):
         self.log.debug("Filtered from %d to %d suspended asgs" % (
             original_count, len(asgs)))
         with self.executor_factory(max_workers=10) as w:
-            w.map(self.process_asg, asgs)
+            list(w.map(self.process_asg, asgs))
                 
     def process_asg(self, asg):
         """Multi-step process to resume

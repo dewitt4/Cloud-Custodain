@@ -1,16 +1,14 @@
 from dateutil.parser import parse as parse_date
 from dateutil.tz import tzutc
 
-import csv
 from datetime import datetime, timedelta
-import json
 import itertools
 import logging
 import operator
 
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter
+from janitor.filters import FilterRegistry, Filter, AgeFilter
 
 from janitor.manager import ResourceManager, resources
 from janitor import utils
@@ -110,16 +108,10 @@ class EC2(ResourceManager):
 
 
 @filters.register('instance-age')        
-class InstanceAgeFilter(Filter):
+class InstanceAgeFilter(AgeFilter):
 
-    threshold_date = None
+    date_attribute = "LaunchTime"
     
-    def __call__(self, i):
-        if not self.threshold_date:
-            days = self.data.get('days', 60)
-            n = datetime.now(tz=tzutc())
-            self.threshold_date = n - timedelta(days)            
-        return self.threshold_date > i['LaunchTime']
                 
 
 @filters.register('marked-for-op')
@@ -282,7 +274,7 @@ class Terminate(StateTransitionAction):
                 DryRun=self.manager.config.dryrun)
 
         with self.executor_factory(max_workers=10) as w:
-            w.map(process_instance, instances)
+            list(w.map(process_instance, instances))
             
         
 @actions.register('mark-for-op')
