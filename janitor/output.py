@@ -6,7 +6,7 @@
  - Python Execution Log
  - Policy Resource Records
  - Policy Action Records
- - CloudWatch Metrics ??
+ - CloudWatch Metrics
 
 # S3 Bucket Location
 

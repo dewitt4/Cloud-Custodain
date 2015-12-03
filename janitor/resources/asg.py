@@ -29,7 +29,7 @@ class ASG(ResourceManager):
         query = self.resource_query()
         self.log.info("Querying asg instances")
         p = c.get_paginator('describe_auto_scaling_groups')
-        results = p.paginate(Filters=query)
+        results = p.paginate()
         elbs = list(itertools.chain(
             *[rp['AutoScalingGroups'] for rp in results]))
         return self.filter_resources(elbs)
