@@ -1,4 +1,3 @@
-import itertools
 import logging
 
 from janitor.actions import ActionRegistry, BaseAction
