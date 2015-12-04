@@ -54,9 +54,10 @@ class CopyInstanceTags(BaseAction):
         client = local_session(self.manager.session_factory).client('ec2')
         attachment = volume['Attachments'][0]
         instance_id = attachment['InstanceId']
+        
         # Todo: We could bulk fetch these before processing individual
         # volumes, we might run into request size limits though.
-        result = client.describe_instance(
+        result = client.describe_instances(
             Filters=[
                 {'Name': 'instance-id',
                  'Value': [instance_id]}])
@@ -72,18 +73,35 @@ class CopyInstanceTags(BaseAction):
             return
 
         copy_tags = []
-        extant_tags = [t['Name'] for t in volume.get('Tags', [])]
+        extant_tags = dict([
+            (t['Key'], t['Value']) for t in volume.get('Tags', [])])
+        
         for t in found['Tags']:
-            if t['Name'] in extant_tags:
+            if t['Key'] in extant_tags:
                 continue
-            if t['Name'].startswith('aws:'):
+            if t['Key'].startswith('aws:'):
                 continue
             copy_tags.append(t)
+    
         copy_tags.append(
-            {'Name': 'LastAttachTime', 'Value': attachment['AttachTime']})
+            {'Key': 'LastAttachTime',
+             'Value': attachment['AttachTime'].isoformat()})
         copy_tags.append(
-            {'Name': 'LastAttachInstance', 'Value': attachment['InstanceId']})
+            {'Key': 'LastAttachInstance', 'Value': attachment['InstanceId']})
 
+        # Don't add tags if we're already current
+        if 'LastAttachInstance' in extant_tags \
+           and extant_tags['LastAttachInstance'] == attachment['InstanceId']:
+            return
+
+        # Can't add more tags than the resource supports
+        if len(copy_tags) > 10:
+            log.warning("action:%s volume:%s instance:%s too many tags to copy" % (
+                self.__class__.__name__.lower(),
+                volume['VolumeId'],
+                attachment['InstanceId']))
+            return
+        
         client.create_tags(
             Resources=[volume['VolumeId']],
             Tags=copy_tags,
@@ -169,7 +187,7 @@ class EncryptVolume(BaseAction):
     def attach_encrypted_volume(self, v, vol_id):
         ec2 = local_session(self.manager.session_factory).client('ec2')
         instance_id = v['Attachments'][0]['InstanceId']
-        results = ec2.describe_instance(InstanceIds=[instance_id])
+        results = ec2.describe_instances(InstanceIds=[instance_id])
         found = None
         for r in results['Reservations']:
             for i in r['Instances']:
@@ -179,11 +197,11 @@ class EncryptVolume(BaseAction):
         if not found:
             log.warning("EncryptVolumes: Instance:%s not found" % i['InstanceId'])
             return
-        ec2.stop_instance(InstanceId=instance_id)
+        ec2.stop_instances(InstanceIds=[instance_id])
         self.wait_on_resource(instance_id)
         ec2.detach_volume(VolumeId=v['VolumeId'])
         ec2.attach_volume(VolumeId=vol_id, Device=v['Attachments'][0]['Device'])
-        ec2.start_instance(InstanceId=instance_id)
+        ec2.start_instances(InstanceIds=[instance_id])
         
     def get_encryption_key(self):
         kms = local_session(self.manager.session_factory).client('kms')
