@@ -91,7 +91,7 @@ class EC2(ResourceManager):
                 qf.append(qd)
         return qf
 
-
+    
 @filters.register('instance-age')        
 class InstanceAgeFilter(AgeFilter):
 
@@ -164,10 +164,10 @@ class Unmark(BaseAction):
             return
         tag = self.data.get('tag', 'maid_status')
         self._run_api(
-            self.manager.client.create_tags,
+            self.manager.client.delete_tags,
             Resources=[i['InstanceId'] for i in instances],
             Tags=[
-                {"Key": tag, "Value": None}],
+                {"Key": tag}],
             DryRun=self.manager.config.dryrun)
 
 
