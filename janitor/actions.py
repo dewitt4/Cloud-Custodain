@@ -50,7 +50,7 @@ class BaseAction(object):
 
     @property
     def name(self):
-        return self.__class__.__name__
+        return self.__class__.__name__.lower()
     
     def process(self, resources):
         raise NotImplemented(

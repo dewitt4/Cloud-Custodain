@@ -1,29 +1,53 @@
 # Developer Install
 
 
+## Requirements
 
-You'll need python-dev and python-virtualenv packages installed already on linux, on
-OSX the default install comes with the nesc requirements.
+- Ensure proxy is configured properly
 
-First clone the repository:
+### On Linux
 
+```bash
+sudo apt-get install python python-dev python-pip python-virtualdev
+```
+
+### On Mac
+
+```bash
+brew install python
+```
+
+## Installing
+
+First, clone the repository:
+
+```bash
 $ git clone https://github.kdc.capitalone.com/cloud-maid/cloud-maid.git
+```
 
 Also recommended is to use a virtualenv to sandbox this install from your system packages:
 
+```bash
 $ virtualenv cloud-maid
 $ source cloud-maid/bin/activate
+```
 
 And then install the dependencies
 
-$ pip install -f requirements.txt
+```bash
+$ pip install -r requirements.txt
+```
 
 And then the maid itself
 
+```bash
 $ python setup.py develop
+```
 
 You should have the cloud-maid command available now.
 
+```bash
 $ cloud-maid -h
+```
 
 

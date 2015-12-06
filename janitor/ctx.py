@@ -11,11 +11,14 @@ class ExecutionContext(object):
         self.options = options
         self.session_factory = session_factory
 
-        factory = MetricsOutput.select(options.metrics_enabled)
+        metrics_enabled = getattr(options, 'metrics_enabled', None)
+        factory = MetricsOutput.select(metrics_enabled)
         self.metrics = factory(self)
-        
-        factory = FSOutput.select(options.output_dir)
-        self.output_path = factory.join(options.output_dir, policy.name)
+
+        output_dir = getattr(options, 'output_dir', '')
+        factory = FSOutput.select(output_dir)
+            
+        self.output_path = factory.join(output_dir, policy.name)
         self.output = factory(self)
 
         self.start_time = None

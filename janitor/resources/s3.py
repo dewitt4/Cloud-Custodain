@@ -99,11 +99,11 @@ def assemble_bucket(item):
     c = s.client('s3')
 
     methods = [
-        ('get_bucket_location', 'Location'),
-        ('get_bucket_tagging', 'Tags'),
-        ('get_bucket_policy',  'Policy'),        
-        ('get_bucket_acl', 'Acl'),
-        ('get_bucket_replication', 'Replication'),        
+        ('get_bucket_location', 'Location', None, None),
+        ('get_bucket_tagging', 'Tags', [], 'TagSet'),
+        ('get_bucket_policy',  'Policy', None, None),   
+        ('get_bucket_acl', 'Acl', None, None),
+        ('get_bucket_replication', 'Replication', None, None),
 #        ('get_bucket_cors', 'Cors'),        
 #        ('get_bucket_versioning', 'Versioning'),
 #        ('get_bucket_lifecycle', 'Lifecycle'),
@@ -113,15 +113,17 @@ def assemble_bucket(item):
     # Bucket Location, Current Client Location, Default Location
     b_location = c_location = location = "us-east-1"
     
-    for m, k in methods:
+    for m, k, default, select in methods:
         try:
             method = getattr(c, m)
             v = method(Bucket=b['Name'])
             v.pop('ResponseMetadata')
+            if select is not None:
+                v = v[select]
         except ClientError, e:
             code =  e.response['Error']['Code']
             if code.startswith("NoSuch") or "NotFound" in code:
-                v = None
+                v = default
             elif code == 'PermanentRedirect':
                 # log.warning(e.response)
                 s = factory()
@@ -174,7 +176,8 @@ class NoGlobalGrants(Filter):
 
     def process_bucket(self, b):
         acl = b.get('Acl', {'Grants': []})
-
+        if not acl or not acl['Grants']:
+            return
         results = []
         for grant in acl['Grants']:
             if not 'URI' in grant.get("Grantee", {}):
@@ -473,10 +476,12 @@ class EncryptExtantKeys(ScanBucket):
                 continue
             crypto_method = self.data.get('crypto', 'AES256')
             # Note on copy we lose individual object acl grants
-            s3.copy_object(
-                Bucket=b, Key=k,
-                CopySource="/%s/%s" % (b, k),
-                MetadataDirective='COPY',
-                ServerSideEncryption=crypto_method)
+            params = {'Bucket': b,
+                      'Key': k,
+                      'CopySource': "/%s/%s" % (b, k),
+                      'MetadataDirective': 'COPY',
+                      'StorageClass': key['StorageClass'],
+                      'ServerSideEncryption': crypto_method}
+            s3.copy_object(**params)
             results.append(k)
         return results
