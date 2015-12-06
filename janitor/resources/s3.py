@@ -477,10 +477,12 @@ class EncryptExtantKeys(ScanBucket):
                 continue
             crypto_method = self.data.get('crypto', 'AES256')
             # Note on copy we lose individual object acl grants
-            s3.copy_object(
-                Bucket=b, Key=k,
-                CopySource="/%s/%s" % (b, k),
-                MetadataDirective='COPY',
-                ServerSideEncryption=crypto_method)
+            params = {'Bucket': b,
+                      'Key': k,
+                      'CopySource': "/%s/%s" % (b, k),
+                      'MetadataDirective': 'COPY',
+                      'StorageClass': key['StorageClass'],
+                      'ServerSideEncryption': crypto_method}
+            s3.copy_object(**params)
             results.append(k)
         return results
