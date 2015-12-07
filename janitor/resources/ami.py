@@ -31,8 +31,8 @@ class AMI(ResourceManager):
         return self.filter_resources(images)
 
 
-@actions.register('delete')
-class Delete(BaseAction):
+@actions.register('deregister')
+class Deregister(BaseAction):
 
     def process(self, images):
         with self.executor_factory(max_workers=10) as w:

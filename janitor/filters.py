@@ -7,6 +7,7 @@ from dateutil.tz import tzutc
 from dateutil.parser import parse
 
 import jmespath
+import logging
 import operator
 
 from janitor.executor import ThreadPoolExecutor
@@ -76,6 +77,8 @@ class FilterRegistry(Registry):
 class Filter(object):
 
     executor_factory = ThreadPoolExecutor
+
+    log = logging.getLogger('maid.filters')
     
     def __init__(self, data, manager=None):
         self.data = data

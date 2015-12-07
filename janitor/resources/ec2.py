@@ -9,13 +9,18 @@ import operator
 
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, Filter, AgeFilter
-
 from janitor.manager import ResourceManager, resources
+from janitor.offhours import Time, OffHour, OnHour
 from janitor import utils
 
 
 filters = FilterRegistry('ec2.filters')
 actions = ActionRegistry('ec2.actions')
+
+
+filters.register('time', Time)
+filters.register('offhour', OffHour)
+filters.register('onhour', OnHour)
 
 
 @resources.register('ec2')

@@ -131,6 +131,8 @@ class EncryptVolume(BaseAction):
 
         Multistep process
 
+        # Todo Stop Instance first
+
         - Create snapshot
         - Wait on snapshot creation
         - Copy Snapshot to create encrypted snapshot
