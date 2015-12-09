@@ -5,6 +5,7 @@ from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry
 
 from janitor.manager import ResourceManager, resources
+from janitor.offhours import Time, OffHour, OnHour
 from janitor.utils import local_session
 
 log = logging.getLogger('maid.asg')
@@ -12,6 +13,11 @@ log = logging.getLogger('maid.asg')
 
 filters = FilterRegistry('asg.filters')
 actions = ActionRegistry('asg.actions')
+
+
+filters.register('time', Time)
+filters.register('offhour', OffHour)
+filters.register('onhour', OnHour)
 
 
 @resources.register('asg')
