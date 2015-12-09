@@ -57,14 +57,14 @@ def blame(options, policy_collection):
     for n in names:
         output_path = S3Output.join(options.output_dir, n)
         _, bucket, key_prefix = S3Output.parse_s3(output_path)
-            
-        log.info("Record Prefix %s", key_prefix)
+
+        marker = key_prefix.strip('/') + "/" + begin_date.strftime('%Y-%m-%d-00') + "/resources.json.gz"
+        log.info("Record Prefix %s Marker %s", key_prefix.strip('/'), marker)
 
         p = s3.get_paginator('list_objects').paginate(
             Bucket=bucket,
-            Prefix=key_prefix[1:]+"/",
-            Marker=(
-                key_prefix[1:] + "/" + begin_date.strftime('%Y-%m-%d-00') + "/resources.json.gz"))
+            Prefix=key_prefix.strip('/') + "/",
+            Marker=marker)
         
         for key_set in p:
             if not 'Contents' in key_set:
