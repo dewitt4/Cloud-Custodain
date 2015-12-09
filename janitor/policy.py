@@ -9,6 +9,7 @@ import yaml
 from janitor.ctx import ExecutionContext
 from janitor.manager import resources
 from janitor import utils
+from janitor.version import version
 
 # Trigger Registrations
 import janitor.resources
@@ -94,12 +95,22 @@ class Policy(object):
                 os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:
             fh.write(value)
 
-    def session_factory(self):
-        session =  boto3.Session(
+    def session_factory(self, assume=True):
+        session = boto3.Session(
             region_name=self.options.region,
             profile_name=self.options.profile)
+        if self.options.assume_role:
+            # Todo stick version here
+            credentials = session.client('sts').assume_role(
+                RoleARN=self.options.assume_role,
+                RoleSessionName="CloudMaid")['Credentials']
+            session = boto3.Session(
+                region_name=self.options.region,
+                aws_access_key_id=credentials['AccessKeyId'],
+                aws_secret_access_key=credentials['SecretAccessKey'],
+                aws_session_token=credentials['SessionToken'])
         session._session.user_agent_name = "CloudMaid"
-        session._session.user_agent_version = "0.5"
+        session._session.user_agent_version = version
         return session
         
     def get_resource_manager(self):

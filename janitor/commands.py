@@ -8,6 +8,7 @@ import sys
 
 from janitor.utils import dumps
 
+log = logging.getLogger('maid.commands')
 
 def identify(options, policy_collection):
     fh = sys.stdout
@@ -19,8 +20,12 @@ def identify(options, policy_collection):
         
 def run(options, policy_collection):
     for policy in policy_collection.policies(options.policies):
-        policy()
-
+        try:
+            policy()
+        except Exception, e:
+            # Output does an exception log
+            log.warning("Error while executing policy %s, continuing" % (
+                policy.name))
         
 def blame(options, policy_collection):
     if not options.output_dir.startswith('s3://'):

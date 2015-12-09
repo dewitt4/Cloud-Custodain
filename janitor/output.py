@@ -136,6 +136,8 @@ class FSOutput(object):
         return os.path.join(*parts)
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        if exc_type is not None:
+            log.exception("Error while executing policy")
         self.leave_log()
 
     def join_log(self):
@@ -213,6 +215,8 @@ class S3Output(FSOutput):
         return s3_path, bucket, key_prefix
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        if exc_type is not None:
+            log.exception("Error while executing policy")
         log.debug("Uploading policy logs")
         self.leave_log()
         self.compress()
