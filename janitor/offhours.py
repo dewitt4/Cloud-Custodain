@@ -124,8 +124,6 @@ DEFAULT_ONHOUR = 7
 class Time(Filter):
 
     def __call__(self, i):
-        if not self.filter_instance(i):
-            return False
         parts = self.get_tag_parts(i)
         if parts is False:
             return False
