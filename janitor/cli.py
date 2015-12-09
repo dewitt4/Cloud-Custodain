@@ -10,6 +10,8 @@ def _default_options(p):
                    help="AWS Region to target (Default: us-east-1)")
     p.add_argument("--profile", default=None,
                    help="AWS Account Config File Profile to utilize")
+    p.add_argument("--assume", default=None, dest="assume_role",
+                   help="Role to assume")
     p.add_argument("-c", "--config", required=True,
                    help="Policy Configuration File")
     p.add_argument("-p", "--policies", default=None,
