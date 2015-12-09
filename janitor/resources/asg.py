@@ -97,6 +97,7 @@ class Suspend(BaseAction):
         client.create_or_update_tags(Tags=[elb_tag])
         return True
 
+    
 @actions.register('resume')
 class Resume(BaseAction):
 
@@ -141,3 +142,18 @@ class Resume(BaseAction):
         asg_client.resume_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])
             
+
+@actions.register('delete')
+class Delete(BaseAction):
+
+    def process(self, asgs):
+        with self.executor_factory(max_workers=10) as w:
+            list(w.map(self.process_asg, asgs))
+
+    def process_asg(self, asg):
+        session = local_session(self.manager.session_factory)
+        asg_client = session.client('autoscaling')
+        asg_client.delete_auto_scaling_group(
+                AutoScalingGroupName=asg['AutoScalingGroupName'])
+    
+        
