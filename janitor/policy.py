@@ -34,7 +34,6 @@ class PolicyCollection(object):
             'policies', [])]
         if not filters:
             return policies
-
         sort_order = [p.get('name') for p in self.data.get('policies', [])]
         policy_map = dict([(p.name, p) for p in policies])
         
