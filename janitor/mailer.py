@@ -53,7 +53,22 @@ Data Message Structure
 ----------------------
 
   - resource_type: ec2
-    resources: []
+    message: ""
+    resources: [
+      {'InstanceId': 'xyz'},
+    ]
+
+We'll receive those and queue them up. And then at batch
+period we'll do outbound
+
+
+Email Message Structure
+-----------------------
+
+We also want direct formatted emails, these are not batched
+and are directly sent out as received in simple relay fashion.
+
+  - {'recipient': 'subject':  'body': base64(gzip())'}
   
 
 Todo
@@ -119,7 +134,6 @@ class MessageType(object):
 
     @staticmethod
     def address_resolver(contact):
-
         if contact.startswith('arn'):
             return MessageType.Topic
         elif '@' in contact:
@@ -140,7 +154,7 @@ class EmailFormatter(object):
     def format(self, recipient, batch):
         """Format a batch of messages to a single recipient"""
         
-    
+
 class Worker(object):
 
     def __init__(self, config, session_factory):
@@ -151,13 +165,10 @@ class Worker(object):
         self.batch_period = self.config.batch_period
         
     def run(self):
-        
         session = self.session_factory()
-        
         while True:
             sqs = session.client('sqs')
             messages = MessageIterator(self.client)
-
             for m in messages:
                 msg_kind = m['MessageAttributes'].get('ser')
                 
