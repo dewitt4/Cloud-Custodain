@@ -37,7 +37,7 @@ import time
 from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import (
-    FilterRegistry, Filter, FilterValidationError)
+    FilterRegistry, Filter)
 
 from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
@@ -406,7 +406,7 @@ class ScanBucket(BucketActionBase):
             # On pypy we need more explicit memory collection to avoid pressure
             # and excess open files/sockets. every thousand objects
             loop_count += 1
-            if loop_count % 10 == 0:
+            if loop_count % 1000 == 0:
                 gc.collect()
 
             # Log completion at info level, progress at debug level

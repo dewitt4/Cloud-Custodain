@@ -66,11 +66,10 @@ class Suspend(BaseAction):
         asg_client = session.client('autoscaling')
         asg_client.suspend_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])
-        self.record_asg_load_balancer(asg_client, asg)
-
-        asg_client.detach_load_balancers(
-            AutoScalingGroupName=asg['AutoScalingGroupName'],
-            LoadBalancerNames=asg['LoadBalancerNames'])
+        if self.record_asg_load_balancer(asg_client, asg):
+            asg_client.detach_load_balancers(
+                AutoScalingGroupName=asg['AutoScalingGroupName'],
+                LoadBalancerNames=asg['LoadBalancerNames'])
         ec2_client = session.client('ec2')
         ec2_client.stop_instances(
             InstanceIds=[i['InstanceId'] for i in asg['Instances']])
@@ -83,6 +82,8 @@ class Suspend(BaseAction):
             if t['Key'] == self.LoadBalancerTagKey:
                 found = t
                 break
+        if not found:
+            return False
         tvalue = ",".join(asg['LoadBalancerNames'])
         if found and found['Value'] == tvalue:
             return
@@ -93,9 +94,10 @@ class Suspend(BaseAction):
             "ResourceType": "auto-scaling-group",
             "ResourceId": asg['AutoScalingGroupName']
             }
-        client.create_or_update_tags([elb_tag])
+        client.create_or_update_tags(Tags=[elb_tag])
+        return True
 
-
+    
 @actions.register('resume')
 class Resume(BaseAction):
 
@@ -130,13 +132,28 @@ class Resume(BaseAction):
                 found = t['Value']
                 break
         if not found:
-            log.warning("No Load Balancers to attach found on asg:%s" % asg['AutoScalingGroupName'])
-            return
-        balancers = found.split(',')
-        asg_client.attach_load_balancers(
-            AutoScalingGroupName=asg['AutoScalingGroupName'],
-            LoadBalancerNames=balancers)
+            log.debug("No Load Balancers to attach found on asg:%s" % asg['AutoScalingGroupName'])
+        else:
+            balancers = found.split(',')
+            asg_client.attach_load_balancers(
+                AutoScalingGroupName=asg['AutoScalingGroupName'],
+                LoadBalancerNames=balancers)
 
         asg_client.resume_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])
             
+
+@actions.register('delete')
+class Delete(BaseAction):
+
+    def process(self, asgs):
+        with self.executor_factory(max_workers=10) as w:
+            list(w.map(self.process_asg, asgs))
+
+    def process_asg(self, asg):
+        session = local_session(self.manager.session_factory)
+        asg_client = session.client('autoscaling')
+        asg_client.delete_auto_scaling_group(
+                AutoScalingGroupName=asg['AutoScalingGroupName'])
+    
+        

@@ -220,7 +220,7 @@ class S3Output(FSOutput):
         log.debug("Uploading policy logs")
         self.leave_log()
         self.compress()
-        self.transfer = S3Transfer(self.ctx.session_factory().client('s3'))
+        self.transfer = S3Transfer(self.ctx.session_factory(assume=False).client('s3'))
         self.upload()
         shutil.rmtree(self.root_dir)
         log.debug("Policy Logs uploaded")
