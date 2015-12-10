@@ -102,7 +102,7 @@ class Policy(object):
         if self.options.assume_role:
             # Todo stick version here
             credentials = session.client('sts').assume_role(
-                RoleARN=self.options.assume_role,
+                RoleArn=self.options.assume_role,
                 RoleSessionName="CloudMaid")['Credentials']
             session = boto3.Session(
                 region_name=self.options.region,
