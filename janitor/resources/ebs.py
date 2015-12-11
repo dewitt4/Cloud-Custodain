@@ -108,9 +108,9 @@ class CopyInstanceTags(BaseAction):
             DryRun=self.manager.config.dryrun)
 
 
-@actions.register('encrypt')        
+@actions.register('encrypt-instance-volume')
 class EncryptVolume(BaseAction):
-    """Encrypt an extant volume, and attach it to an instance.
+    """Encrypt an extant volume attached to an instance
 
     Not suitable for autoscale groups.
     """
@@ -147,10 +147,10 @@ class EncryptVolume(BaseAction):
         if v['Attachments']:
             self.attach_encrypted_volume(v, vol_id)
 
+        # Delete unencrypted volume
         client = local_session(self.manager.session_factory).client('ec2')
         client.delete_volume(VolumeId=v['VolumeId'])
                     
-        # Delete unencrypted volume
 
     def create_encrypted_volume(self, v, key_id):
         ec2 = local_session(self.manager.session_factory).client('ec2')

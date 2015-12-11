@@ -89,6 +89,8 @@ class SQSExecutor(Executor):
 
 class MessageIterator(object):
 
+    msg_attributes = ['sequence_id', 'op', 'ser']
+    
     def __init__(self, client, queue_url, limit=0, timeout=10):
         self.client = client
         self.queue_url = queue_url
@@ -110,8 +112,8 @@ class MessageIterator(object):
         response = self.client.receive_message(
             QueueUrl=self.queue_url,
             WaitTimeSeconds=self.timeout,
-            MessageAttributeNames=[
-                'sequence_id', 'op', 'ser'])
+            MessageAttributeNames=self.msg_attributes)
+
         msgs = response.get('Messages', [])
         for m in msgs:
             self.messages.append(m)

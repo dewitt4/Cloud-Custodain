@@ -59,7 +59,7 @@ Data Message Structure
     ]
 
 We'll receive those and queue them up. And then at batch
-period we'll do outbound
+period we'll do outbound formatting and processing
 
 
 Email Message Structure
@@ -78,8 +78,10 @@ Todo
 
 
 """
+import argparse
 import boto3
 import email
+import logging
 import smtplib
 import time
 import json
@@ -88,6 +90,13 @@ import sqlite3
 
 from janitor import utils
 from janitor.sqsexec import MessageIterator
+
+
+DATA_MESSAGE = "datamsg/1.0"
+EMAIL_MESSAGE = "email/1.0"
+
+
+log = logging.getLogger('maid.mail')
 
 
 class MessageDB(object):
@@ -101,16 +110,16 @@ class MessageDB(object):
     def _init(self):
         self.cursor.execute('''
            create table if not exists messages(
-              recipient text
-              queue_id text
-              message_id text
+              recipient text,
+              queue_id text,
+              message_id text,
               message text
         )''')
         
     def add(self, recipient, message):
         self.cursor.execute(
             'insert into messages (recipient, message) values (?, ?)',
-            recipient, message
+            (recipient, message)
             )
 
     def batches(self):
@@ -118,15 +127,15 @@ class MessageDB(object):
             '''
             select recipient, message
             from messages
-            order by recipient
+            group by recipient
             ''')
-        return results
+        return list(results.fetchall())
         
     def flush(self):
         self.cursor.execute('''delete from messages''')
 
 
-class MessageType(object):
+class MessageAddress(object):
 
     Email = "Email"
     Lookup = "Lookup"
@@ -135,11 +144,11 @@ class MessageType(object):
     @staticmethod
     def address_resolver(contact):
         if contact.startswith('arn'):
-            return MessageType.Topic
+            return MessageAddress.Topic
         elif '@' in contact:
-            return MessageType.Email
+            return MessageAddress.Email
         else:
-            return MessageType.Lookup
+            return MessageAddress.Lookup
 
 
 class EmailFormatter(object):
@@ -153,7 +162,7 @@ class EmailFormatter(object):
         
     def format(self, recipient, batch):
         """Format a batch of messages to a single recipient"""
-        
+
 
 class Worker(object):
 
@@ -163,25 +172,73 @@ class Worker(object):
         self.receive_queue = self.config.sqs_message_queue
         self.spool_db = MessageDB(self.config.spool_path)
         self.batch_period = self.config.batch_period
+        self.smtp = smtplib.SMTP(
+            self.config.smtp_server,
+            self.config.smtp_port)
         
     def run(self):
         session = self.session_factory()
         while True:
             sqs = session.client('sqs')
             messages = MessageIterator(self.client)
+            messages.msg_attributes = ['mtype', 'recipient']
             for m in messages:
-                msg_kind = m['MessageAttributes'].get('ser')
-                
+                msg_kind = m['MessageAttributes'].get('mtype')
+                if msg_kind == DATA_MESSAGE:
+                    self.spool_db.add(
+                        m['MessageAttributes']['recipient'], m)
+                elif msg_kind == EMAIL_MESSAGE:
+                    result = self.smtp.sendmail(
+                        self.config.from_addr,
+                        [m['MessageAttributes']['recipient']],
+                        )
 
-def send_data_message(client, queue_url, message):
+                    if result:
+                        log.warning("Couldn't send email %s" % (result,))
+                    messages.ack(m)
+
+
+def setup_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-s', '--smtp-host')
+    parser.add_argument(
+        '-p', '--smtp-port')
+    parser.add_argument(
+        '-q', '--queue-url')
+    parser.add_argument(
+        '-d', '--database-path')    
+    parser.add_argument(
+        '-f', '--from-addr', default="no-reply-cloud-maid@capitalone.com")    
+
+    return parser
+
+    
+# FTesting
+
+def send_data_message(queue_url, recipient, message):
+    client = boto3.Session().client('sqs')
     client.send_message(
         QueueUrl=queue_url,
         MessageBody=utils.dumps(message),
         MessageAttributes={
+            'mtype': {
+                'DataType': 'String',
+                'StringValue': DATA_MESSAGE},
+            'recipient': {
+                'StringValue': recipient,
+                'DataType': 'String'}})
+
+    
+def send_email_message(client, queue_url, message):
+    client.send_message(
+        QueueUrl=queue_url,
+        MessageBody=message,
+        MessageAttributes={
+            'op': {
+                'DataType': 'String',
+                'StringValue': 'email/1.0'},
             'ser': {
                 'StringValue': 'json',
-                'DataType': 'String'},
-            })
-    
-def send_email_message():
-    pass
+                'DataType': 'String'
+                }})
