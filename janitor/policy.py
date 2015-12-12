@@ -99,7 +99,7 @@ class Policy(object):
         session = boto3.Session(
             region_name=self.options.region,
             profile_name=self.options.profile)
-        if self.options.assume_role:
+        if self.options.assume_role and assume:
             # Todo stick version here
             credentials = session.client('sts').assume_role(
                 RoleArn=self.options.assume_role,
