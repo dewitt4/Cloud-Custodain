@@ -14,6 +14,10 @@ ftests:
 	./bin/nosetests -s -v ftests
 
 depcache:
-	./bin/pip install -d deps -r requirements.txt
+	mkdir -p deps
+	virtualenv dep-download
+	dep-download/bin/pip install -d deps -r requirements.txt
 	tar cvf maid-deps.tgz deps
+	rm -Rf dep-download
+	rm -Rf deps
 

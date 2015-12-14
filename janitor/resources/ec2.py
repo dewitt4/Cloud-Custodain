@@ -8,7 +8,7 @@ import operator
 
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter, AgeFilter
+from janitor.filters import FilterRegistry, Filter, AgeFilter, OPERATORS
 from janitor.manager import ResourceManager, resources
 from janitor.offhours import Time, OffHour, OnHour
 from janitor import utils
@@ -51,7 +51,7 @@ class EC2(ResourceManager):
     def resources(self): 
         qf = self.resource_query()
         instances = None
-        
+
         if self._cache.load():
             instances = self._cache.get(qf)
         if instances is not None:
@@ -95,6 +95,19 @@ class EC2(ResourceManager):
                 qf_names.add(qd['Name'])
                 qf.append(qd)
         return qf
+
+
+@filters.register('tag-count')
+class TagCountFilter(Filter):
+
+    def __call__(self, i):
+        count = self.data.get('count', 10)
+        op_name = self.data.get('op', 'lt')
+        op = OPERATORS.get(op_name)
+        tag_count = len([
+            t['Key'] for t in i.get('Tags', [])
+            if not t['Key'].startswith('aws:')])
+        return op(tag_count, count)
 
     
 @filters.register('instance-age')        
@@ -141,8 +154,9 @@ class MarkedForOp(Filter):
             self.current_date = datetime.now()
 
         return self.current_date >= action_date
-        
+
     
+@actions.register('tag')    
 @actions.register('mark')        
 class Mark(BaseAction):
 
@@ -160,7 +174,8 @@ class Mark(BaseAction):
                  "Value": msg}],
             DryRun=self.manager.config.dryrun)
 
-
+        
+@actions.register('untag')
 @actions.register('unmark')
 class Unmark(BaseAction):
 

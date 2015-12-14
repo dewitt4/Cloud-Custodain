@@ -41,7 +41,7 @@ from janitor.filters import (
 
 from janitor.manager import ResourceManager, resources
 from janitor.rate import TokenBucket
-from janitor.utils import chunks, local_session, dumps, set_annotation
+from janitor.utils import chunks, local_session, set_annotation
 
 
 log = logging.getLogger('maid.s3')

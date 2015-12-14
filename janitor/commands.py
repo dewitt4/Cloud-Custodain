@@ -1,6 +1,7 @@
 from cStringIO import StringIO
 from datetime import timedelta, datetime
 
+import boto3
 import gzip
 import logging
 import json
@@ -38,7 +39,7 @@ def blame(options, policy_collection):
     names = [
         p.name for p in
         policy_collection.policies(options.policies) if p.resource_type == 'ec2']
-    session = p.session_factory()
+    session = boto3.Session()
     s3 = session.client('s3')
 
     d = datetime.now()
