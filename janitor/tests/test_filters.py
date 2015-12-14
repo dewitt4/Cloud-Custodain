@@ -99,6 +99,18 @@ class TestMarkedForAction(BaseFilterTest):
         
 class TestInstanceValue(BaseFilterTest):
 
+    def test_filter_tag_count(self):
+        tags = []
+        for i in range(10):
+            tags.append({'Key': str(i), 'Value': str(i)})
+        i = instance(Tags=tags)
+        self.assertFilter(
+            {'type': 'tag-count'}, i, False)
+        tags.pop(0)
+        i = instance(Tags=tags)
+        self.assertFilter(
+            {'type': 'tag-count'}, i, True)
+        
     def test_filter_tag(self):
         i = instance(Tags=[
             {'Key': 'ASV', 'Value': 'abcd'}])
