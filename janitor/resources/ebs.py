@@ -2,10 +2,10 @@ import itertools
 import logging
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry
+from janitor.filters import FilterRegistry, ValueFilter, ANNOTATION_KEY
 
 from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session
+from janitor.utils import local_session, set_annotation, query_instances
 
 
 log = logging.getLogger('maid.ebs')
@@ -32,6 +32,31 @@ class EBS(ResourceManager):
         results = p.paginate(Filters=query)
         volumes = list(itertools.chain(*[rp['Volumes'] for rp in results]))
         return self.filter_resources(volumes)
+
+    
+@filters.register('instance')
+class AttachedInstanceFilter(ValueFilter):
+    """Filter volumes based on filtering on their attached instance"""
+
+    def process(self, resources):
+        original_count = len(resources)
+        resources = [r for r in resources if r.get('Attachments')]
+        log.debug('Filtered from %d volumes to %d attached volumes' % (
+            original_count, len(resources)))
+        self.instance_map = self.get_instance_mapping(resources)
+        return filter(self, resources)
+    
+    def __call__(self, r):
+        if self.match(self.instance_map[r['Attachments'][0]['InstanceId']]):
+            set_annotation(r, ANNOTATION_KEY, "instance-%s" % self.k)
+            return True
+        
+    def get_instance_mapping(self, resources):
+        instance_ids = [r['Attachments'][0]['InstanceId'] for r in resources]
+        instances = query_instances(
+            local_session(self.manager.session_factory),
+            InstanceIds=[instance_ids])
+        return {i['InstanceId']: i for i in instances}
         
 
 @actions.register('copy-instance-tags')
@@ -41,9 +66,8 @@ class CopyInstanceTags(BaseAction):
     Mostly useful for volumes not set to delete on termination, which
     are otherwise candidates for garbage collection, copying the
     instance tags gives us more semantic information to determine if
-    that's useful, as well letting us know the last time the volume
+    their useful, as well letting us know the last time the volume
     was actually used.
-
     """
     def process(self, volumes):
         volumes = [v for v in volumes if v['Attachments']]
@@ -60,7 +84,7 @@ class CopyInstanceTags(BaseAction):
         result = client.describe_instances(
             Filters=[
                 {'Name': 'instance-id',
-                 'Value': [instance_id]}])
+                 'Values': [instance_id]}])
         found = False
         for r in result.get('Reservations', []):
             for i in r['Instances']:
@@ -108,7 +132,7 @@ class CopyInstanceTags(BaseAction):
             DryRun=self.manager.config.dryrun)
 
 
-@actions.register('encrypt')        
+@actions.register('encrypt-instance-volume')
 class EncryptVolume(BaseAction):
     """Encrypt an extant volume, and attach it to an instance.
 
@@ -156,6 +180,7 @@ class EncryptVolume(BaseAction):
 
     def create_encrypted_volume(self, v, key_id):
         ec2 = local_session(self.manager.session_factory).client('ec2')
+        
         results = ec2.create_snapshot(
             VolumeId=v['VolumeId'],
             Description="Transient snapshot for encryption",)

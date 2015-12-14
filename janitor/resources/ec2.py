@@ -51,7 +51,7 @@ class EC2(ResourceManager):
     def resources(self): 
         qf = self.resource_query()
         instances = None
-        
+
         if self._cache.load():
             instances = self._cache.get(qf)
         if instances is not None:
@@ -141,8 +141,9 @@ class MarkedForOp(Filter):
             self.current_date = datetime.now()
 
         return self.current_date >= action_date
-        
+
     
+@actions.register('tag')    
 @actions.register('mark')        
 class Mark(BaseAction):
 
@@ -160,7 +161,8 @@ class Mark(BaseAction):
                  "Value": msg}],
             DryRun=self.manager.config.dryrun)
 
-
+        
+@actions.register('untag')
 @actions.register('unmark')
 class Unmark(BaseAction):
 

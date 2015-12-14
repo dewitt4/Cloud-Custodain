@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import json
+import itertools
 import threading
 import time
 
@@ -35,11 +36,24 @@ def chunks(iterable, size=50):
     if batch:
         yield batch
 
+
+def query_instances(session, client=None, **query):
+    """Return a list of ec2 instances for the query.
+    """
+    if client is None:
+        client = session.client('ec2')
+    p = client.get_paginator('describe_instances')
+    results = p.paginate(**query)
+    return list(itertools.chain(
+        *[r["Instances"] for r in itertools.chain(
+            *[pp['Reservations'] for pp in results])]))
+
         
 CONN_CACHE = threading.local()
 
 
 def local_session(factory):
+    """Cache a session thread local for up to an hr."""
     s = getattr(CONN_CACHE, 'session', None)
     t = getattr(CONN_CACHE, 'time', 0)
     n = time.time()

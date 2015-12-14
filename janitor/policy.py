@@ -109,6 +109,16 @@ class Policy(object):
                 aws_access_key_id=credentials['AccessKeyId'],
                 aws_secret_access_key=credentials['SecretAccessKey'],
                 aws_session_token=credentials['SessionToken'])
+        maid_record = os.environ.get('MAID_RECORD')
+        if maid_record:
+            maid_record = os.path.expanduser(maid_record)
+            if not os.path.exists(maid_record):
+                self.log.error(
+                    "Maid record path: %s does not exist" % maid_record)
+                raise ValueError("record path does not exist")
+            import placebo
+            pill = placebo.attach(session, maid_record)
+            pill.record()
         session._session.user_agent_name = "CloudMaid"
         session._session.user_agent_version = version
         return session
