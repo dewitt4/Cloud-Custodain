@@ -116,6 +116,7 @@ class Policy(object):
                 self.log.error(
                     "Maid record path: %s does not exist" % maid_record)
                 raise ValueError("record path does not exist")
+            self.log.info("Recording aws traffic to: %s" % maid_record)
             import placebo
             pill = placebo.attach(session, maid_record)
             pill.record()
