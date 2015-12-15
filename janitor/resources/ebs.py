@@ -293,7 +293,6 @@ class EncryptVolume(BaseAction):
             if self.verbose:
                 self.log.debug("Waiting on snapshot completion %s" % snapshot_id)
             waiter = client.get_waiter('snapshot_completed')
-            waiter.config.max_att
             waiter.wait(SnapshotIds=[snapshot_id])
             if self.verbose:
                 self.log.debug("Snapshot: %s completed" % snapshot_id)
