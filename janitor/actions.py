@@ -32,7 +32,7 @@ class ActionRegistry(Registry):
             raise ValueError(
                 "Invalid action type %s, valid actions %s" % (
                     action_type, self.keys()))
-        return action_class(data, manager)
+        return action_class(data, manager).validate()
 
     
 class BaseAction(object):
@@ -48,6 +48,9 @@ class BaseAction(object):
         self.manager = manager
         self.log_dir = log_dir
 
+    def validate(self):
+        return self
+    
     @property
     def name(self):
         return self.__class__.__name__.lower()

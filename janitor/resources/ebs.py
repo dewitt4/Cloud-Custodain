@@ -41,13 +41,15 @@ class AttachedInstanceFilter(ValueFilter):
     def process(self, resources):
         original_count = len(resources)
         resources = [r for r in resources if r.get('Attachments')]
-        log.debug('Filtered from %d volumes to %d attached volumes' % (
+        self.log.debug('Filtered from %d volumes to %d attached volumes' % (
             original_count, len(resources)))
         self.instance_map = self.get_instance_mapping(resources)
         return filter(self, resources)
     
     def __call__(self, r):
-        if self.match(self.instance_map[r['Attachments'][0]['InstanceId']]):
+        instance = self.instance_map[r['Attachments'][0]['InstanceId']]
+        if self.match(instance):
+            r['Instance'] = instance
             set_annotation(r, ANNOTATION_KEY, "instance-%s" % self.k)
             return True
         
@@ -55,7 +57,7 @@ class AttachedInstanceFilter(ValueFilter):
         instance_ids = [r['Attachments'][0]['InstanceId'] for r in resources]
         instances = query_instances(
             local_session(self.manager.session_factory),
-            InstanceIds=[instance_ids])
+            InstanceIds=instance_ids)
         return {i['InstanceId']: i for i in instances}
         
 
@@ -138,98 +140,124 @@ class EncryptVolume(BaseAction):
 
     Not suitable for autoscale groups.
     """
+
+    def validate(self):
+        key = self.data.get('key')
+        if not key:
+            raise ValueError(
+                "action:encrypt-instance-volume requires kms keyid/alias specified")
+        self.verbose = self.data.get('verbose', False)
+        return self
+
     def process(self, volumes):
         original_count = len(volumes)
-        volumes = [v for v in volumes if not v['Encrypted']]
-        log.debug("EncryptVolumes filtered from %d to %d unencrypted volumes" % (
-            original_count, len(volumes)))
-        key_id = self.data.get('key')
-        if not key_id:
-            self.log.warning("No key specificed for encrypt volume, skipping")
-            return
+        volumes = [v for v in volumes
+                   if not v['Encrypted'] or not v['Attachments']]
+        log.debug(
+            "EncryptVolumes filtered from %d to %d unencrypted attached volumes" % (
+                original_count, len(volumes)))
+        
+        # Group volumes by instance id
+        instance_vol_map = {}
+        for v in volumes:
+            instance_id = v['Attachments'][0]['InstanceId']
+            instance_vol_map.setdefault(instance_id, []).append(v)
+            
         with self.executor_factory(max_workers=10) as w:
-            list(w.map(self.process_volume, volumes))
+            list(w.map(self.process_volume, instance_vol_map.values()))
 
-    def process_volume(self, v):
-        """Encrypt extant unencrypted ebs volume
+    def process_volume(self, vol_set):
+        """Encrypt attached unencrypted ebs volume
+
+        vol_set corresponds to all the unencrypted volumes on a given instance.
 
         Multistep process
-
-        # Todo Stop Instance first
-
-        - Create snapshot
-        - Wait on snapshot creation
-        - Copy Snapshot to create encrypted snapshot
-        - Wait on snapshot creation
-        - Create encrypted volume from snapshot
-        - Wait on volume creation
-        - Delete transient snapshots
-        - Stop instance / modify block device mapping
-        - Delete unencrypted volume
+        
+        - Stop instance
+        - For each volume
+          - Create snapshot
+          - Wait on snapshot creation
+          - Copy Snapshot to create encrypted snapshot
+          - Wait on snapshot creation
+          - Create encrypted volume from snapshot
+          - Wait on volume creation
+          - Delete transient snapshots
+          - Detach Unencryptd Volume
+          - Attach Encrypted Volume
+        - For each volume
+          - Delete unencrypted volume
+        - Start Instance
         """
-        key_id = self.get_encryption_key()
-        vol_id = self.create_encrypted_volume(v, key_id)
-
-        if v['Attachments']:
-            self.attach_encrypted_volume(v, vol_id)
-
+        instance_id = vol_set[0]['Attachments'][0]['InstanceId']
         client = local_session(self.manager.session_factory).client('ec2')
-        client.delete_volume(VolumeId=v['VolumeId'])
-                    
-        # Delete unencrypted volume
+        client.stop_instances(InstanceIds=[instance_id])
+        self.wait_on_resource(client, instance_id=instance_id)
+        
+        key_id = self.get_encryption_key()
+        if self.verbose:
+            self.log.debug("Using encryption key: %s" % key_id)
 
+        for v in vol_set:
+            vol_id = self.create_encrypted_volume(v, key_id)
+            client.detach_volume(
+                InstanceId=instance_id, VolumeId=v['VolumeId'])
+            client.attach_volume(
+                InstanceId=instance_id, VolumeId=vol_id,
+                Device=v['Attachments'][0]['Device'])
+
+        client.start_instances(InstanceIds=[instance_id])
+        
+        if self.verbose:
+            self.log.debug("Deleting unencrypted volumes")
+            
+        for v in vol_set:
+            client.delete_volume(VolumeId=v['VolumeId'])
+        
     def create_encrypted_volume(self, v, key_id):
         ec2 = local_session(self.manager.session_factory).client('ec2')
-        
         results = ec2.create_snapshot(
             VolumeId=v['VolumeId'],
-            Description="Transient snapshot for encryption",)
+            Description="maid transient snapshot for encryption",)
         transient_snapshots = [results['SnapshotId']]
-        self.wait_on_resource(ec2, results['SnapshotId'])
-        
+        ec2.create_tags(
+            Resources=[results['SnapshotId']],
+            Tags=[
+                {'Key': 'maid-crypto-remediation', 'Value': 'true'}])
+        self.wait_on_resource(ec2, results['SnapshotId'])        
+
         results = ec2.copy_snapshot(
             SourceSnapshotId=results['SnapshotId'],
-            SourceRegion=v['AvailabilityZone'].rsplit('-', 1)[0],
-            Description='Transient snapshot for encryption',
+            SourceRegion=v['AvailabilityZone'][:-1],
+            Description='maid transient snapshot for encryption',
             Encrypted=True,
             KmsKeyId=key_id)
         transient_snapshots.append(results['SnapshotId'])
-        self.wait_on_resource(ec2, results['SnapshotId'])
-
+        ec2.create_tags(
+            Resources=[results['SnapshotId']],
+            Tags=[
+                {'Key': 'maid-crypto-remediation', 'Value': 'true'}])
+        self.wait_on_resource(ec2, results['SnapshotId'])        
+        
         # Todo provisioned iops passthrough on create replacement volume
         results = ec2.create_volume(
-            Size=v['VolumeSize'],
+            Size=v['Size'],
             VolumeType=v['VolumeType'],
             SnapshotId=results['SnapshotId'],
-            KmsKeyId=key_id)
+            AvailabilityZone=v['AvailabilityZone'],
+            Encrypted=True)
 
+        ec2.create_tags(
+            Resources=[results['VolumeId']],
+            Tags=[{'Key': 'maid-crypt-remediation', 'Value': 'true'}])
+        
         # Wait on encrypted volume creation
-        self.wait_on_resource(ec2, results['VolumeId'])
+        self.wait_on_resource(ec2, volume_id=results['VolumeId'])
         
         # Delete transient snapshots        
         for sid in transient_snapshots:
             ec2.delete_snapshot(SnapshotId=sid)
         return results['VolumeId']
 
-    def attach_encrypted_volume(self, v, vol_id):
-        ec2 = local_session(self.manager.session_factory).client('ec2')
-        instance_id = v['Attachments'][0]['InstanceId']
-        results = ec2.describe_instances(InstanceIds=[instance_id])
-        found = None
-        for r in results['Reservations']:
-            for i in r['Instances']:
-                if i['InstanceId'] == instance_id:
-                    found = i
-                    break
-        if not found:
-            log.warning("EncryptVolumes: Instance:%s not found" % i['InstanceId'])
-            return
-        ec2.stop_instances(InstanceIds=[instance_id])
-        self.wait_on_resource(instance_id)
-        ec2.detach_volume(VolumeId=v['VolumeId'])
-        ec2.attach_volume(VolumeId=vol_id, Device=v['Attachments'][0]['Device'])
-        ec2.start_instances(InstanceIds=[instance_id])
-        
     def get_encryption_key(self):
         kms = local_session(self.manager.session_factory).client('kms')
         key_alias = self.data.get('key')
@@ -238,16 +266,29 @@ class EncryptVolume(BaseAction):
         return key_id
     
     def wait_on_resource(self, client, snapshot_id=None, volume_id=None, instance_id=None):
+
         # boto client waiters poll every 15 seconds up to a max 600s (5m)
         if snapshot_id:
+            if self.verbose:
+                self.log.debug("Waiting on snapshot completion %s" % snapshot_id)
             waiter = client.get_waiter('snapshot_completed')
             waiter.wait(SnapshotIds=[snapshot_id])
+            if self.verbose:
+                self.log.debug("Snapshot: %s completed" % snapshot_id)
         elif volume_id:
-            waiter = client.get_waiter('volume_available')
+            if self.verbose:
+                self.log.debug("Waiting on volume creation %s" % volume_id)
+            waiter = client.get_waiter('volume_available')        
             waiter.wait(VolumeIds=[volume_id])
+            if self.verbose:
+                self.log.debug("Volume: %s created" % volume_id)
         elif instance_id:
+            if self.verbose:
+                self.log.debug("Waiting on instance stop")
             waiter = client.get_waiter('instance_stopped')
             waiter.wait(InstanceIds=[instance_id])
+            if self.verbose:
+                self.log.debug("Instance: %s stopped" % instance_id)
                         
 
 @actions.register('delete')
