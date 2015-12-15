@@ -28,7 +28,10 @@ OPERATORS = {
     'gt': operator.gt,
     'ge': operator.ge,
     'le': operator.le,
+    'in': lambda x, y: x in y,
+    'ni': lambda x, y: not x in y,
     'lt': operator.lt}
+
 
 
 class FilterRegistry(Registry):

@@ -11,6 +11,7 @@ from janitor.utils import dumps
 
 log = logging.getLogger('maid.commands')
 
+
 def identify(options, policy_collection):
     fh = sys.stdout
     for policy in policy_collection.policies(options.policies):
@@ -24,10 +25,13 @@ def run(options, policy_collection):
         try:
             policy()
         except Exception, e:
+            if options.debug:
+                raise
             # Output does an exception log
             log.warning("Error while executing policy %s, continuing" % (
                 policy.name))
-        
+
+            
 def blame(options, policy_collection):
     if not options.output_dir.startswith('s3://'):
         raise ValueError("Blame only supports s3 output")
