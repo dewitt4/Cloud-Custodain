@@ -182,7 +182,7 @@ class EncryptVolume(BaseAction):
           - Create encrypted volume from snapshot
           - Wait on volume creation
           - Delete transient snapshots
-          - Detach Unencryptd Volume
+          - Detach Unencrypted Volume
           - Attach Encrypted Volume
         - For each volume
           - Delete unencrypted volume
@@ -197,8 +197,14 @@ class EncryptVolume(BaseAction):
         if self.verbose:
             self.log.debug("Using encryption key: %s" % key_id)
 
+        # Create all the volumes first
+        paired = []
         for v in vol_set:
-            vol_id = self.create_encrypted_volume(v, key_id)
+            vol_id = self.create_encrypted_volume(v, key_id, instance_id)
+            paired.append((v, vol_id))
+
+        # Next detach and reattach
+        for v, vol_id in paired:
             client.detach_volume(
                 InstanceId=instance_id, VolumeId=v['VolumeId'])
             client.attach_volume(
@@ -208,12 +214,12 @@ class EncryptVolume(BaseAction):
         client.start_instances(InstanceIds=[instance_id])
         
         if self.verbose:
-            self.log.debug("Deleting unencrypted volumes")
+            self.log.debug("Deleting unencrypted volumes for: %s" % instance_id)
             
         for v in vol_set:
             client.delete_volume(VolumeId=v['VolumeId'])
         
-    def create_encrypted_volume(self, v, key_id):
+    def create_encrypted_volume(self, v, key_id, instance_id):
         ec2 = local_session(self.manager.session_factory).client('ec2')
         results = ec2.create_snapshot(
             VolumeId=v['VolumeId'],
@@ -223,6 +229,7 @@ class EncryptVolume(BaseAction):
             Resources=[results['SnapshotId']],
             Tags=[
                 {'Key': 'maid-crypto-remediation', 'Value': 'true'}])
+            
         self.wait_on_resource(ec2, results['SnapshotId'])        
 
         results = ec2.copy_snapshot(
@@ -235,7 +242,9 @@ class EncryptVolume(BaseAction):
         ec2.create_tags(
             Resources=[results['SnapshotId']],
             Tags=[
-                {'Key': 'maid-crypto-remediation', 'Value': 'true'}])
+                {'Key': 'maid-crypto-remediation', 'Value': instance_id},
+                {'Key': 'maid-device', 'Value': v['Attachments'][0]['Device']}
+            ])
         self.wait_on_resource(ec2, results['SnapshotId'])        
         
         # Todo provisioned iops passthrough on create replacement volume
@@ -265,13 +274,26 @@ class EncryptVolume(BaseAction):
         key_id = result['KeyMetadata']['KeyId']
         return key_id
     
-    def wait_on_resource(self, client, snapshot_id=None, volume_id=None, instance_id=None):
-
+    def wait_on_resource(self, *args, **kw):
+        # Sigh this is dirty, but failure in the middle of our workflow
+        # due to overly long resource creation is complex to unwind,
+        # with multi-volume instances. Wait up to three times (actual
+        # wait time is a per resource type configuration.
+        try:
+            return self._wait_on_resource(*args, **kw)
+        except Exception:
+            try:
+                return self._wait_on_resource(*args, **kw)
+            except Exception:
+                return self._wait_on_resource(*args, **kw)
+        
+    def _wait_on_resource(self, client, snapshot_id, volume_id, instance_id=None):
         # boto client waiters poll every 15 seconds up to a max 600s (5m)
         if snapshot_id:
             if self.verbose:
                 self.log.debug("Waiting on snapshot completion %s" % snapshot_id)
             waiter = client.get_waiter('snapshot_completed')
+            waiter.config.max_att
             waiter.wait(SnapshotIds=[snapshot_id])
             if self.verbose:
                 self.log.debug("Snapshot: %s completed" % snapshot_id)
