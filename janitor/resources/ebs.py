@@ -1,6 +1,8 @@
 import itertools
 import logging
 
+from concurrent.futures import as_completed
+
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry, ValueFilter, ANNOTATION_KEY
 
@@ -162,9 +164,17 @@ class EncryptVolume(BaseAction):
         for v in volumes:
             instance_id = v['Attachments'][0]['InstanceId']
             instance_vol_map.setdefault(instance_id, []).append(v)
-            
+
         with self.executor_factory(max_workers=10) as w:
-            list(w.map(self.process_volume, instance_vol_map.values()))
+            futures = {}
+            for instance_id, vol_set in instance_vol_map.items():
+                futures[w.submit(self.process_volume, instance_id, vol_set)] = instance_id
+            for f in as_completed(futures):
+                if f.exception():
+                    instance_id = futures[f]
+                    log.error(
+                        "Exception processing instance:%s volset: %s \n %s" % (
+                            instance_id, instance_vol_map[instance_id], f.exception()))
 
     def process_volume(self, vol_set):
         """Encrypt attached unencrypted ebs volume
@@ -197,7 +207,7 @@ class EncryptVolume(BaseAction):
         if self.verbose:
             self.log.debug("Using encryption key: %s" % key_id)
 
-        # Create all the volumes first
+        # Create all the volumes before patching the instance.
         paired = []
         for v in vol_set:
             vol_id = self.create_encrypted_volume(v, key_id, instance_id)
@@ -220,6 +230,7 @@ class EncryptVolume(BaseAction):
             client.delete_volume(VolumeId=v['VolumeId'])
         
     def create_encrypted_volume(self, v, key_id, instance_id):
+        # Create a current snapshot
         ec2 = local_session(self.manager.session_factory).client('ec2')
         results = ec2.create_snapshot(
             VolumeId=v['VolumeId'],
@@ -229,9 +240,9 @@ class EncryptVolume(BaseAction):
             Resources=[results['SnapshotId']],
             Tags=[
                 {'Key': 'maid-crypto-remediation', 'Value': 'true'}])
-            
         self.wait_on_resource(ec2, results['SnapshotId'])        
 
+        # Create encrypted snapshot from current
         results = ec2.copy_snapshot(
             SourceSnapshotId=results['SnapshotId'],
             SourceRegion=v['AvailabilityZone'][:-1],
@@ -242,22 +253,23 @@ class EncryptVolume(BaseAction):
         ec2.create_tags(
             Resources=[results['SnapshotId']],
             Tags=[
-                {'Key': 'maid-crypto-remediation', 'Value': instance_id},
-                {'Key': 'maid-device', 'Value': v['Attachments'][0]['Device']}
+                {'Key': 'maid-crypto-remediation', 'Value': True}
             ])
         self.wait_on_resource(ec2, results['SnapshotId'])        
-        
-        # Todo provisioned iops passthrough on create replacement volume
+
+        # Create encrypted volume, also tag so we can recover
         results = ec2.create_volume(
             Size=v['Size'],
             VolumeType=v['VolumeType'],
             SnapshotId=results['SnapshotId'],
             AvailabilityZone=v['AvailabilityZone'],
             Encrypted=True)
-
         ec2.create_tags(
             Resources=[results['VolumeId']],
-            Tags=[{'Key': 'maid-crypt-remediation', 'Value': 'true'}])
+            Tags=[
+                {'Key': 'maid-crypt-remediation', 'Value': instance_id},
+                {'Key': 'maid-origin-volume', 'Value': v['VolumeId']},
+                {'Key': 'maid-instance-device', 'Value': v['Attachments'][0]['Device']}])
         
         # Wait on encrypted volume creation
         self.wait_on_resource(ec2, volume_id=results['VolumeId'])
