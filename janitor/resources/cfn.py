@@ -26,7 +26,7 @@ class CloudFormation(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('cloudformation')
-        query = self.resource_query()
+        query = self.resource_query()  # FIXME: Not used
         self.log.info("Querying cloudformation")
         p = c.get_paginator('describe_stacks')
         results = p.paginate()

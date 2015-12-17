@@ -32,6 +32,7 @@ class ActionRegistry(Registry):
             raise ValueError(
                 "Invalid action type %s, valid actions %s" % (
                     action_type, self.keys()))
+        # Construct a ResourceManager
         return action_class(data, manager).validate()
 
     
