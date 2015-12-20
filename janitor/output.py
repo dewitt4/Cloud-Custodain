@@ -177,7 +177,7 @@ class DirectoryOutput(FSOutput):
             if not os.path.exists(self.ctx.output_path):
                 os.makedirs(self.ctx.output_path)
 
-    
+
 class S3Output(FSOutput):
     """
     Usage::
@@ -240,4 +240,5 @@ class S3Output(FSOutput):
                         'ServerSideEncryption': 'AES256'})
                     
 
-
+s3_join = S3Output.join
+parse_s3 = S3Output.parse_s3

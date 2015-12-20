@@ -38,21 +38,13 @@ def setup_parser():
     parser = argparse.ArgumentParser()
     subs = parser.add_subparsers()
 
-
-    blame = subs.add_parser("blame")
-    blame.set_defaults(command=commands.blame)
-    _default_options(blame)
-    blame.add_argument(
+    report = subs.add_parser("report")
+    report.set_defaults(command=commands.report)
+    _default_options(report)
+    report.add_argument(
         '--days', type=int,
         help="Number of days of history to consider")
-    blame.add_argument(
-        '--ip', action='append',
-        help="Server IP Address to look for")
-    blame.add_argument(
-        '--instance-id', action='append',
-        help="Server Instance Id to look for")
 
-    
     identify = subs.add_parser("identify")
     identify.set_defaults(command=commands.identify)
     _default_options(identify)
