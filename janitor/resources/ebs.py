@@ -28,7 +28,7 @@ class EBS(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('ec2')
-        query = self.resource_query()
+        query = self.resource_query()  # FIXME: This is always []. What's going on?
         self.log.info("Querying ebs volumes")
         p = c.get_paginator('describe_volumes')
         results = p.paginate(Filters=query)

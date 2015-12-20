@@ -37,7 +37,7 @@ class ASG(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('autoscaling')
-        query = self.resource_query()
+        query = self.resource_query()  # FIXME: This is always []. What's going on?
         if self._cache.load():
             asgs = self._cache.get({'resource': 'asg', 'q': query})
             if asgs is not None:

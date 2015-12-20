@@ -2,6 +2,7 @@
 import argparse
 import logging
 
+# policy initializes a lot of stuff on load
 from janitor import policy, commands
 
 
