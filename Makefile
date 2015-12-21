@@ -21,3 +21,5 @@ depcache:
 	rm -Rf dep-download
 	rm -Rf deps
 
+sphinx:
+	make -f Makefile.sphinx html
