@@ -1,5 +1,6 @@
 """
-# Record Outputs
+Record Outputs
+==============
 
  Structured and Unstructured per action and resource
 
@@ -8,16 +9,17 @@
  - Policy Action Records
  - CloudWatch Metrics
 
-# S3 Bucket Location
+S3 Bucket Location
+==================
 
- s3://cloud-maid-sts-digital-dev/
+s3://cloud-maid-sts-digital-dev/
 
- policies
-   - <policy-name>
-     - <date>
-         - <file.log.gz>
-         - <file.json.gz>
-         - maid
+policies
+  - <policy-name>
+    - <date>
+        - <file.log.gz>
+        - <file.json.gz>
+        - maid
 
 Actions have output / or even state 
 

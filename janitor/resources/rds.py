@@ -1,35 +1,36 @@
 """
-# RDS Resource Manager
+RDS Resource Manager
+====================
 
-## Example Policies
+Example Policies
+----------------
 
 Find rds instances that are publicly available
 
-```yaml
-policies:
-   - name: rds-public
-     resource: rds
-     filters: 
-      - PubliclyAccessible: true
-```
+.. code-block:: yaml
+
+   policies:
+      - name: rds-public
+        resource: rds
+        filters: 
+         - PubliclyAccessible: true
 
 Find rds instances that are not encrypted
 
-```yaml
+.. code-block:: yaml
 
-policies: 
-   - name: rds-non-encrypted
-     resource: rds
-     filters:
-      - type: value
-        key: StorageEncrypted
-        value: true
-        op: ne
-```
+   policies: 
+      - name: rds-non-encrypted
+        resource: rds
+        filters:
+         - type: value
+           key: StorageEncrypted
+           value: true
+           op: ne
 
 
 Todo/Notes
-==========
+----------
 - Tag api for rds is highly inconsistent
   compared to every other aws api, it
   requires full arns. The api never exposes
