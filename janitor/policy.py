@@ -11,7 +11,7 @@ from janitor.manager import resources
 from janitor import utils
 from janitor.version import version
 
-# Trigger Registrations
+# This import causes our resources to be initialized
 import janitor.resources
 
 
@@ -26,15 +26,18 @@ def load(options, path):
 
 class PolicyCollection(object):
 
+    # FIXME: rename data to policySpec?
     def __init__(self, data, options):
         self.data = data
         self.options = options
         
     def policies(self, filters=None):
+        # self.options is the CLI options specified in cli.setup_parser()
         policies = [Policy(p, self.options) for p in self.data.get(
             'policies', [])]
         if not filters:
             return policies
+        # FIXME: return filter(lambda p: fnmatch.fnmatch(p.name, filters), policies) ?
         sort_order = [p.get('name') for p in self.data.get('policies', [])]
         policy_map = dict([(p.name, p) for p in policies])
         
@@ -68,6 +71,7 @@ class Policy(object):
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()
+            # FIXME: rename resources to distinguish from imported janitor.manager resources
             resources = self.resource_manager.resources()
             rt = time.time() - s
             self.log.info(
@@ -109,7 +113,9 @@ class Policy(object):
                 aws_access_key_id=credentials['AccessKeyId'],
                 aws_secret_access_key=credentials['SecretAccessKey'],
                 aws_session_token=credentials['SessionToken'])
-        maid_record = os.environ.get('MAID_RECORD')
+
+        # FIXME: split all this maid_record stuff into a function; document it
+        maid_record = os.environ.get('MAID_RECORD') # FIXME: what are sane values for this?
         if maid_record:
             maid_record = os.path.expanduser(maid_record)
             if not os.path.exists(maid_record):
@@ -120,6 +126,7 @@ class Policy(object):
             import placebo
             pill = placebo.attach(session, maid_record)
             pill.record()
+
         session._session.user_agent_name = "CloudMaid"
         session._session.user_agent_version = version
         return session

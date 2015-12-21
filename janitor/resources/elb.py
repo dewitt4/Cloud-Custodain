@@ -25,7 +25,7 @@ class ELB(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('elb')
-        query = self.resource_query()
+        query = self.resource_query()  # FIXME: This is always []. What's going on?
         self.log.info("Querying elb instances")
         p = c.get_paginator('describe_load_balaners')
         results = p.paginate(Filters=query)

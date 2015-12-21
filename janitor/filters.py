@@ -183,12 +183,12 @@ class ValueFilter(Filter):
         return False
 
 
+# Select instances older than threshold_date (defaults to 60 days ago)
 class AgeFilter(Filter):
 
-    # filter instance cache of threshold date
     threshold_date = None
 
-    # subclass override to determine date attribute
+    # The name of attribute to compare to threshold; must override in subclass
     date_attribute = None
 
     def validate(self):

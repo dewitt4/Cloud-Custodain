@@ -26,6 +26,7 @@ class EC2(ResourceManager):
 
     def __init__(self, ctx, data):
         super(EC2, self).__init__(ctx, data)
+        # FIXME: should we be doing this check in every ResourceManager?
         if not isinstance(self.data, dict):
             raise ValueError(
                 "Invalid format, expecting dictionary found %s" % (
@@ -36,6 +37,7 @@ class EC2(ResourceManager):
 
     @property
     def client(self):
+        # FIXME: Where is this used?
         return self.session_factory().client('ec2')
         
     def filter_resources(self, resources):
@@ -46,7 +48,8 @@ class EC2(ResourceManager):
             original, len(resources)))
         return resources
     
-    def resources(self): 
+    def resources(self):
+        # FIXME: Explain why this is different from the other ResourceManagers
         qf = self.resource_query()
         instances = None
 

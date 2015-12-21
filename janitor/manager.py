@@ -23,10 +23,12 @@ class ResourceManager(object):
     def format_json(self, resources, fh):
         return dumps(resources, fh, indent=2)
 
+    # FIXME: Only overridden by ec2. Explain.
     def resource_query(self):
         return []
     
     def filter_resources(self, resources):
+        # FIXME: resources shadows global variable
         original = len(resources)
         for f in self.filters:
             resources = f.process(resources)
