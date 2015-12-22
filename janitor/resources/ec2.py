@@ -37,17 +37,8 @@ class EC2(ResourceManager):
 
     @property
     def client(self):
-        # FIXME: Where is this used?
         return self.session_factory().client('ec2')
         
-    def filter_resources(self, resources):
-        original = len(resources)
-        for f in self.filters:
-            resources = f.process(resources)
-        self.log.info("Filtered resources from %d to %d" % (
-            original, len(resources)))
-        return resources
-    
     def resources(self):
         # FIXME: Explain why this is different from the other ResourceManagers
         qf = self.resource_query()
