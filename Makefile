@@ -22,6 +22,7 @@ depcache:
 	rm -Rf deps
 
 sphinx:
+	rm -r build && \
 	make -f Makefile.sphinx html
 
 ghpages:
