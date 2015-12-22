@@ -40,7 +40,6 @@ from janitor.filters import (
     FilterRegistry, Filter)
 
 from janitor.manager import ResourceManager, resources
-from janitor.rate import TokenBucket
 from janitor.utils import chunks, local_session, set_annotation
 
 
@@ -58,16 +57,10 @@ class S3(ResourceManager):
     def __init__(self, ctx, data):
         super(S3, self).__init__(ctx, data)
         self.log_dir = ctx.log_dir
-        self.rate_limit = {
-            'key_process_rate': TokenBucket(2000),
-        }
         self.filters = filters.parse(
             self.data.get('filters', []), self)
         self.actions = actions.parse(
             self.data.get('actions', []), self)
-        
-    def incr(self, m, v=1):
-        return self.rate_limit[m].consume(v)
         
     def resources(self, matches=()):
         c = self.session_factory().client('s3')

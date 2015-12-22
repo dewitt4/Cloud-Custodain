@@ -6,7 +6,7 @@ from janitor.mailer import MessageDB
 
 class MessageDBTest(unittest.TestCase):
 
-    def test_add_batch_flush(self):
+    def xtest_add_batch_flush(self):
         db = MessageDB(":memory:")
         db.add('serious@example.com', 'abc')
         db.add('serious@example.com', 'def')
