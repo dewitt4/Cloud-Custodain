@@ -1,11 +1,11 @@
 import logging
 
 from janitor import cache
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.utils import dumps
 
 
-resources = Registry('resources')
+resources = PluginRegistry('resources')
 
 
 class ResourceManager(object):
@@ -23,12 +23,11 @@ class ResourceManager(object):
     def format_json(self, resources, fh):
         return dumps(resources, fh, indent=2)
 
-    # FIXME: Only overridden by ec2. Explain.
     def resource_query(self):
+        """Return server side query filter for the given api."""
         return []
     
     def filter_resources(self, resources):
-        # FIXME: resources shadows global variable
         original = len(resources)
         for f in self.filters:
             resources = f.process(resources)

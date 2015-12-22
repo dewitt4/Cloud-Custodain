@@ -5,11 +5,11 @@ Actions to take on resources
 import logging
 from botocore.exceptions import ClientError
 
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.executor import ThreadPoolExecutor
 
 
-class ActionRegistry(Registry):
+class ActionRegistry(PluginRegistry):
 
     def parse(self, data, manager):
         results = []

@@ -2,17 +2,17 @@
 from concurrent.futures import (
     ProcessPoolExecutor, ThreadPoolExecutor)
 
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 
 
-class ExecutorRegistry(Registry):
+class ExecutorRegistry(PluginRegistry):
 
     def __init__(self, plugin_type):
         super(ExecutorRegistry, self).__init__(plugin_type)
 
-        self.register_class('process', ProcessPoolExecutor)
-        self.register_class('thread', ThreadPoolExecutor)
-        self.register_class('main', MainThreadExecutor)
+        self.register('process', ProcessPoolExecutor)
+        self.register('thread', ThreadPoolExecutor)
+        self.register('main', MainThreadExecutor)
 
 
 def executor(name, **kw):

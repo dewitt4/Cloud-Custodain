@@ -11,7 +11,7 @@ import logging
 import operator
 
 from janitor.executor import ThreadPoolExecutor
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.utils import set_annotation
 
 
@@ -34,12 +34,12 @@ OPERATORS = {
 
 
 
-class FilterRegistry(Registry):
+class FilterRegistry(PluginRegistry):
 
     def __init__(self, *args, **kw):
         super(FilterRegistry, self).__init__(*args, **kw)
-        self.register_class('value', ValueFilter)
-        self.register_class('or', Or)
+        self.register('value', ValueFilter)
+        self.register('or', Or)
         
     def parse(self, data, manager):
         results = []
@@ -58,6 +58,8 @@ class FilterRegistry(Registry):
         if len(data) == 1 and not 'type' in data:
             if data.keys()[0] == 'or':
                 return Or(data, self, manager)
+            elif data.keys()[0] == 'and':
+                return And(data, self, manager)
             return ValueFilter(data, manager).validate()
 
         filter_type = data.get('type')
@@ -118,9 +120,24 @@ class Or(Filter):
                 return True
         return False
 
+    
+class And(Filter):    
 
+    def __init__(self, data, registry, manager):
+        super(And, self).__init__(data)
+        self.registry = registry
+        self.filters = registry.parse(self.data.values()[0], self.manager)
+
+    def __call__(self, i):
+        for f in self.filters:
+            if not f(i):
+                return False
+        return True
+    
+    
 class ValueFilter(Filter):
-
+    """Generic value filter using jmespath
+    """
     expr = None
     op = v = None
 
@@ -183,9 +200,9 @@ class ValueFilter(Filter):
         return False
 
 
-# Select instances older than threshold_date (defaults to 60 days ago)
 class AgeFilter(Filter):
-
+    """Automatically filter resources older than a given date.
+    """
     threshold_date = None
 
     # The name of attribute to compare to threshold; must override in subclass
