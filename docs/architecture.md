@@ -2,28 +2,28 @@
 
 # Terms
 
-- Policy
+- *Policy*
 
-A configurable set of actions to take on a filtered set of aws
-resources of a particular type.
+  Defined in yaml, specifies a set of filters and actions to take
+  on a given aws resource type.
 
-- Resource
+- *Resource Manager*
 
-Encapsulates the interaction via aws api to a particular aws resource
-(autoscalegroups, s3 buckets, ec2 instances, etc). 
+  Provides for retrieval of a resources of a given type (typically via aws api) and defines the vocabulary of filters and actions that can be used on those resource. Example resource types are autoscalegroups, s3 buckets, ec2 instances, elbs, etc).
 
-- Filter
+- *Filter*
 
-Given a set of resources, how do we filter to the subset that we're
-interested in operating on. The filtering language has some default
-behaviors across resource types like value filtering with jmespath
-expressions against the json representation of a resource, as well
-specific filters for particular resources types (instance age, asg size,
-etc).
+  Given a set of resources, how do we filter to the subset that we're interested in operating on. The filtering language has some default behaviors across resource types like value filtering with jmespath expressions against the json representation of a resource, as well specific filters for particular resources types (instance age, tag count, etc).
 
-- Action
+- *Action*
 
+  A verb to use on a given resource, ie. stop, start, suspend
+  delete, encrypt, etc.
 
+# Policy Execution
+
+TODO, document diagram, to show generic output management
+and sequencing.
 
 # Model Definition
 
@@ -70,12 +70,3 @@ etc).
 # Not yet
 #- Distributed
 #- Autoscaling
-
-
-
-
-
-
-
-
-

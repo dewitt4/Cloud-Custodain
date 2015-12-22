@@ -50,4 +50,20 @@ You should have the cloud-maid command available now.
 $ cloud-maid -h
 ```
 
+## Running tests
+
+There are several additional dependencies for running unit tests.
+
+```bash
+$ cd cloud-maid
+$ source bin/activate
+$ pip install nosetests
+$ pip install mock
+```
+
+And then unit tests can be run with
+
+```bash
+$ make tests
+```
 

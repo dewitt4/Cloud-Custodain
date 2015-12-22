@@ -9,6 +9,7 @@ from janitor.utils import local_session
 
 log = logging.getLogger('maid.ami')
 
+# FIXME: Doing this sort of initialization on module load feels wrong. Discuss.
 filters = FilterRegistry('ami.filters')
 actions = ActionRegistry('ami.actions')
 
@@ -16,8 +17,10 @@ actions = ActionRegistry('ami.actions')
 @resources.register('ami')
 class AMI(ResourceManager):
 
+    # FIXME: Rename all 'data' variables to something meaningful
     def __init__(self, ctx, data):
         super(AMI, self).__init__(ctx, data)
+        # FIXME: Move these to ResourceManager.__init__?
         self.filters = filters.parse(
             self.data.get('filters', []), self)
         self.actions = actions.parse(
@@ -25,14 +28,14 @@ class AMI(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('ec2')
-        query = self.resource_query()
+        query = self.resource_query()  # FIXME: Not used
         self.log.info("Querying images")
-        images = c.describe_images(Owners=['self'])['Images']
+        images = c.describe_images(Owners=['self'], Filters=query)['Images']
         return self.filter_resources(images)
 
 
-@actions.register('delete')
-class Delete(BaseAction):
+@actions.register('deregister')
+class Deregister(BaseAction):
 
     def process(self, images):
         with self.executor_factory(max_workers=10) as w:

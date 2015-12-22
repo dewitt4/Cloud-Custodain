@@ -9,8 +9,9 @@ import yaml
 from janitor.ctx import ExecutionContext
 from janitor.manager import resources
 from janitor import utils
+from janitor.version import version
 
-# Trigger Registrations
+# This import causes our resources to be initialized
 import janitor.resources
 
 
@@ -25,16 +26,18 @@ def load(options, path):
 
 class PolicyCollection(object):
 
+    # FIXME: rename data to policySpec?
     def __init__(self, data, options):
         self.data = data
         self.options = options
         
     def policies(self, filters=None):
+        # self.options is the CLI options specified in cli.setup_parser()
         policies = [Policy(p, self.options) for p in self.data.get(
             'policies', [])]
         if not filters:
             return policies
-
+        # FIXME: return filter(lambda p: fnmatch.fnmatch(p.name, filters), policies) ?
         sort_order = [p.get('name') for p in self.data.get('policies', [])]
         policy_map = dict([(p.name, p) for p in policies])
         
@@ -68,6 +71,7 @@ class Policy(object):
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()
+            # FIXME: rename resources to distinguish from imported janitor.manager resources
             resources = self.resource_manager.resources()
             rt = time.time() - s
             self.log.info(
@@ -95,12 +99,36 @@ class Policy(object):
                 os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:
             fh.write(value)
 
-    def session_factory(self):
-        session =  boto3.Session(
+    def session_factory(self, assume=True):
+        session = boto3.Session(
             region_name=self.options.region,
             profile_name=self.options.profile)
+        if self.options.assume_role and assume:
+            # Todo stick version here
+            credentials = session.client('sts').assume_role(
+                RoleArn=self.options.assume_role,
+                RoleSessionName="CloudMaid")['Credentials']
+            session = boto3.Session(
+                region_name=self.options.region,
+                aws_access_key_id=credentials['AccessKeyId'],
+                aws_secret_access_key=credentials['SecretAccessKey'],
+                aws_session_token=credentials['SessionToken'])
+
+        # FIXME: split all this maid_record stuff into a function; document it
+        maid_record = os.environ.get('MAID_RECORD') # FIXME: what are sane values for this?
+        if maid_record:
+            maid_record = os.path.expanduser(maid_record)
+            if not os.path.exists(maid_record):
+                self.log.error(
+                    "Maid record path: %s does not exist" % maid_record)
+                raise ValueError("record path does not exist")
+            self.log.info("Recording aws traffic to: %s" % maid_record)
+            import placebo
+            pill = placebo.attach(session, maid_record)
+            pill.record()
+
         session._session.user_agent_name = "CloudMaid"
-        session._session.user_agent_version = "0.5"
+        session._session.user_agent_version = version
         return session
         
     def get_resource_manager(self):

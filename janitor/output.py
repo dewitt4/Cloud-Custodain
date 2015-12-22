@@ -136,6 +136,8 @@ class FSOutput(object):
         return os.path.join(*parts)
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        if exc_type is not None:
+            log.exception("Error while executing policy")
         self.leave_log()
 
     def join_log(self):
@@ -175,7 +177,7 @@ class DirectoryOutput(FSOutput):
             if not os.path.exists(self.ctx.output_path):
                 os.makedirs(self.ctx.output_path)
 
-    
+
 class S3Output(FSOutput):
     """
     Usage::
@@ -213,10 +215,12 @@ class S3Output(FSOutput):
         return s3_path, bucket, key_prefix
     
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        if exc_type is not None:
+            log.exception("Error while executing policy")
         log.debug("Uploading policy logs")
         self.leave_log()
         self.compress()
-        self.transfer = S3Transfer(self.ctx.session_factory().client('s3'))
+        self.transfer = S3Transfer(self.ctx.session_factory(assume=False).client('s3'))
         self.upload()
         shutil.rmtree(self.root_dir)
         log.debug("Policy Logs uploaded")
@@ -236,4 +240,5 @@ class S3Output(FSOutput):
                         'ServerSideEncryption': 'AES256'})
                     
 
-
+s3_join = S3Output.join
+parse_s3 = S3Output.parse_s3

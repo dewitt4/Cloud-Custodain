@@ -1,3 +1,8 @@
+"""Provide basic caching services to avoid extraneous
+queries over multiple.
+
+
+"""
 
 import cPickle
 
@@ -51,12 +56,14 @@ class FileCacheManager(object):
         
     def load(self):
         if os.path.isfile(self.cache_path):
-            if time.time() - os.stat(self.cache_path).st_mtime > self.config.cache_period * 60:
-                return False            
+            if (time.time() - os.stat(self.cache_path).st_mtime >
+                self.config.cache_period * 60):
+                return False
             with open(self.cache_path) as fh:
                 self.data = cPickle.load(fh)
             log.info("Using cache file %s" % self.cache_path)
             return True
+        
     def save(self, key, data):
         with open(self.cache_path, 'w') as fh:
             cPickle.dump({

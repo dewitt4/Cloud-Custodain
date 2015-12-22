@@ -8,9 +8,9 @@ import operator
 
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter, AgeFilter
-
+from janitor.filters import FilterRegistry, Filter, AgeFilter, OPERATORS
 from janitor.manager import ResourceManager, resources
+from janitor.offhours import Time, OffHour, OnHour
 from janitor import utils
 
 
@@ -18,11 +18,15 @@ filters = FilterRegistry('ec2.filters')
 actions = ActionRegistry('ec2.actions')
 
 
+filters.register('time', Time)
+
+
 @resources.register('ec2')
 class EC2(ResourceManager):
 
     def __init__(self, ctx, data):
         super(EC2, self).__init__(ctx, data)
+        # FIXME: should we be doing this check in every ResourceManager?
         if not isinstance(self.data, dict):
             raise ValueError(
                 "Invalid format, expecting dictionary found %s" % (
@@ -35,18 +39,11 @@ class EC2(ResourceManager):
     def client(self):
         return self.session_factory().client('ec2')
         
-    def filter_resources(self, resources):
-        original = len(resources)
-        for f in self.filters:
-            resources = f.process(resources)
-        self.log.info("Filtered resources from %d to %d" % (
-            original, len(resources)))
-        return resources
-    
-    def resources(self): 
+    def resources(self):
+        # FIXME: Explain why this is different from the other ResourceManagers
         qf = self.resource_query()
         instances = None
-        
+
         if self._cache.load():
             instances = self._cache.get(qf)
         if instances is not None:
@@ -90,6 +87,61 @@ class EC2(ResourceManager):
                 qf_names.add(qd['Name'])
                 qf.append(qd)
         return qf
+
+
+
+class StateTransitionFilter(object):
+    """Filter instances by state.
+
+    Try to simplify construction for policy authors by automatically
+    filtering elements (filters or actions) to the instances states
+    they are valid for.
+    
+    For more details see http://goo.gl/TZH9Q5
+
+    """
+    valid_origin_states = ()
+
+    def filter_instance_state(self, instances):
+        orig_length = len(instances)
+        results = [i for i in instances
+                   if i['State']['Name'] in self.valid_origin_states]
+        self.log.info("%s %d of %d instances" % (
+            self.__class__.__name__, len(results), orig_length))
+        return results
+        
+    
+@filters.register('offhour')
+class InstanceOffHour(OffHour, StateTransitionFilter):
+
+    valid_origin_states = ('running',)
+
+    def process(self, resources):
+        return super(InstanceOffHour, self).process(
+            self.filter_instance_state(resources))
+
+    
+@filters.register('onhour')
+class InstanceOnHour(OnHour, StateTransitionFilter):
+    
+    valid_origin_states = ('stopped',)
+
+    def process(self, resources):
+        return super(InstanceOnHour, self).process(
+            self.filter_instance_state(resources))
+    
+
+@filters.register('tag-count')
+class TagCountFilter(Filter):
+
+    def __call__(self, i):
+        count = self.data.get('count', 10)
+        op_name = self.data.get('op', 'lt')
+        op = OPERATORS.get(op_name)
+        tag_count = len([
+            t['Key'] for t in i.get('Tags', [])
+            if not t['Key'].startswith('aws:')])
+        return op(tag_count, count)
 
     
 @filters.register('instance-age')        
@@ -136,8 +188,9 @@ class MarkedForOp(Filter):
             self.current_date = datetime.now()
 
         return self.current_date >= action_date
-        
+
     
+@actions.register('tag')    
 @actions.register('mark')        
 class Mark(BaseAction):
 
@@ -155,7 +208,8 @@ class Mark(BaseAction):
                  "Value": msg}],
             DryRun=self.manager.config.dryrun)
 
-
+        
+@actions.register('untag')
 @actions.register('unmark')
 class Unmark(BaseAction):
 
@@ -170,29 +224,9 @@ class Unmark(BaseAction):
                 {"Key": tag}],
             DryRun=self.manager.config.dryrun)
 
-
-class StateTransitionAction(BaseAction):
-    """Filter instances by state.
-
-    Try to simplify construction for policy authors by
-    automatically filtering actions to the instances states
-    they are valid for.
-    
-    For more details see http://goo.gl/TZH9Q5 
-    """
-    valid_origin_states = ()
-
-    def filter_instance_state(self, instances):
-        orig_length = len(instances)
-        results = [i for i in instances
-                   if i['State']['Name'] in self.valid_origin_states]
-        self.log.info("%s %d of %d instances" % (
-            self.__class__.__name__, len(results), orig_length))
-        return results
-        
     
 @actions.register('start')        
-class Start(StateTransitionAction):
+class Start(BaseAction, StateTransitionFilter):
 
     valid_origin_states = ('stopped',)
 
@@ -207,7 +241,7 @@ class Start(StateTransitionAction):
 
 
 @actions.register('stop')
-class Stop(StateTransitionAction):
+class Stop(BaseAction, StateTransitionFilter):
 
     valid_origin_states = ('running', 'pending')
     
@@ -222,7 +256,7 @@ class Stop(StateTransitionAction):
 
         
 @actions.register('terminate')        
-class Terminate(StateTransitionAction):
+class Terminate(BaseAction, StateTransitionFilter):
     """ Terminate a set of instances.
     
     While ec2 offers a bulk delete api, any given instance can be configured

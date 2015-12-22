@@ -5,11 +5,11 @@ Actions to take on resources
 import logging
 from botocore.exceptions import ClientError
 
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.executor import ThreadPoolExecutor
 
 
-class ActionRegistry(Registry):
+class ActionRegistry(PluginRegistry):
 
     def parse(self, data, manager):
         results = []
@@ -32,7 +32,8 @@ class ActionRegistry(Registry):
             raise ValueError(
                 "Invalid action type %s, valid actions %s" % (
                     action_type, self.keys()))
-        return action_class(data, manager)
+        # Construct a ResourceManager
+        return action_class(data, manager).validate()
 
     
 class BaseAction(object):
@@ -48,6 +49,9 @@ class BaseAction(object):
         self.manager = manager
         self.log_dir = log_dir
 
+    def validate(self):
+        return self
+    
     @property
     def name(self):
         return self.__class__.__name__.lower()

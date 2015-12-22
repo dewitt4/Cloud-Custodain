@@ -1,11 +1,11 @@
 import logging
 
 from janitor import cache
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.utils import dumps
 
 
-resources = Registry('resources')
+resources = PluginRegistry('resources')
 
 
 class ResourceManager(object):
@@ -24,6 +24,7 @@ class ResourceManager(object):
         return dumps(resources, fh, indent=2)
 
     def resource_query(self):
+        """Return server side query filter for the given api."""
         return []
     
     def filter_resources(self, resources):
