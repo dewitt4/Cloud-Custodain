@@ -11,7 +11,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   generated/modules
+   overview
 
 Indices and tables
 ==================
