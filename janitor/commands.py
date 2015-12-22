@@ -41,7 +41,9 @@ def report(options, policy_collection):
     d = datetime.now()
     delta = timedelta(days=options.days)
     begin_date = d - delta
-    do_report(policy, begin_date, sys.stdout)
+    do_report(
+        policy, begin_date, sys.stdout,
+        raw_output_fh=options.raw)
 
 
             

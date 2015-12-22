@@ -44,6 +44,9 @@ def setup_parser():
     report.add_argument(
         '--days', type=int,
         help="Number of days of history to consider")
+    report.add_argument(
+        '--raw', type=argparse.FileType('wb'),
+        help="Store raw json of collected records to given file path")
 
     identify = subs.add_parser("identify")
     identify.set_defaults(command=commands.identify)

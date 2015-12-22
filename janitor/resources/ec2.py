@@ -233,7 +233,6 @@ class Unmark(BaseAction):
                 {"Key": tag}],
             DryRun=self.manager.config.dryrun)
 
-
     
 @actions.register('start')        
 class Start(BaseAction, StateTransitionFilter):
