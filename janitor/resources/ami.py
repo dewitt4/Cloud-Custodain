@@ -30,7 +30,7 @@ class AMI(ResourceManager):
         c = self.session_factory().client('ec2')
         query = self.resource_query()  # FIXME: Not used
         self.log.info("Querying images")
-        images = c.describe_images(Owners=['self'])['Images']
+        images = c.describe_images(Owners=['self'], Filters=query)['Images']
         return self.filter_resources(images)
 
 

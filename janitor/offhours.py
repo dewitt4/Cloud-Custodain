@@ -7,9 +7,8 @@ one time use instances for quickly trying something out, but wanting
 to turn terminate it after a length of time (like one week, one month, 
 etc).
 
-By default, Off hours support is based on resource tags being set
-on instances or auto-scale groups.
-
+By default, Off hours support is based on tags being defined on
+applicable resources.
 
 Tag Based Configuration
 -----------------------
