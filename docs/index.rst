@@ -12,6 +12,13 @@ Contents:
    :maxdepth: 2
 
    overview
+   architecture
+   developer
+   roadmap
+   filter-values
+   ec2
+   s3
+   comparisons
 
 Indices and tables
 ==================

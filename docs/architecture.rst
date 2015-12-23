@@ -1,5 +1,8 @@
+Architecture
+============
+
 Terms
-=====
+-----
 
 - *Policy*
 
@@ -20,13 +23,13 @@ Terms
   delete, encrypt, etc.
 
 Policy Execution
-================
+----------------
 
 TODO, document diagram, to show generic output management
 and sequencing.
 
 Model Definition
-================
+----------------
 
 - Validation
 
@@ -43,7 +46,7 @@ Model Definition
 
 
 Operations Design Goals
-=======================
+-----------------------
 
 - Configuration either S3 or Git Config
 
@@ -70,7 +73,7 @@ Operations Design Goals
 - Cron / Lambda Execution
 
 Not yet
-=======
+-------
 
 - Distributed
 - Autoscaling
