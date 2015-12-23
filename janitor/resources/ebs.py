@@ -138,7 +138,7 @@ class CopyInstanceTags(BaseAction):
 
 @actions.register('encrypt-instance-volume')
 class EncryptVolume(BaseAction):
-    """Encrypt an extant volume, and attach it to an instance.
+    """Encrypt an extant volume attached to an instance
 
     Not suitable for autoscale groups.
     """
