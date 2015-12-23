@@ -99,8 +99,8 @@ def assemble_bucket(item):
         ('get_bucket_policy',  'Policy', None, None),   
         ('get_bucket_acl', 'Acl', None, None),
         ('get_bucket_replication', 'Replication', None, None),
+        ('get_bucket_versioning', 'Versioning', None, None),
 #        ('get_bucket_cors', 'Cors'),        
-#        ('get_bucket_versioning', 'Versioning'),
 #        ('get_bucket_lifecycle', 'Lifecycle'),
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
@@ -364,6 +364,7 @@ class ScanBucket(BucketActionBase):
                 try:
                     return self._process_bucket(b, p, key_log, w)
                 except ClientError, e:
+                    raise
                     log.exception(
                         "Error processing bucket:%s paginator:%s" % (
                             b['Name'], p))
@@ -460,14 +461,30 @@ class EncryptExtantKeys(ScanBucket):
             local_session(self.manager.session_factory), bucket,
             kms = (crypto_method == 'aws:kms'))
         results = []
+        versioning = (
+            self.data.get('scan-versions', False) and
+            bucket.get('Versioning',
+                       {'Status': ''}).get('Status') == 'Enabled')
+
         for key in batch:
             k = key['Key']
             data = s3.head_object(Bucket=b, Key=k)
             if 'ServerSideEncryption' in data:
+                if versioning:
+                    results.extend(self.process_versions(s3, bucket, key))
                 continue
+
+            results.append((k, data.get('VersionId', '')))
+            if versioning:
+                results.extend(self.process_versions(s3, bucket, key))
             if self.data.get('report-only'):
-                results.append(k)
                 continue
+
+            if key['StorageClass'] == 'GLACIER':
+                # Glacier lifecycle stuff is a beast, need to request object
+                # back, wait 3-5hrs, then copy, tbd
+                continue
+
             crypto_method = self.data.get('crypto', 'AES256')
             # Note on copy we lose individual object acl grants
             params = {'Bucket': b,
@@ -477,5 +494,29 @@ class EncryptExtantKeys(ScanBucket):
                       'StorageClass': key['StorageClass'],
                       'ServerSideEncryption': crypto_method}
             s3.copy_object(**params)
-            results.append(k)
+
+        return results
+
+    def process_versions(self, s3, bucket, key):
+        p = s3.get_paginator('list_object_versions')
+        results = []
+        for page in p.paginate(Bucket=bucket['Name'], Prefix=key['Key']):
+            for v in page.get('Versions', []):
+                if v['IsLatest']:
+                    continue
+                if v['Key'] != key['Key']:
+                    continue
+                info = s3.head_object(
+                    Bucket=bucket['Name'],
+                    Key=key['Key'],
+                    VersionId=v['VersionId'])
+                if 'ServerSideEncryption' in info:
+                    continue
+                results.append((key['Key'], v['VersionId']))
+                if self.data.get('report-only'):
+                    continue
+                s3.delete_object(
+                    Bucket=bucket['Name'],
+                    Key=key['Key'],
+                    VersionId=v['VersionId'])
         return results
