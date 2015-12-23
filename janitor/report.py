@@ -64,87 +64,82 @@ def report(policy, start_date, output_fh, raw_output_fh=None, filters=None):
         policy.ctx.output.key_prefix,
         start_date)
 
-    records = formatter(output_fh, records)
+    records = unique(records, formatter.id_field, filters=formatter.filters)
+    rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
+
+    writer = csv.writer(output_fh, formatter.headers)
+    writer.writerow(formatter.headers)
+    for row in rows:
+        writer.writerow(row)
+
     if raw_output_fh is not None:
         dumps(records, raw_output_fh, indent=2)
 
 
-def unique(records, identity_func, unique_pick='last', filters=None):
-    keys = set(map(identity_func, records))
-    reverse = unique_pick == 'last'
-    records.sort(key=operator.itemgetter('MaidDate'), reverse=reverse)
-    results = []
-    for r in records:
-        rid = identity_func(r)
-        if rid in keys:
-            if filters:
-                found = True
-                for f in filters:
-                    if not f(r):
-                        found = False
-                        break
-                if not found:
-                    continue
-            results.append(r)
-            keys.remove(rid)
-    log.debug("Uniqued from %d to %d" % (len(records), len(results)))
-    return results
+def unique(records, id_field, reverse=True, filters=None):
+    # filter the records down to those that pass all the filters
+    filters = filters or []
+    filtered = filter(lambda record: reduce(lambda found, filter: found and filter(record), filters, True), records)
+    filtered.sort(key=lambda r: r['MaidDate'], reverse=reverse)
+    # unique record list by id_field
+    uniq, _ = reduce(
+        lambda (recs, keys), rec:
+            (recs, keys) if rec[id_field] in keys  # if duplicate key, keep old accumulator
+            else (recs + [rec], keys | {rec[id_field]}),  # add to records and keys
+        filtered,
+        ([], set()))  # (unique records, set of keys)
+    log.debug("Uniqued from %d to %d" % (len(records), len(uniq)))
+    return uniq
 
 
-def ec2_csv(output_fh, records):
-
-    headers = ['action-date', 'instance-id', 'name',
-               'instance-type', 'launch', 'vpc-id', 'ip-addr',
-               'asv', 'env', 'owner']
-    writer = csv.writer(output_fh, headers)
-    writer.writerow(headers)
-
-    records = unique(
-        records, operator.itemgetter('InstanceId'),
-        filters=[lambda x: x['State']['Name'] != 'terminated'])
-    
-    for r in records:
-        tag_map = {t['Key']: t['Value'] for t in r['Tags']}
-        writer.writerow([
-            r['MaidDate'].strftime("%Y-%m-%d"),
-            r['InstanceId'],
-            tag_map.get('Name', ''),
-            r['InstanceType'],
-            r['LaunchTime'],
-            r.get('VpcId', ''),
-            r.get('PrivateIpAddress', ''),
-            tag_map.get("ASV", ""),
-            tag_map.get("CMDBEnvironment", ""),
-            tag_map.get("OwnerContact", ""),
-        ])
-
-    return records
+def fmt_csv(record, fn):
+    tag_map = {t['Key']: t['Value'] for t in record['Tags']}
+    return fn(record, tag_map)
 
 
-def asg_csv(output_fh, records):
-    headers = ['name', 'instance-count',
-               'asv', 'env', 'owner']
-    writer = csv.writer(output_fh, headers)
-    writer.writerow(headers)
+class Formatter:
+    def __init__(self, id_field, headers, extractor, filters=[]):
+        self.id_field = id_field
+        self.headers = headers
+        self.extractor = extractor
+        self.filters = filters
 
-    records = unique(
-        records, operator.itemgetter('AutoScalingGroupName'))
-    
-    for r in records:
-        tag_map = {t['Key']: t['Value'] for t in r['Tags']}
-        writer.writerow([
-            r['AutoScalingGroupName'],
-            str(len(r['Instances'])),
-            tag_map.get("ASV", ""),
-            tag_map.get("CMDBEnvironment", ""),
-            tag_map.get("OwnerContact", "")])
 
-    return records
+def ec2_csv(record, tag_map):
+    return [
+        record['MaidDate'].strftime("%Y-%m-%d"),
+        record['InstanceId'],
+        tag_map.get('Name', ''),
+        record['InstanceType'],
+        record['LaunchTime'],
+        record.get('VpcId', ''),
+        record.get('PrivateIpAddress', ''),
+        tag_map.get("ASV", ""),
+        tag_map.get("CMDBEnvironment", ""),
+        tag_map.get("OwnerContact", ""),
+    ]
+
+
+def asg_csv(r, tag_map):
+    return [
+        r['AutoScalingGroupName'],
+        str(len(r['Instances'])),
+        tag_map.get("ASV", ""),
+        tag_map.get("CMDBEnvironment", ""),
+        tag_map.get("OwnerContact", "")
+    ]
 
 
 RECORD_TYPE_FORMATTERS = {
-    'ec2': ec2_csv,
-    'asg': asg_csv
+    'ec2': Formatter(
+        'InstanceId',
+        ['action-date', 'instance-id', 'name', 'instance-type', 'launch', 'vpc-id', 'ip-addr', 'asv', 'env', 'owner'],
+        ec2_csv,
+        [lambda x: x['State']['Name'] != 'terminated']),
+    'asg': Formatter(
+        'AutoScalingGroupName',
+        ['name', 'instance-count', 'asv', 'env', 'owner'],
+        asg_csv)
     }
 
 
@@ -172,10 +167,7 @@ def record_set(session_factory, bucket, key_prefix, start_date):
             keys = [k for k in key_set['Contents']
                     if k['Key'].endswith('resources.json.gz')]
             key_count += len(keys)
-            futures = []
-            for k in keys:
-                futures.append(
-                    w.submit(get_records, bucket, k, session_factory))
+            futures = map(lambda k: w.submit(get_records, bucket, k, session_factory), keys)
 
             for f in as_completed(futures):
                 records.extend(f.result())
@@ -201,13 +193,3 @@ def get_records(bucket, key, session_factory):
     for r in records:
         r['MaidDate'] = maid_date
     return records
-
-        
-
-    
-
-    
-
-
-
-    
