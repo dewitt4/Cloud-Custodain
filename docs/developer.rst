@@ -1,69 +1,75 @@
-# Developer Install
+Developer Install
+=================
 
 
-## Requirements
+Requirements
+------------
 
 - Ensure proxy is configured properly
 
-### On Linux
+On Linux
+~~~~~~~~
 
-```bash
-sudo apt-get install python python-dev python-pip python-virtualdev
-```
+.. code-block:: bash
 
-### On Mac
+   sudo apt-get install python python-dev python-pip python-virtualdev
 
-```bash
-brew install python
-```
+On Mac
+~~~~~~
 
-## Installing
+.. code-block:: bash
+
+   brew install python
+
+Installing
+----------
 
 First, clone the repository:
 
-```bash
-$ git clone https://github.kdc.capitalone.com/cloud-maid/cloud-maid.git
-```
+.. code-block:: bash
+
+   $ git clone https://github.kdc.capitalone.com/cloud-maid/cloud-maid.git
 
 Also recommended is to use a virtualenv to sandbox this install from your system packages:
 
-```bash
-$ virtualenv cloud-maid
-$ source cloud-maid/bin/activate
-```
+.. code-block:: bash
+
+   $ virtualenv cloud-maid
+   $ source cloud-maid/bin/activate
 
 And then install the dependencies
 
-```bash
-$ pip install -r requirements.txt
-```
+.. code-block:: bash
+
+   $ pip install -r requirements.txt
 
 And then the maid itself
 
-```bash
-$ python setup.py develop
-```
+.. code-block:: bash
+
+   $ python setup.py develop
 
 You should have the cloud-maid command available now.
 
-```bash
-$ cloud-maid -h
-```
+.. code-block:: bash
 
-## Running tests
+   $ cloud-maid -h
+
+Running tests
+-------------
 
 There are several additional dependencies for running unit tests.
 
-```bash
-$ cd cloud-maid
-$ source bin/activate
-$ pip install nosetests
-$ pip install mock
-```
+.. code-block:: bash
+
+   $ cd cloud-maid
+   $ source bin/activate
+   $ pip install nosetests
+   $ pip install mock
 
 And then unit tests can be run with
 
-```bash
-$ make tests
-```
+.. code-block:: bash
+
+   $ make tests
 

@@ -1,6 +1,5 @@
-
-
-# Terms
+Terms
+=====
 
 - *Policy*
 
@@ -20,12 +19,14 @@
   A verb to use on a given resource, ie. stop, start, suspend
   delete, encrypt, etc.
 
-# Policy Execution
+Policy Execution
+================
 
 TODO, document diagram, to show generic output management
 and sequencing.
 
-# Model Definition
+Model Definition
+================
 
 - Validation
 
@@ -41,7 +42,8 @@ and sequencing.
   datetime support.
 
 
-# Operations Design Goals
+Operations Design Goals
+=======================
 
 - Configuration either S3 or Git Config
 
@@ -67,6 +69,8 @@ and sequencing.
 
 - Cron / Lambda Execution
 
-# Not yet
-#- Distributed
-#- Autoscaling
+Not yet
+=======
+
+- Distributed
+- Autoscaling
