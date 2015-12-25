@@ -11,9 +11,23 @@ from janitor.resources.s3 import (
     NoGlobalGrants,
     EncryptionRequiredPolicy,
     EncryptExtantKeys,
-    BucketScanLog)
+    BucketScanLog,
+    restore_complete
+)
 
 from janitor.resources import s3 as s3_resource
+
+
+class RestoreCompletionTest(TestCase):
+
+    def test_restore_complete(self):
+
+        self.assertTrue(
+            restore_complete(
+                ('ongoing-request="false", '
+                 'expiry-date="Fri, 23 Dec 2012 00:00:00 GMT"')))
+
+        self.assertFalse(restore_complete('ongoing-request="true"'))
     
 
 class BucketScanLogTests(TestCase):

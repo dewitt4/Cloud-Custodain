@@ -34,7 +34,6 @@ import time
 
 from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.executor import MainThreadExecutor
 from janitor.filters import (
     FilterRegistry, Filter)
 
@@ -43,14 +42,8 @@ from janitor.utils import chunks, local_session, set_annotation
 
 """
 TODO:
-
  - How does replication status effect in place encryption.
- - Glacier storage class processing
-   - Glacier lifecycle stuff is a beast,
-   - need to request object
-   - wait 3-5hrs
-   - then copy
-   - tbd x-amz-
+ - Test glacier support
 """
 
 
@@ -391,18 +384,16 @@ class ScanBucket(BucketActionBase):
         # The bulk of _process_bucket function executes inline in
         # calling thread/worker context, neither paginator nor
         # bucketscan log should be used across worker boundary.
-        p = s3.get_paginator(self.get_bucket_op(b, 'iterator')).paginate(
-            Bucket=b['Name'])
+        p = s3.get_paginator(
+            self.get_bucket_op(b, 'iterator')).paginate(Bucket=b['Name'])
         with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
             with self.executor_factory(max_workers=10) as w:
                 try:
                     return self._process_bucket(b, p, key_log, w)
                 except ClientError, e:
-                    raise
                     log.exception(
                         "Error processing bucket:%s paginator:%s" % (
                             b['Name'], p))
-                return None
 
     __call__ = process_bucket
     
@@ -570,4 +561,6 @@ class EncryptExtantKeys(ScanBucket):
 def restore_complete(restore):
     if ',' in restore:
         ongoing, avail = restore.split(',', 1)
+    else:
+        ongoing = restore
     return 'false' in ongoing
