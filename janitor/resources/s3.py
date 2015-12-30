@@ -233,6 +233,41 @@ class EncryptedPrefix(BucketActionBase):
             ServerSideEncryption=crypto_method)
         return {'Bucket': b['Name'], 'Prefix': k, 'State': 'Updated'}
         
+
+@filters.register('missing-policy-statement')
+class MissingPolicyStatementFilter(Filter):
+    """Find buckets missing a set of named policy statements."""
+    
+    def process(self, buckets):
+        with self.executor_factory(max_workers=5) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
+
+    def process_bucket(self, b):
+        p = b['Policy']
+        if p is None:
+            return b
+
+        p = json.loads(p['Policy'])
+
+        required = list(self.data.get('statement_ids', []))
+        statements = p.get('Statement', [])
+        
+        for s in list(statements):
+            if s['StatementId'] in required:
+                required.remove(s['StatementId'])
+        if not required:
+            return None
+        return b
+
+    
+@actions.register('no-op')
+class NoOp(BucketActionBase):
+    
+    def process(self, buckets):
+        return None
+            
             
 @actions.register('encryption-policy')    
 class EncryptionRequiredPolicy(BucketActionBase):

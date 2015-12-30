@@ -98,7 +98,7 @@ encryption-policy with a list of events.
 Event Sources
 -------------
 
-We need to distribute cloud-watch events api json atm.
+We need to distribute cloud-watch events api json atm for install
 
 
 Todo
@@ -106,8 +106,9 @@ Todo
 
 Maid additionally can use lambda execution for resource intensive policy
 actions, using dynamodb for results aggregation, and a periodic result checker.
-
 """
+
+
 import inspect
 from cStringIO import StringIO
 import fnmatch
@@ -128,7 +129,41 @@ from janitor.policy import load
 log = logging.getLogger('maid.lambda')
 
 
+__notes__ = """
+Architecture implementation notes
+
+We need to load policies for lambda functions a bit differently so that
+they can create the resources needed.
+
+
+For full lifecycle management we need to be able to determine
+
+ - all resources associated to a given policy
+ - all resources created by maid
+ - diff of current resources to goal state of resources
+ - remove previous policy lambdas and their event sources
+   - we need either the previous config file or we need
+     to assume only one maid running lambdas in a given
+     account.
+
+ 
+Sample interactions
+
+  $ cloud-maid resources -c config.yml
+
+   lambda:
+     - function: name
+       sources:
+        - source info
+   
+
+"""
+
+
 def resource_handle(resource_type, event, lambda_context):
+    """
+    Generic resource handler dispatch
+    """
     policies = load('config.json', format='json')
     resources = None
     
@@ -155,15 +190,17 @@ def format_event(evt):
 
 # Explicit entry points by type (could go do dyn dispatch with evt inspect)
 def s3_handle(event, context):
+    """S3 Event Handler"""
     return resource_handle('s3', event, context)
 
 
 def ec2_handle(event, context):
+    """EC2 Instance Event Handler"""
     return resource_handle('ec2', event, context)
 
 
 def cwe_handle(event, context):
-    raise NotImplementedError()
+#    raise NotImplementedError()
     return resource_handle()
 
 
@@ -228,10 +265,17 @@ class PythonPackageArchive(object):
     def close(self):
         self._closed = True
         self._zip_file.close()
+        log.debug("Created maid lambda archive size: %0.2fmb",
+                  (os.path.getsize(self._temp_archive_file.name) / (1024.0 * 1024.0)))
+        return self
 
+    def remove(self):
+        if self._temp_archive_file:
+            self._temp_archive_file = None
+            
     def get_bytes(self):
         assert self._closed, "Archive not closed"
-        return open(self._temp_archive_file, 'rb').read()
+        return open(self._temp_archive_file.name, 'rb').read()
     
         
 class LambdaManager(object):
@@ -241,7 +285,25 @@ class LambdaManager(object):
         self.client = self.session_factory().client('lambda')
         
     def publish(self, func, alias=None):
+        log.debug('Publishing maid lambda function %s', func.name)
         with func as archive:
+            result = self._create_or_update(func, archive)
+            func.alias = self.publish_alias(result, alias)
+
+        for e in func.get_events(self.session_factory):
+            log.debug("Adding function: %s event source: %s",
+                      func.alias, e)
+            e.add(func)
+
+    def _create_or_update(self, func, archive):
+        if self.exists(func.name):
+            log.debug("updating function %s", func.name)
+            result = self.client.update_function_code(
+                FunctionName=func.name,
+                ZipFile=archive.get_bytes(),
+                Publish=True  # why would this ever be false
+            )
+        else:
             result = self.client.create_function(
                 FunctionName=func.name,
                 Code={'ZipFile': archive.get_bytes()},
@@ -252,27 +314,52 @@ class LambdaManager(object):
                 Timeout=func.timeout,
                 MemorySize=func.memory_size
             )
-            if alias:
-                self.client.create_alias(
-                    FunctionName=func.name,
-                    Name=alias)
-        for e in func.events:
-            e.add(func)
-            
-
-    def exists(self, func_name):
-        try:
-            result = self.client.get_function(
-                FunctionName=func_name)
-        except Exception:
-            return False
         return result
+            
+    def publish_alias(self, func_data, alias):
+        if not alias:
+            return func_data['FunctionArn']
+        func_name = func_data['FunctionName']
+        func_version = func_data['Version']
+        log.debug("Publishing maid lambda alias %s", alias)
 
+        exists = resource_exists(
+            self.client.get_alias, FunctionName=func_name, Name=alias)
+
+        if not exists:
+            alias_result = self.client.create_alias(
+                FunctionName=func_name,
+                Name=alias,
+                FunctionVersion=func_version)
+        else:
+            alias_result = self.client.update_alias(
+                FunctionName=func_name,
+                Name=alias,
+                FunctionVersion=func_version)
+        return alias_result['AliasArn']
+                        
+    def exists(self, func_name):
+        return resource_exists(
+            self.client.get_function, FunctionName=func_name)
+
+    
+def resource_exists(op, *args, **kw):
+    try:
+        op(*args, **kw)
+    except ClientError, e:
+        if e.response['Error']['Code'] == "ResourceNotFoundException":
+            return False
+        raise
+    return True
+        
+    
     
 class LambdaFunction(object):
     # name
     # runtime
     # events
+
+    alias = None
     
     def process(self, resources):
         pass
@@ -293,12 +380,13 @@ def handler(event, ctx):
     mu.%s_handler(event, ctx)
 """
 
+
 def maid_archive(skip=None):
     return PythonPackageArchive(
         os.path.dirname(inspect.getabsfile(janitor)),
-        os.path.join(
-            os.path.dirname(sys.executable), '..'),
-        skip=skip)    
+        os.path.abspath(os.path.join(
+            os.path.dirname(sys.executable), '..')),
+        skip=skip)
     
 
 class PolicyLambda(PythonFunction):
@@ -308,7 +396,7 @@ class PolicyLambda(PythonFunction):
     
     def __init__(self, policy):
         self.policy = policy
-        self.archive = maid_archive()
+        self.archive = maid_archive('*pyc')
 
     @property
     def name(self):
@@ -318,15 +406,23 @@ class PolicyLambda(PythonFunction):
     def description(self):
         return self.policy.data.get(
             'description', 'cloud-maid lambda policy')
-    
+
+    @property
+    def role(self):
+        return self.policy.data['mode'].get(
+            'role',
+            'arn:aws:iam::873150696559:role/CapOne-CrossAccount-CustomRole-CloudMaid')
+            
     @property
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)
 
-    @property
-    def events(self):
+    def get_events(self, session_manager):
+        events = []
         for e in self.policy.data['mode'].get('events', []):
-            CloudWatchEventSource(e)
+            events.append(CloudWatchEventSource(e, self.session_factory))
+        return events
+            
     def __enter__(self):
         self.archive.create()
         self.archive.add_contents(
@@ -334,10 +430,11 @@ class PolicyLambda(PythonFunction):
         self.archive.add_contents(
             'handler.py', PolicyHandlerTemplate % (
                 self.policy.data['mode']['type']))
+        self.archive.close()
         return self.archive
     
     def __exit__(self, *args):
-        self.archive.close()
+        self.archive.remove()
         return
 
     
