@@ -3,8 +3,8 @@ import unittest
 
 from janitor.utils import chunks
 
-class UtilTest(unittest.TestCase):
 
+class UtilTest(unittest.TestCase):
 
     def test_chunks(self):
         self.assertEqual(

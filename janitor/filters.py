@@ -7,10 +7,11 @@ from dateutil.tz import tzutc
 from dateutil.parser import parse
 
 import jmespath
+import logging
 import operator
 
 from janitor.executor import ThreadPoolExecutor
-from janitor.registry import Registry
+from janitor.registry import PluginRegistry
 from janitor.utils import set_annotation
 
 
@@ -27,15 +28,18 @@ OPERATORS = {
     'gt': operator.gt,
     'ge': operator.ge,
     'le': operator.le,
+    'in': lambda x, y: x in y,
+    'ni': lambda x, y: not x in y,
     'lt': operator.lt}
 
 
-class FilterRegistry(Registry):
+
+class FilterRegistry(PluginRegistry):
 
     def __init__(self, *args, **kw):
         super(FilterRegistry, self).__init__(*args, **kw)
-        self.register_class('value', ValueFilter)
-        self.register_class('or', Or)
+        self.register('value', ValueFilter)
+        self.register('or', Or)
         
     def parse(self, data, manager):
         results = []
@@ -54,6 +58,8 @@ class FilterRegistry(Registry):
         if len(data) == 1 and not 'type' in data:
             if data.keys()[0] == 'or':
                 return Or(data, self, manager)
+            elif data.keys()[0] == 'and':
+                return And(data, self, manager)
             return ValueFilter(data, manager).validate()
 
         filter_type = data.get('type')
@@ -76,6 +82,8 @@ class FilterRegistry(Registry):
 class Filter(object):
 
     executor_factory = ThreadPoolExecutor
+
+    log = logging.getLogger('maid.filters')
     
     def __init__(self, data, manager=None):
         self.data = data
@@ -112,9 +120,24 @@ class Or(Filter):
                 return True
         return False
 
+    
+class And(Filter):    
 
+    def __init__(self, data, registry, manager):
+        super(And, self).__init__(data)
+        self.registry = registry
+        self.filters = registry.parse(self.data.values()[0], self.manager)
+
+    def __call__(self, i):
+        for f in self.filters:
+            if not f(i):
+                return False
+        return True
+    
+    
 class ValueFilter(Filter):
-
+    """Generic value filter using jmespath
+    """
     expr = None
     op = v = None
 
@@ -178,11 +201,11 @@ class ValueFilter(Filter):
 
 
 class AgeFilter(Filter):
-
-    # filter instance cache of threshold date
+    """Automatically filter resources older than a given date.
+    """
     threshold_date = None
 
-    # subclass override to determine date attribute
+    # The name of attribute to compare to threshold; must override in subclass
     date_attribute = None
 
     def validate(self):

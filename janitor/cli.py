@@ -2,6 +2,7 @@
 import argparse
 import logging
 
+# policy initializes a lot of stuff on load
 from janitor import policy, commands
 
 
@@ -10,6 +11,8 @@ def _default_options(p):
                    help="AWS Region to target (Default: us-east-1)")
     p.add_argument("--profile", default=None,
                    help="AWS Account Config File Profile to utilize")
+    p.add_argument("--assume", default=None, dest="assume_role",
+                   help="Role to assume")
     p.add_argument("-c", "--config", required=True,
                    help="Policy Configuration File")
     p.add_argument("-p", "--policies", default=None,
@@ -35,6 +38,16 @@ def setup_parser():
     parser = argparse.ArgumentParser()
     subs = parser.add_subparsers()
 
+    report = subs.add_parser("report")
+    report.set_defaults(command=commands.report)
+    _default_options(report)
+    report.add_argument(
+        '--days', type=int,
+        help="Number of days of history to consider")
+    report.add_argument(
+        '--raw', type=argparse.FileType('wb'),
+        help="Store raw json of collected records to given file path")
+
     identify = subs.add_parser("identify")
     identify.set_defaults(command=commands.identify)
     _default_options(identify)
@@ -58,7 +71,8 @@ def main():
     logging.basicConfig(
         level=level,
         format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
-    logging.getLogger('botocore').setLevel(logging.ERROR)    
+    logging.getLogger('botocore').setLevel(logging.ERROR)
+    logging.getLogger('placebo').setLevel(logging.INFO)    
     
     config = policy.load(options, options.config)
     try:
