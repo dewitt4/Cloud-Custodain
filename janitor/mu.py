@@ -72,23 +72,46 @@ proposed syntax
 
 ```
 policies:
-  - name: s3-bucket-policy
+  - name: s3-encrypted-bucket-policy
     mode: 
-      type: cloudwatch
+      type: cloudtrail
+      sources: 
+       - s3.amazonaws.com
       events: 
        - CreateBucket
     filters:
-      # Bucket policy not extant
-      -
+      # Match on buckets with policies that are missing
+      # required statements
+      - type: missing-policy-statement
+        statement_ids: [RequireEncryptedPutObject]
     actions:
+      # Apply encryption required policy
       - encryption-policy
-  - name: ec2-encrypted-instance-volumes
+
+  - name: ec2-require-encrypted-volumes
     mode:
-      type: cloudwatch
+      type: ec2-instance-state
       events:
-      - CreateVolume
+      - pending
+    filters:
+      - type: ebs
+        key: Encrypted
+        value: False
     actions:
-      - encrypt-instance-volume
+      - mark
+      # TODO delete instance volumes that
+      # are not set to delete on terminate
+      # currently we have a poll policy that
+      # handles this.
+      - terminate
+
+  - name: ec2-require-tag-compliance
+    mode:
+      type: ec2-instance-state
+      events:
+      - running
+    filters:
+
 ```
 
 alternatively we could associate relevant events to some
@@ -116,8 +139,9 @@ import json
 import logging
 import os
 import pprint
-import tempfile
 import sys
+import tempfile
+import uuid
 import zipfile
 
 from botocore.exceptions import ClientError
@@ -155,7 +179,15 @@ Sample interactions
      - function: name
        sources:
         - source info
-   
+
+
+
+Zip Files idempotency is a bit hard to define, we can't currently
+tag the lambda, and zip files track mod times.
+
+Better option is to push to s3 assets folder and use metadata and/or
+versioning there.
+
 
 """
 
@@ -167,7 +199,6 @@ def resource_handle(resource_type, event, lambda_context):
     policies = load('config.json', format='json')
     resources = None
     
-    log.info("Processing event \n %s", format_event(event))
     
     if not 'Records' in event:
         log.warning("Could not found resource records in event")
@@ -188,21 +219,23 @@ def format_event(evt):
     return io.getvalue()
 
 
-# Explicit entry points by type (could go do dyn dispatch with evt inspect)
-def s3_handle(event, context):
-    """S3 Event Handler"""
-    return resource_handle('s3', event, context)
+def ec2_instance_state_handle(event, context):
+    log.info("Processing event \n %s", format_event(event))
+    
 
-
-def ec2_handle(event, context):
-    """EC2 Instance Event Handler"""
-    return resource_handle('ec2', event, context)
-
-
-def cwe_handle(event, context):
-#    raise NotImplementedError()
-    return resource_handle()
-
+def cloudtrail_handle(event, context):
+    log.info("Processing event \n %s", format_event(event))
+    source = event.get('source')
+    if not source:
+        raise ValueError("Missing source for cloudtrail event")
+    if not source.startswith('aws.'):
+        raise ValueError("Unknown source for cloudtrail event %s" % source)
+    # TODO this is a bit simplistic we probably need to map both service
+    # and api calls onto maid resource types (ie ec2 encompasses networking
+    # and storage, in addition to instances).
+    ns, resource_type = source.split('.', 1)
+    resource_handle(resource_type, event, context)
+    
 
 class PythonPackageArchive(object):
 
@@ -276,33 +309,46 @@ class PythonPackageArchive(object):
     def get_bytes(self):
         assert self._closed, "Archive not closed"
         return open(self._temp_archive_file.name, 'rb').read()
-    
+
         
 class LambdaManager(object):
-
-    def __init__(self, session_factory):
+    """ Provides CRUD operations around lambda functions
+    """
+    def __init__(self, session_factory, s3_asset_path=None):
         self.session_factory = session_factory
         self.client = self.session_factory().client('lambda')
+        self.s3_asset_path = s3_asset_path
         
     def publish(self, func, alias=None):
-        log.debug('Publishing maid lambda function %s', func.name)
+        log.info('Publishing maid policy lambda function %s', func.name)
         with func as archive:
             result = self._create_or_update(func, archive)
             func.alias = self.publish_alias(result, alias)
 
         for e in func.get_events(self.session_factory):
-            log.debug("Adding function: %s event source: %s",
-                      func.alias, e)
-            e.add(func)
+            if e.add(func):
+                log.debug(
+                    "Added event source: %s to function: %s",
+                    func.alias, e)
 
     def _create_or_update(self, func, archive):
-        if self.exists(func.name):
-            log.debug("updating function %s", func.name)
+
+        lfunc = self.get(func.name)
+
+        if lfunc:
+            log.debug("Updating function %s code", func.name)
             result = self.client.update_function_code(
                 FunctionName=func.name,
                 ZipFile=archive.get_bytes(),
                 Publish=True  # why would this ever be false
             )
+
+            # TODO update function configuration
+#            if self.delta(lfunc, func):
+#                self.client.update_function_configuration(
+#                    )
+                
+            
         else:
             result = self.client.create_function(
                 FunctionName=func.name,
@@ -315,8 +361,10 @@ class LambdaManager(object):
                 MemorySize=func.memory_size
             )
         return result
-            
+
     def publish_alias(self, func_data, alias):
+        """Create or update an alias for the given function.
+        """
         if not alias:
             return func_data['FunctionArn']
         func_name = func_data['FunctionName']
@@ -338,20 +386,18 @@ class LambdaManager(object):
                 FunctionVersion=func_version)
         return alias_result['AliasArn']
                         
-    def exists(self, func_name):
+    def get(self, func_name):
         return resource_exists(
             self.client.get_function, FunctionName=func_name)
 
     
 def resource_exists(op, *args, **kw):
     try:
-        op(*args, **kw)
+        return op(*args, **kw)
     except ClientError, e:
         if e.response['Error']['Code'] == "ResourceNotFoundException":
             return False
         raise
-    return True
-        
     
     
 class LambdaFunction(object):
@@ -361,12 +407,6 @@ class LambdaFunction(object):
 
     alias = None
     
-    def process(self, resources):
-        pass
-
-    def generate_lambda(self):
-        raise NotImplementedError("generate_lambda()")
-
 
 class PythonFunction(LambdaFunction):
 
@@ -377,7 +417,9 @@ PolicyHandlerTemplate = """\
 from janitor import mu
 
 def handler(event, ctx):
-    mu.%s_handler(event, ctx)
+    print(mu.format_event(event)
+
+# %s
 """
 
 
@@ -391,7 +433,7 @@ def maid_archive(skip=None):
 
 class PolicyLambda(PythonFunction):
 
-    handler = "policy:handler"
+    handler = "handler.handler"
     timeout = 60
     
     def __init__(self, policy):
@@ -417,16 +459,16 @@ class PolicyLambda(PythonFunction):
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)
 
-    def get_events(self, session_manager):
+    def get_events(self, session_factory):
         events = []
-        for e in self.policy.data['mode'].get('events', []):
-            events.append(CloudWatchEventSource(e, self.session_factory))
+        events.append(CloudWatchEventSource(
+            self.policy.data['mode'], session_factory))
         return events
             
     def __enter__(self):
         self.archive.create()
         self.archive.add_contents(
-            'config.json', json.dumps({'policies': self.policy.data}))
+            'config.json', json.dumps({'policies': self.policy.data}, indent=2))
         self.archive.add_contents(
             'handler.py', PolicyHandlerTemplate % (
                 self.policy.data['mode']['type']))
@@ -440,7 +482,7 @@ class PolicyLambda(PythonFunction):
     
 class CloudWatchEventSource(object):
     """
-    Modeled after kappa event source, such that it can be contributed
+    Modeled loosely after kappa event source, such that it can be contributed
     post cloudwatch events ga or public beta.
 
     Event Pattern for Instance State
@@ -464,35 +506,98 @@ class CloudWatchEventSource(object):
 
     def __init__(self, data, session_factory):
         self.session_factory = session_factory
-        self.client = self.session_factory.client('events')
-
+        self.client = self.session_factory().client('events')
+        self.data = data
+        
     def _make_notification_id(self, function_name):
-        return "maid-%s" % function_name
+        if not function_name.startswith("maid-"):
+            return "maid-%s" % function_name
+        return function_name
 
-    def exists(self, function):
-        try:
-            self.client.describe_rule(
-                Name=self._make_notification_id(function.name))
-            return True
-        except ClientError, e:
-            if e['Error']['Code'] == "ResourceNotFoundException":
-                return False
-            raise
+    def get(self, rule_name):
+        return resource_exists(
+            self.client.describe_rule,
+            Name=self._make_notification_id(rule_name))
 
+    def delta(self, rule, rule_params):
+        """Given two cwe rules determine if the configuration is the same.
+
+        Name is already implied.
+        """
+        for k in ['State', 'EventPattern', 'ScheduleExpression']:
+            if rule.get(k) != rule_params.get(k):
+                return True
+        return False
+
+    def __repr__(self):
+        return "<CloudWatchEvent Source:%s Events:%s>" % (
+            self.data.get('type'), ', '.join(self.data.get('events', [])))
+    
+    def render_event_pattern(self):
+        event_type = self.data.get('type')
+        payload = {}
+        if event_type == 'cloudtrail':
+            payload['detail-type'] = ['AWS API Call via CloudTrail']
+            detail = {
+                'eventSource': self.data.get('sources', []),
+                'detail': self.data.get('events', [])}
+        elif event_type == "ec2-instance-state":
+            payload['source'] = 'aws.ec2'
+            payload['detail-type'] = ["EC2 Instance State-change Notifications"]
+            payload['detail'] = {"state": self.get('events', [])}
+        else:
+            raise ValueError("Unknown lambda event source type: %s" % event_type)
+        if not payload:
+            return None
+        return json.dumps(payload)
+        
     def add(self, func):
-        schedule = self.data.get('schedule')
-        self.client.put_rule(
+        params = dict(
             Name=func.name,
-            ScheduleExpression=schedule,
-            EventPattern=json.dumps({}),
-            State='ENABLED',
-            RoleArn=self.func.role)
+            State='ENABLED')
 
+        pattern = self.render_event_pattern()
+        if pattern:
+            params['EventPattern'] = pattern
+
+        schedule = self.data.get('schedule')        
+        if schedule:
+            params['ScheduleExpression'] = schedule
+        
+        rule = self.get(func.name)
+        if rule and not self.delta(rule, params):
+            log.debug("Updating cwe rule for %s" % self)            
+            response = self.client.put_rule(**params)
+        elif not rule:
+            log.debug("Creating cwe rule for %s" % self)
+            response = self.client.put_rule(**params)
+        else:
+            log.debug("Existing cwe rule found for %s" % self)
+            
+        found = False
+        response = self.client.list_targets_by_rule(Rule=func.name)
+        for t in response['Targets']:
+            if func.alias in t['Arn']:
+                found = True
+
+        if found:
+            log.debug('Existing cwe rule target found for %s' % self)
+            return
+            
+        self.client.put_targets(
+            Rule=func.name,
+            Targets=[
+                {"Id": str(uuid.uuid4()),
+                 "Arn": func.alias}]
+            )
+        return True
+        
     def update(self, func):
         self.add(func)
 
     def remove(self, func):
-        self.client.delete_rule(
-            Name=func.name,
-        )
+        if self.get(func.name):
+            self.client.delete_rule(
+                Name=func.name,
+            )
     
