@@ -35,16 +35,20 @@ class BaseTest(unittest.TestCase):
         return policy.load(e, t.name)
 
     
-def instance(state=None, **kw):
+def load_data(file_name, state=None, **kw):
     data = json.loads(open(
         os.path.join(
             os.path.dirname(__file__), 'data',
-            'instance.json')).read())
+            file_name)).read())
     if state:
         data.update(state)
     if kw:
         data.update(kw)
     return data
+
+
+def instance(state=None, **kw):
+    return load_data('instance.json', state, **kw)
 
 
 class Bag(dict):
