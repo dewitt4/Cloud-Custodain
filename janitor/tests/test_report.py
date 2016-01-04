@@ -2,7 +2,7 @@ import unittest
 import datetime
 
 from janitor import report
-from janitor.report import RECORD_TYPE_FORMATTERS, fmt_csv
+from janitor.report import RECORD_TYPE_FORMATTERS
 
 class TestEC2Report(unittest.TestCase):
     def setUp(self):
@@ -81,45 +81,35 @@ class TestEC2Report(unittest.TestCase):
     def test_full(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         records = [self.full_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows])
 
 
     def test_minimal(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         records = [self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.minimal_rows])
 
 
     def test_both(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         records = [self.full_record, self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows, self.minimal_rows])
 
 
     def test_duplicate(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         records = [self.full_record, self.duplicate_record, self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows, self.minimal_rows])
 
 
     def test_terminated(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         records = [self.full_record, self.terminated_record, self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows, self.minimal_rows])
 
 
@@ -175,34 +165,26 @@ class TestASGReport(unittest.TestCase):
     def test_full(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
         records = [self.full_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows])
 
 
     def test_minimal(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
         records = [self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.minimal_rows])
 
 
     def test_both(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
         records = [self.full_record, self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows, self.minimal_rows])
 
 
     def test_duplicate(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
         records = [self.full_record, self.duplicate_record, self.minimal_record]
-        records = report.unique(records, formatter.id_field, filters=formatter.filters)
-        rows = map(lambda record: fmt_csv(record, formatter.extractor), records)
-
+        rows = formatter.to_csv(records)
         self.assertEqual(rows, [self.full_rows, self.minimal_rows])
