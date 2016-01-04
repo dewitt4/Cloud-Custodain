@@ -72,7 +72,11 @@ class Policy(object):
         return self.data['resource']
 
     def process_event(self, event, lambda_ctx, resource):
-        """Run policy on single lambda event."""
+        """Run policy on a lambda event.
+
+        Lambda automatically generates cloud watch logs, and metrics
+        for us.
+        """
         results = self.resource_manager.filter_resources([resource])
         if not results:
             return
@@ -80,7 +84,7 @@ class Policy(object):
             a(results)
 
     def __call__(self):
-        """Run policy."""
+        """Run policy in pull mode"""
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()

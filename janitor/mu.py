@@ -127,11 +127,13 @@ We need to distribute cloud-watch events api json atm for install
 Todo
 ----
 
-Maid additionally can use lambda execution for resource intensive policy
-actions, using dynamodb for results aggregation, and a periodic result checker.
+Maid additionally could use lambda execution for resource intensive policy
+actions, using dynamodb for results aggregation, and a periodic result checker,
+alternatively sqs with periodic aggregator, or when lambda is vpc accessible
+elasticache.
 """
 
-
+import abc
 import inspect
 from cStringIO import StringIO
 import fnmatch
@@ -181,14 +183,33 @@ Sample interactions
         - source info
 
 
+Given an event that comes in from one of a number of sources,
+per event source we need to be able to extract the rseource
+identities and then query state for them and before processing
+filters and actions.
 
-Zip Files idempotency is a bit hard to define, we can't currently
-tag the lambda, and zip files track mod times.
+TODO:
 
-Better option is to push to s3 assets folder and use metadata and/or
-versioning there.
+- Execution Mode Abstraction for all policies, execution needs
+  to defer to this, with default on non poll being provisioning
+  resources.
 
+- Resource Manager Abstraction for all policies (or just policy
+  collection).
 
+- Lambda Manager Update Func Configuration
+
+-  Cli tools for listing maid provisioned resources
+
+# S3 Uploads
+
+ - Zip Files idempotency is a bit hard to define, we can't currently
+   tag the lambda with git revisions, and zip files track mod times.
+ - We're actually uploading policy specific lambda functions, as we 
+   bake the policy into the function code. So we need to track two
+   separate versions, the policy version and the maid code version.
+ - With s3 for the function code, we can track this information better
+   both via metadata and/or versioning.
 """
 
 
@@ -198,7 +219,6 @@ def resource_handle(resource_type, event, lambda_context):
     """
     policies = load('config.json', format='json')
     resources = None
-    
     
     if not 'Records' in event:
         log.warning("Could not found resource records in event")
@@ -238,7 +258,12 @@ def cloudtrail_handle(event, context):
     
 
 class PythonPackageArchive(object):
+    """Creates a zip file for python lambda functions
 
+    Packages up a virtualenv and a source package directory per lambda's
+    directory structure.
+    """
+    
     def __init__(self, src_path, virtualenv_dir, skip=None):
         self.src_path = src_path
         self.virtualenv_dir = virtualenv_dir
@@ -264,6 +289,7 @@ class PythonPackageArchive(object):
         return [f for f in files if not f in skip_files]
     
     def create(self):
+        assert not self._temp_archive_file, "Archive already created"
         self._temp_archive_file = tempfile.NamedTemporaryFile()
         self._zip_file = zipfile.ZipFile(
             self._temp_archive_file, mode='w',
@@ -292,10 +318,12 @@ class PythonPackageArchive(object):
                     os.path.join(arc_prefix, f))
 
     def add_contents(self, dest, contents):
+        # see zinfo function for some caveats
         assert not self._closed, "Archive closed"
         self._zip_file.writestr(dest, contents)
 
     def close(self):
+        # Note underlying tempfile is removed when  garbage collected.
         self._closed = True
         self._zip_file.close()
         log.debug("Created maid lambda archive size: %0.2fmb",
@@ -303,13 +331,24 @@ class PythonPackageArchive(object):
         return self
 
     def remove(self):
+        # dispose of the temp file for garbag collection
         if self._temp_archive_file:
             self._temp_archive_file = None
             
     def get_bytes(self):
+        # return the entire zip file as byte string.
         assert self._closed, "Archive not closed"
         return open(self._temp_archive_file.name, 'rb').read()
 
+
+def maid_archive(skip=None):
+    """Create a lambda code archive for running maid."""
+    return PythonPackageArchive(
+        os.path.dirname(inspect.getabsfile(janitor)),
+        os.path.abspath(os.path.join(
+            os.path.dirname(sys.executable), '..')),
+        skip=skip)
+    
         
 class LambdaManager(object):
     """ Provides CRUD operations around lambda functions
@@ -321,9 +360,9 @@ class LambdaManager(object):
         
     def publish(self, func, alias=None):
         log.info('Publishing maid policy lambda function %s', func.name)
-        with func as archive:
-            result = self._create_or_update(func, archive)
-            func.alias = self.publish_alias(result, alias)
+
+        result = self._create_or_update(func)
+        func.alias = self.publish_alias(result, alias)
 
         for e in func.get_events(self.session_factory):
             if e.add(func):
@@ -331,24 +370,28 @@ class LambdaManager(object):
                     "Added event source: %s to function: %s",
                     func.alias, e)
 
-    def _create_or_update(self, func, archive):
+    def remove(self, func, alias=None):
+        log.info("Removing maid policy lambda function %s", func.name)
+        for e in func.get_events(self.session_factory):
+            e.remove(func)
 
+    def _create_or_update(self, func):
+        archive = func.get_archive()
         lfunc = self.get(func.name)
-
         if lfunc:
             log.debug("Updating function %s code", func.name)
             result = self.client.update_function_code(
                 FunctionName=func.name,
                 ZipFile=archive.get_bytes(),
-                Publish=True  # why would this ever be false
+                Publish=True
             )
-
             # TODO update function configuration
-#            if self.delta(lfunc, func):
-#                self.client.update_function_configuration(
-#                    )
-                
-            
+            # also set publish above to false, and publish
+            # after configuration change?
+            #
+            #if self.delta(lfunc, func):
+            #    self.client.update_function_configuration(
+            #        )
         else:
             result = self.client.create_function(
                 FunctionName=func.name,
@@ -358,8 +401,8 @@ class LambdaManager(object):
                 Handler=func.handler,
                 Description=func.description,
                 Timeout=func.timeout,
-                MemorySize=func.memory_size
-            )
+                MemorySize=func.memory_size,
+                Publish=True)
         return result
 
     def publish_alias(self, func_data, alias):
@@ -400,40 +443,62 @@ def resource_exists(op, *args, **kw):
         raise
     
     
-class LambdaFunction(object):
-    # name
-    # runtime
-    # events
+class LambdaFunction:
+
+    __metaclass__ = abc.ABCMeta
 
     alias = None
     
+    @abc.abstractproperty
+    def name(self):
+        """Name for the lambda function"""
 
-class PythonFunction(LambdaFunction):
+    @abc.abstractproperty
+    def runtime(self):
+        """ """
 
-    runtime = "python2.7"
+    @abc.abstractproperty
+    def description(self):
+        """ """
 
+    @abc.abstractproperty
+    def handler(self):
+        """ """
 
+    @abc.abstractproperty
+    def memory_size(self):
+        """ """
+
+    @abc.abstractproperty
+    def timeout(self):
+        """ """        
+
+    @abc.abstractproperty
+    def role(self):
+        """ """                
+
+    @abc.abstractmethod
+    def get_events(self):
+        """event sources that should be bound to this lambda."""
+    
+    @abc.abstractmethod
+    def get_archive(self):
+        """Return the lambda distribution archive object."""
+
+        
 PolicyHandlerTemplate = """\
 from janitor import mu
 
-def handler(event, ctx):
-    print(mu.format_event(event)
+def run(event, context):
+    return mu.%s_handler(event, context)
 
-# %s
 """
 
 
-def maid_archive(skip=None):
-    return PythonPackageArchive(
-        os.path.dirname(inspect.getabsfile(janitor)),
-        os.path.abspath(os.path.join(
-            os.path.dirname(sys.executable), '..')),
-        skip=skip)
-    
+class PolicyLambda(LambdaFunction):
 
-class PolicyLambda(PythonFunction):
-
-    handler = "handler.handler"
+    handler = "maid_policy.run"
+    runtime = "python2.7"
     timeout = 60
     
     def __init__(self, policy):
@@ -465,21 +530,39 @@ class PolicyLambda(PythonFunction):
             self.policy.data['mode'], session_factory))
         return events
             
-    def __enter__(self):
+    def get_archive(self):
         self.archive.create()
         self.archive.add_contents(
-            'config.json', json.dumps({'policies': self.policy.data}, indent=2))
+            zinfo('config.json'),
+            json.dumps({'policies': self.policy.data}, indent=2))
         self.archive.add_contents(
-            'handler.py', PolicyHandlerTemplate % (
-                self.policy.data['mode']['type']))
+            zinfo('maid_policy.py'),
+            PolicyHandlerTemplate % (
+                self.policy.data['mode']['type'].replace('-', '_')))
         self.archive.close()
         return self.archive
-    
-    def __exit__(self, *args):
-        self.archive.remove()
-        return
 
-    
+
+def zinfo(fname):
+    """Amazon lambda exec environment setup can break itself
+    if zip files aren't constructed a particular way.
+
+    ie. It respects file perm attributes including
+    those that prevent lambda from working. Namely lambda
+    extracts code as one user, and executes code as a different
+    user without permissions for the executing user to read
+    the file the lambda function is defacto broken. 
+
+    Python's default zipfile.writestr does a 0600 perm which
+    we modify here as a workaround.
+    """
+    info = zipfile.ZipInfo(fname)
+    # Grant other users permissions to read
+    info.external_attr = 0o644 << 16
+    info.compress_type = zipfile.ZIP_DEFLATED
+    return info
+
+
 class CloudWatchEventSource(object):
     """
     Modeled loosely after kappa event source, such that it can be contributed
@@ -519,13 +602,13 @@ class CloudWatchEventSource(object):
             self.client.describe_rule,
             Name=self._make_notification_id(rule_name))
 
-    def delta(self, rule, rule_params):
+    def delta(self, src, tgt):
         """Given two cwe rules determine if the configuration is the same.
 
         Name is already implied.
         """
         for k in ['State', 'EventPattern', 'ScheduleExpression']:
-            if rule.get(k) != rule_params.get(k):
+            if src.get(k) != tgt.get(k):
                 return True
         return False
 
@@ -538,7 +621,7 @@ class CloudWatchEventSource(object):
         payload = {}
         if event_type == 'cloudtrail':
             payload['detail-type'] = ['AWS API Call via CloudTrail']
-            detail = {
+            payload['detail'] = {
                 'eventSource': self.data.get('sources', []),
                 'detail': self.data.get('events', [])}
         elif event_type == "ec2-instance-state":
@@ -549,7 +632,7 @@ class CloudWatchEventSource(object):
             raise ValueError("Unknown lambda event source type: %s" % event_type)
         if not payload:
             return None
-        return json.dumps(payload)
+        return json.dumps(payload, indent=2)
         
     def add(self, func):
         params = dict(
@@ -559,13 +642,13 @@ class CloudWatchEventSource(object):
         pattern = self.render_event_pattern()
         if pattern:
             params['EventPattern'] = pattern
-
+            log.debug("%s Event Pattern: %s", self, pattern)
         schedule = self.data.get('schedule')        
         if schedule:
             params['ScheduleExpression'] = schedule
         
         rule = self.get(func.name)
-        if rule and not self.delta(rule, params):
+        if rule and self.delta(rule, params):
             log.debug("Updating cwe rule for %s" % self)            
             response = self.client.put_rule(**params)
         elif not rule:
