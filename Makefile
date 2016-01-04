@@ -2,6 +2,7 @@
 install:
 	virtualenv .
 	source bin/activate && pip install -r requirements.txt
+	source bin/activate && pip install -r tools/dev-requirements.txt
 	source bin/activate && python setup.py develop
 
 coverage:
@@ -20,4 +21,3 @@ depcache:
 	tar cvf maid-deps.tgz deps
 	rm -Rf dep-download
 	rm -Rf deps
-

@@ -92,7 +92,6 @@ def unique(records, identity_func, unique_pick='last', filters=None):
 
 
 def ec2_csv(output_fh, records):
-
     headers = ['action-date', 'instance-id', 'name',
                'instance-type', 'launch', 'vpc-id', 'ip-addr',
                'asv', 'env', 'owner']
@@ -117,7 +116,6 @@ def ec2_csv(output_fh, records):
             tag_map.get("CMDBEnvironment", ""),
             tag_map.get("OwnerContact", ""),
         ])
-
     return records
 
 

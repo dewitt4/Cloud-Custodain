@@ -9,7 +9,7 @@ from janitor.utils import local_session
 
 log = logging.getLogger('maid.ami')
 
-# FIXME: Doing this sort of initialization on module load feels wrong. Discuss.
+
 filters = FilterRegistry('ami.filters')
 actions = ActionRegistry('ami.actions')
 
