@@ -17,17 +17,14 @@ class TestEC2Report(unittest.TestCase):
     def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
         tests = [
-            ([self.records['full']],
-             [self.rows['full']]),
-            ([self.records['minimal']],
-             [self.rows['minimal']]),
-            ([self.records['full'], self.records['minimal']],
-             [self.rows['full'], self.rows['minimal']]),
-            ([self.records['full'], self.records['duplicate'], self.records['minimal']],
-             [self.rows['full'], self.rows['minimal']]),
-            ([self.records['full'], self.records['terminated'], self.records['minimal']],
-             [self.rows['full'], self.rows['minimal']])]
-        for recs, rows in tests:
+            (['full'], ['full']),
+            (['minimal'], ['minimal']),
+            (['full', 'minimal'], ['full', 'minimal']),
+            (['full', 'duplicate', 'minimal'], ['full', 'minimal']),
+            (['full', 'terminated', 'minimal'], ['full', 'minimal'])]
+        for rec_ids, row_ids in tests:
+            recs = map(lambda x: self.records[x], rec_ids)
+            rows = map(lambda x: self.rows[x], row_ids)
             self.assertEqual(formatter.to_csv(recs), rows)
 
 
@@ -43,13 +40,11 @@ class TestASGReport(unittest.TestCase):
     def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
         tests = [
-            ([self.records['full']],
-             [self.rows['full']]),
-            ([self.records['minimal']],
-             [self.rows['minimal']]),
-            ([self.records['full'], self.records['minimal']],
-             [self.rows['full'], self.rows['minimal']]),
-            ([self.records['full'], self.records['duplicate'], self.records['minimal']],
-             [self.rows['full'], self.rows['minimal']])]
-        for recs, rows in tests:
+            (['full'], ['full']),
+            (['minimal'], ['minimal']),
+            (['full', 'minimal'], ['full', 'minimal']),
+            (['full', 'duplicate', 'minimal'], ['full', 'minimal'])]
+        for rec_ids, row_ids in tests:
+            recs = map(lambda x: self.records[x], rec_ids)
+            rows = map(lambda x: self.rows[x], row_ids)
             self.assertEqual(formatter.to_csv(recs), rows)
