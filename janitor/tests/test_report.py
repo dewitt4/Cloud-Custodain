@@ -14,35 +14,21 @@ class TestEC2Report(unittest.TestCase):
         for rec in self.records.values():
             rec['MaidDate'] = date_parse(rec['MaidDate'])
 
-    def test_full(self):
+    def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
-        records = [self.records['full']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full']])
-
-    def test_minimal(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("ec2")
-        records = [self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['minimal']])
-
-    def test_both(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("ec2")
-        records = [self.records['full'], self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full'], self.rows['minimal']])
-
-    def test_duplicate(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("ec2")
-        records = [self.records['full'], self.records['duplicate'], self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full'], self.rows['minimal']])
-
-    def test_terminated(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("ec2")
-        records = [self.records['full'], self.records['terminated'], self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full'], self.rows['minimal']])
+        tests = [
+            ([self.records['full']],
+             [self.rows['full']]),
+            ([self.records['minimal']],
+             [self.rows['minimal']]),
+            ([self.records['full'], self.records['minimal']],
+             [self.rows['full'], self.rows['minimal']]),
+            ([self.records['full'], self.records['duplicate'], self.records['minimal']],
+             [self.rows['full'], self.rows['minimal']]),
+            ([self.records['full'], self.records['terminated'], self.records['minimal']],
+             [self.rows['full'], self.rows['minimal']])]
+        for recs, rows in tests:
+            self.assertEqual(formatter.to_csv(recs), rows)
 
 
 class TestASGReport(unittest.TestCase):
@@ -54,26 +40,16 @@ class TestASGReport(unittest.TestCase):
         for rec in self.records.values():
             rec['MaidDate'] = date_parse(rec['MaidDate'])
 
-    def test_full(self):
+    def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")
-        records = [self.records['full']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full']])
-
-    def test_minimal(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("asg")
-        records = [self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['minimal']])
-
-    def test_both(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("asg")
-        records = [self.records['full'], self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full'], self.rows['minimal']])
-
-    def test_duplicate(self):
-        formatter = RECORD_TYPE_FORMATTERS.get("asg")
-        records = [self.records['full'], self.records['duplicate'], self.records['minimal']]
-        rows = formatter.to_csv(records)
-        self.assertEqual(rows, [self.rows['full'], self.rows['minimal']])
+        tests = [
+            ([self.records['full']],
+             [self.rows['full']]),
+            ([self.records['minimal']],
+             [self.rows['minimal']]),
+            ([self.records['full'], self.records['minimal']],
+             [self.rows['full'], self.rows['minimal']]),
+            ([self.records['full'], self.records['duplicate'], self.records['minimal']],
+             [self.rows['full'], self.rows['minimal']])]
+        for recs, rows in tests:
+            self.assertEqual(formatter.to_csv(recs), rows)
