@@ -22,13 +22,13 @@ depcache:
 	rm -Rf deps
 
 sphinx:
-	rm -r build && \
-	make -f Makefile.sphinx html
+	make -f docs/Makefile.sphinx clean && \
+	make -f docs/Makefile.sphinx html
 
 ghpages:
 	git checkout gh-pages && \
 	rm -r _modules _sources _static generated genindex.html index.html objects.inv py-modindex.html search.html searchindex.js && \
-	cp -r build/html/* . && \
+	cp -r docs/build/html/* . && \
 	git add -u && \
 	git add _modules _sources _static generated *.html *.js && \
 	git commit -m "Updated generated Sphinx documentation"
