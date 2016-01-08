@@ -1,9 +1,11 @@
 """S3 Resource Manager
 
+Filters:
+
 The generic Values filters (jmespath) expression and Or filter are
-available with S3 Buckets, we include several additonal bucket data
-(Tags, Replication, Acl, Policy) as keys within a bucket
-representation.
+available with all resources, including buckets, we include several
+additonal bucket data (Tags, Replication, Acl, Policy) as keys within
+a bucket representation.
 
 Actions:
 
@@ -22,12 +24,10 @@ Actions:
    delivery.
 
 """
-
 from botocore.client import Config
 from botocore.exceptions import ClientError
 from concurrent.futures import as_completed
 
-import gc
 import json
 import itertools
 import logging
@@ -36,13 +36,15 @@ import time
 
 from janitor import executor
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import (
-    FilterRegistry, Filter)
-
+from janitor.filters import FilterRegistry, Filter
 from janitor.manager import ResourceManager, resources
-from janitor.rate import TokenBucket
 from janitor.utils import chunks, local_session, set_annotation
 
+"""
+TODO:
+ - How does replication status effect in place encryption.
+ - Test glacier support
+"""
 
 log = logging.getLogger('maid.s3')
 
@@ -58,38 +60,24 @@ class S3(ResourceManager):
     def __init__(self, ctx, data):
         super(S3, self).__init__(ctx, data)
         self.log_dir = ctx.log_dir
-        self.rate_limit = {
-            'key_process_rate': TokenBucket(2000),
-        }
         self.filters = filters.parse(
             self.data.get('filters', []), self)
         self.actions = actions.parse(
             self.data.get('actions', []), self)
         
-    def incr(self, m, v=1):
-        return self.rate_limit[m].consume(v)
-        
-    def resources(self, matches=()):
+    def resources(self):
         c = self.session_factory().client('s3')
         log.debug('Retrieving buckets')
         response = c.list_buckets()
         buckets = response['Buckets']
         log.debug('Got %d buckets' % len(buckets))
-
-        if matches:
-            buckets = filter(lambda x: x['Name'] in matches, buckets)
-            log.debug("Filtered to %d buckets" % len(buckets))
-
         log.debug('Assembling bucket documents')
         with self.executor_factory(max_workers=10) as w:
-            results = w.map(assemble_bucket, zip(itertools.repeat(self.session_factory), buckets))
+            results = w.map(
+                assemble_bucket,
+                zip(itertools.repeat(self.session_factory), buckets))
             results = filter(None, results)
-
-        for f in self.filters:
-            results = f.process(results)
-
-        log.debug("Filtered to %d buckets" % len(results))
-        return results
+        return self.filter_resources(results)
 
     
 def assemble_bucket(item):
@@ -106,12 +94,13 @@ def assemble_bucket(item):
         ('get_bucket_policy',  'Policy', None, None),   
         ('get_bucket_acl', 'Acl', None, None),
         ('get_bucket_replication', 'Replication', None, None),
+        ('get_bucket_versioning', 'Versioning', None, None),
+        ('get_bucket_lifecycle', 'Lifecycle', None, None),
 #        ('get_bucket_cors', 'Cors'),        
-#        ('get_bucket_versioning', 'Versioning'),
-#        ('get_bucket_lifecycle', 'Lifecycle'),
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
 
+    # Bucket Location, Current Client Location, Default Location
     b_location = c_location = location = "us-east-1"
     
     for m, k, default, select in methods:
@@ -126,7 +115,7 @@ def assemble_bucket(item):
             if code.startswith("NoSuch") or "NotFound" in code:
                 v = default
             elif code == 'PermanentRedirect':
-                #log.warning(e.response)
+                # log.warning(e.response)
                 s = factory()
                 c = bucket_client(s, b)
                 # Requeue with the correct region given location constraint
@@ -147,19 +136,19 @@ def assemble_bucket(item):
     return b
 
 
-def bucket_client(s, b, kms=False):
+def bucket_client(session, b, kms=False):
     location = b.get('Location')
     if location is None:
         region = 'us-east-1'
     else:
         region = location['LocationConstraint'] or 'us-east-1'
     if kms:
+        # Need v4 signature for aws:kms crypto
         config = Config(signature_version='s3v4')
     else:
         config = None
-    return s.client(
-        's3', region_name=region,
-        # Need v4 for aws:kms crypto
+    return session.client(
+        's3', region_name=region,        
         config=config)
 
 
@@ -244,6 +233,41 @@ class EncryptedPrefix(BucketActionBase):
             ServerSideEncryption=crypto_method)
         return {'Bucket': b['Name'], 'Prefix': k, 'State': 'Updated'}
         
+
+@filters.register('missing-policy-statement')
+class MissingPolicyStatementFilter(Filter):
+    """Find buckets missing a set of named policy statements."""
+    
+    def process(self, buckets):
+        with self.executor_factory(max_workers=5) as w:
+            results = w.map(self.process_bucket, buckets)
+            results = filter(None, list(results))
+            return results
+
+    def process_bucket(self, b):
+        p = b['Policy']
+        if p is None:
+            return b
+
+        p = json.loads(p['Policy'])
+
+        required = list(self.data.get('statement_ids', []))
+        statements = p.get('Statement', [])
+        
+        for s in list(statements):
+            if s['StatementId'] in required:
+                required.remove(s['StatementId'])
+        if not required:
+            return None
+        return b
+
+    
+@actions.register('no-op')
+class NoOp(BucketActionBase):
+    
+    def process(self, buckets):
+        return None
+            
             
 @actions.register('encryption-policy')    
 class EncryptionRequiredPolicy(BucketActionBase):
@@ -347,7 +371,29 @@ class BucketScanLog(object):
 class ScanBucket(BucketActionBase):
 
     permissions = ("s3:ListBucket",)
-    
+
+    bucket_ops = {
+        'standard': {
+            'iterator': 'list_objects',
+            'contents_key': 'Contents',
+            'key_processor': 'process_key'
+            },
+        'versioned': {
+            'iterator': 'list_object_versions',
+            'contents_key': 'Versions',
+            'key_processor': 'process_version'
+            }
+        }
+
+    def get_bucket_op(self, b, op_name):
+        bucket_style = (
+            b.get('Versioning', {'Status': ''}).get('Status') == 'Enabled'
+            and 'versioned' or 'standard')
+        op = self.bucket_ops[bucket_style][op_name]
+        if op_name == 'key_processor':
+            return getattr(self, op)
+        return op
+
     def process(self, buckets):
         results = []
         with self.executor_factory(max_workers=3) as w:
@@ -365,7 +411,8 @@ class ScanBucket(BucketActionBase):
         # The bulk of _process_bucket function executes inline in
         # calling thread/worker context, neither paginator nor
         # bucketscan log should be used across worker boundary.
-        p = s3.get_paginator('list_objects').paginate(Bucket=b['Name'])
+        p = s3.get_paginator(
+            self.get_bucket_op(b, 'iterator')).paginate(Bucket=b['Name'])
         with BucketScanLog(self.manager.log_dir, b['Name']) as key_log:
             with self.executor_factory(max_workers=10) as w:
                 try:
@@ -374,22 +421,21 @@ class ScanBucket(BucketActionBase):
                     log.exception(
                         "Error processing bucket:%s paginator:%s" % (
                             b['Name'], p))
-                return None
 
     __call__ = process_bucket
     
     def _process_bucket(self, b, p, key_log, w):
+        content_key = self.get_bucket_op(b, 'contents_key')
         count = 0
-        loop_count = 0
         
         for key_set in p:
             # Empty bucket check
-            if not 'Contents' in key_set:
+            if not content_key in key_set:
                 return {'Bucket': b['Name'],
                         'Remediated': key_log.count,
                         'Count': count}
             futures = []
-            for batch in chunks(key_set['Contents'], size=100):
+            for batch in chunks(key_set[content_key], size=100):
                 futures.append(w.submit(self.process_chunk, batch, b))
 
             for f in as_completed(futures):
@@ -401,13 +447,7 @@ class ScanBucket(BucketActionBase):
                 if r:
                     key_log.add(r)
 
-            count += len(key_set.get('Contents', []))
-
-            # On pypy we need more explicit memory collection to avoid pressure
-            # and excess open files/sockets. every thousand objects
-            loop_count += 1
-            if loop_count % 1000 == 0:
-                gc.collect()
+            count += len(key_set[content_key])
 
             # Log completion at info level, progress at debug level
             if key_set['IsTruncated']:
@@ -420,14 +460,24 @@ class ScanBucket(BucketActionBase):
         return {'Bucket': b['Name'], 'Remediated': key_log.count, 'Count': count}
 
     def process_chunk(self, batch, bucket):
-        return None
+        raise NotImplementedError()
+
+    def process_key(self, s3, key, bucket_name, info=None):
+        raise NotImplementedError()
+
+    def process_version(self, s3, bucket, key):
+        raise NotImplementedError()
     
 
 @actions.register('encrypt-keys')    
 class EncryptExtantKeys(ScanBucket):
 
-    permissions = ("s3:PutObject", "s3:GetObject",) + ScanBucket.permissions
-    customer_keys = None
+    permissions = (
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObjectVersion",
+        "s3:RestoreObject",
+    ) + ScanBucket.permissions
 
     def process(self, buckets):
         t = time.time()
@@ -452,37 +502,92 @@ class EncryptExtantKeys(ScanBucket):
         self.manager.ctx.metrics.flush()
                 
         log.info(
-            "EncryptExtant Complete keys:%d remediated:%d rate:%0.2f/s time:%0.2fs",
+            ("EncryptExtant Complete keys:%d "
+             "remediated:%d rate:%0.2f/s time:%0.2fs"),
             object_count,
             remediated_count,
             float(object_count) / run_time,
             run_time)
-
         return results
 
     def process_chunk(self, batch, bucket):
         crypto_method = self.data.get('crypto', 'AES256')
-        b = bucket['Name']
         s3 = bucket_client(
             local_session(self.manager.session_factory), bucket,
-            kms = (crypto_method == 'aws:kms'))
+            kms=(crypto_method == 'aws:kms'))
+        b = bucket['Name']
         results = []
+        key_processor = self.get_bucket_op(bucket, 'key_processor')
         for key in batch:
-            k = key['Key']
-            data = s3.head_object(Bucket=b, Key=k)
-            if 'ServerSideEncryption' in data:
-                continue
-            if self.data.get('report-only'):
-                results.append(k)
-                continue
-            crypto_method = self.data.get('crypto', 'AES256')
-            # Note on copy we lose individual object acl grants
-            params = {'Bucket': b,
-                      'Key': k,
-                      'CopySource': "/%s/%s" % (b, k),
-                      'MetadataDirective': 'COPY',
-                      'StorageClass': key['StorageClass'],
-                      'ServerSideEncryption': crypto_method}
-            s3.copy_object(**params)
-            results.append(k)
+            r = key_processor(s3, key, b)
+            if r:
+                results.append(r)
         return results
+
+    def process_key(self, s3, key, bucket_name, info=None):
+        k = key['Key']
+
+        if info is None:
+            info = s3.head_object(Bucket=bucket_name, Key=k)
+
+        if 'ServerSideEncryption' in info:
+            return False
+
+        if self.data.get('report-only'):
+            return k['Key']
+
+        storage_class = key['StorageClass']
+        if storage_class == 'GLACIER':
+            if not 'Restore' in info:
+                # This takes multiple hours, we let the next maid
+                # run take care of followups.
+                s3.restore_object(
+                    Bucket=bucket_name,
+                    Key=key,
+                    RestoreRequest={'Days': 30})
+                return False
+            elif not restore_complete(info['Restore']):
+                return False
+            storage_class == 'STANDARD'
+
+        crypto_method = self.data.get('crypto', 'AES256')
+        # Note on copy we lose individual object acl grants
+        params = {'Bucket': bucket_name,
+                  'Key': k,
+                  'CopySource': "/%s/%s" % (bucket_name, k),
+                  'MetadataDirective': 'COPY',
+                  'StorageClass': storage_class,
+                  'ServerSideEncryption': crypto_method}
+        s3.copy_object(**params)
+        return k
+
+    def process_version(self, s3, key, bucket_name):
+        info = s3.head_object(
+            Bucket=bucket_name,
+            Key=key['Key'],
+            VersionId=key['VersionId'])
+
+        if 'ServerSideEncryption' in info:
+            return False
+
+        if self.data.get('report-only'):
+            return key['Key'], key['VersionId']
+
+        if key['IsLatest']:
+            r = self.process_key(s3, key, bucket_name, info)
+            # Glacier request, wait till we have the restored object
+            if not r:
+                return r
+        s3.delete_object(
+            Bucket=bucket_name,
+            Key=key['Key'],
+            VersionId=key['VersionId'])
+        return key['Key'], key['VersionId']
+
+
+def restore_complete(restore):
+    if ',' in restore:
+        ongoing, avail = restore.split(',', 1)
+    else:
+        ongoing = restore
+    return 'false' in ongoing

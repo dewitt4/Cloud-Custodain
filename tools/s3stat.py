@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 
 import boto3
 import json
-import pprint
 import logging
 import os
 
@@ -73,7 +72,7 @@ def main():
    results['TotalObjects'] = obj_count
    results['TotalSizeGB'] = size_count
 
-   print json.dumps(results, indent=2)
+   print(json.dumps(results, indent=2))
 
 
    

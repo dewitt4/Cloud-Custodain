@@ -51,6 +51,25 @@ class TestOrFilter(unittest.TestCase):
             True)
         self.assertEqual(
             f(instance(Architecture='amd64')),
+            False)
+
+
+class TestAndFilter(unittest.TestCase):
+
+    def test_and(self):
+        f = filters.factory({
+            'and': [
+                {'Architecture': 'x86_64'},
+                {'Color': 'green'}]})
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='green')),
+            True)
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='blue')),
             False)        
 
         
