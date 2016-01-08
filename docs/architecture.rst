@@ -32,15 +32,12 @@ Model Definition
 ----------------
 
 - Validation
-
 - Imports
-
 - Formats
 
   - yaml
 
 - Serialization and Exchange Formats
-
 - For record serialization, we preferentially use bson over json for its
   datetime support.
 
@@ -49,7 +46,6 @@ Operations Design Goals
 -----------------------
 
 - Configuration either S3 or Git Config
-
 - Stateless by design (this simplifies scaling)
 
   - Dev can run with a local cache file.
@@ -58,14 +54,19 @@ Operations Design Goals
 - IAM Policy Generation
 
 - Policy level Outputs
+
   - Data S3 at Element Level
   - Metrics at Element Level
+
     - Execution Time
     - Resource Counts
 	- Modified
+
   - Alerts (SNS)
+
     - Error
     - Completion
+
   - SNS Notifications
   - Worker
   - Output channels

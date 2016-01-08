@@ -2,12 +2,12 @@
 Record Outputs
 ==============
 
- Structured and Unstructured per action and resource
+Structured and Unstructured per action and resource
 
- - Python Execution Log
- - Policy Resource Records
- - Policy Action Records
- - CloudWatch Metrics
+- Python Execution Log
+- Policy Resource Records
+- Policy Action Records
+- CloudWatch Metrics
 
 S3 Bucket Location
 ==================
@@ -15,18 +15,22 @@ S3 Bucket Location
 s3://cloud-maid-sts-digital-dev/
 
 policies
-  - <policy-name>
-    - <date>
-        - <file.log.gz>
-        - <file.json.gz>
-        - maid
+
+- <policy-name>
+
+  - <date>
+
+    - <file.log.gz>
+
+      - <file.json.gz>
+      - maid
 
 Actions have output / or even state 
 
 
 Every policy gets a temp directory
-   - maid-run.log.gz
-   - 
+
+- maid-run.log.gz
 
 """
 
@@ -182,10 +186,13 @@ class DirectoryOutput(FSOutput):
 
 class S3Output(FSOutput):
     """
-    Usage::
+    Usage:
 
-    with S3Output(session_factory, 's3://bucket/prefix'):
-        log.info('xyz')  # -> log messages sent to maid-run.log.gz
+    .. code-block:: python
+    
+       with S3Output(session_factory, 's3://bucket/prefix'):
+           log.info('xyz')  # -> log messages sent to maid-run.log.gz
+
     """
 
     permissions = ('S3:PutObject',)

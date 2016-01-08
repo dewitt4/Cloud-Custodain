@@ -13,18 +13,18 @@ class PluginRegistry(object):
 
     As an example of defining an external plugin using a python package
     
-    ```python
-    setup(
-      name="maid_cmdb",
-      description="Maid filters for interacting with internal CMDB"
-      version='1.0',
-      packages=find_packages(),
-      entry_points={
-         'console_scripts': [
-            'maid.ec2.filters = maid_cmdb:filter_ec2']},
-      )
-    ```
-    
+    .. code-block:: python
+
+       setup(
+           name="maid_cmdb",
+           description="Maid filters for interacting with internal CMDB"
+           version='1.0',
+           packages=find_packages(),
+           entry_points={
+                'console_scripts': [
+                     'maid.ec2.filters = maid_cmdb:filter_ec2']},
+           )
+
     For loading the plugins we can simply invoke method:load_plugins like
     so::
 
