@@ -39,12 +39,12 @@ import csv
 import gzip
 import json
 import logging
-import operator
 
 from dateutil.parser import parse as date_parse
 
 from janitor.executor import ThreadPoolExecutor
 from janitor.utils import local_session, dumps
+
 
 log = logging.getLogger('maid.reports')
 
@@ -64,86 +64,103 @@ def report(policy, start_date, output_fh, raw_output_fh=None, filters=None):
         policy.ctx.output.key_prefix,
         start_date)
 
-    records = formatter(output_fh, records)
+    rows = formatter.to_csv(records)
+
+    writer = csv.writer(output_fh, formatter.headers())
+    writer.writerow(formatter.headers())
+    writer.writerows(rows)
+
     if raw_output_fh is not None:
         dumps(records, raw_output_fh, indent=2)
 
 
-def unique(records, identity_func, unique_pick='last', filters=None):
-    keys = set(map(identity_func, records))
-    reverse = unique_pick == 'last'
-    records.sort(key=operator.itemgetter('MaidDate'), reverse=reverse)
-    results = []
-    for r in records:
-        rid = identity_func(r)
-        if rid in keys:
-            if filters:
-                found = True
-                for f in filters:
-                    if not f(r):
-                        found = False
-                        break
-                if not found:
-                    continue
-            results.append(r)
-            keys.remove(rid)
-    log.debug("Uniqued from %d to %d" % (len(records), len(results)))
-    return results
+class Formatter(object):
+    def __init__(self, id_field, headers):
+        self._id_field = id_field
+        self._headers = headers
+
+    def csv_fields(self, record, tag_map):
+        '''Must be implemented by subclass'''
+        raise Exception("Method not implemented by subclass: csv_fields")
+
+    def filter_record(self, record):
+        '''Override in subclass if filtering needed.'''
+        return True
+
+    def headers(self):
+        return self._headers
+
+    def extract_csv(self, record):
+        tag_map = {t['Key']: t['Value'] for t in record['Tags']}
+        return self.csv_fields(record, tag_map)
+
+    def uniq_by_id(self, records):
+        """Only the first record for each id"""
+        uniq = []
+        keys = set()
+        for rec in records:
+            rec_id = rec[self._id_field]
+            if rec_id not in keys:
+                uniq.append(rec)
+                keys.add(rec_id)
+        return uniq
+
+    def to_csv(self, records, reverse=True):
+        filtered = filter(self.filter_record, records)
+        log.debug("Filtered from %d to %d" % (len(records), len(filtered)))
+        filtered.sort(key=lambda r: r['MaidDate'], reverse=reverse)
+        uniq = self.uniq_by_id(filtered)
+        log.debug("Uniqued from %d to %d" % (len(filtered), len(uniq)))
+        rows = map(self.extract_csv, uniq)
+        return rows
 
 
-def ec2_csv(output_fh, records):
-    headers = ['action-date', 'instance-id', 'name',
-               'instance-type', 'launch', 'vpc-id', 'ip-addr',
-               'asv', 'env', 'owner']
-    writer = csv.writer(output_fh, headers)
-    writer.writerow(headers)
+class EC2Formatter(Formatter):
+    def __init__(self):
+        super(EC2Formatter, self).__init__(
+            'InstanceId',
+            ['action-date', 'instance-id', 'name', 'instance-type', 'launch',
+             'vpc-id', 'ip-addr', 'asv', 'env', 'owner'])
 
-    records = unique(
-        records, operator.itemgetter('InstanceId'),
-        filters=[lambda x: x['State']['Name'] != 'terminated'])
-    
-    for r in records:
-        tag_map = {t['Key']: t['Value'] for t in r['Tags']}
-        writer.writerow([
-            r['MaidDate'].strftime("%Y-%m-%d"),
-            r['InstanceId'],
+    def filter_record(self, record):
+        return record['State']['Name'] != 'terminated'
+
+    def csv_fields(self, record, tag_map):
+        return [
+            record['MaidDate'].strftime("%Y-%m-%d"),
+            record['InstanceId'],
             tag_map.get('Name', ''),
-            r['InstanceType'],
-            r['LaunchTime'],
-            r.get('VpcId', ''),
-            r.get('PrivateIpAddress', ''),
+            record['InstanceType'],
+            record['LaunchTime'],
+            record.get('VpcId', ''),
+            record.get('PrivateIpAddress', ''),
             tag_map.get("ASV", ""),
             tag_map.get("CMDBEnvironment", ""),
             tag_map.get("OwnerContact", ""),
-        ])
-    return records
+        ]
 
 
-def asg_csv(output_fh, records):
-    headers = ['name', 'instance-count',
-               'asv', 'env', 'owner']
-    writer = csv.writer(output_fh, headers)
-    writer.writerow(headers)
+class ASGFormatter(Formatter):
+    def __init__(self):
+        super(ASGFormatter, self).__init__(
+            'AutoScalingGroupName',
+            ['name', 'instance-count', 'asv', 'env', 'owner'])
 
-    records = unique(
-        records, operator.itemgetter('AutoScalingGroupName'))
-    
-    for r in records:
-        tag_map = {t['Key']: t['Value'] for t in r['Tags']}
-        writer.writerow([
-            r['AutoScalingGroupName'],
-            str(len(r['Instances'])),
+    def csv_fields(self, record, tag_map):
+        return [
+            record['AutoScalingGroupName'],
+            str(len(record['Instances'])),
             tag_map.get("ASV", ""),
             tag_map.get("CMDBEnvironment", ""),
-            tag_map.get("OwnerContact", "")])
+            tag_map.get("OwnerContact", "")
+        ]
 
-    return records
 
-
+# FIXME: Should we use a PluginRegistry instead?
 RECORD_TYPE_FORMATTERS = {
-    'ec2': ec2_csv,
-    'asg': asg_csv
-    }
+    'ec2': EC2Formatter(),
+    'asg': ASGFormatter()
+}
 
 
 def record_set(session_factory, bucket, key_prefix, start_date):
@@ -165,15 +182,12 @@ def record_set(session_factory, bucket, key_prefix, start_date):
         Marker=marker)
     with ThreadPoolExecutor(max_workers=20) as w:
         for key_set in p:
-            if not 'Contents' in key_set:
+            if 'Contents' not in key_set:
                 continue
             keys = [k for k in key_set['Contents']
                     if k['Key'].endswith('resources.json.gz')]
             key_count += len(keys)
-            futures = []
-            for k in keys:
-                futures.append(
-                    w.submit(get_records, bucket, k, session_factory))
+            futures = map(lambda k: w.submit(get_records, bucket, k, session_factory), keys)
 
             for f in as_completed(futures):
                 records.extend(f.result())
@@ -199,13 +213,3 @@ def get_records(bucket, key, session_factory):
     for r in records:
         r['MaidDate'] = maid_date
     return records
-
-        
-
-    
-
-    
-
-
-
-    
