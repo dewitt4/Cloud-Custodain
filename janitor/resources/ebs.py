@@ -136,11 +136,12 @@ class CopyInstanceTags(BaseAction):
             DryRun=self.manager.config.dryrun)
 
 
-@actions.register('encrypt-instance-volume')
-class EncryptVolume(BaseAction):
-    """Encrypt an extant volume, and attach it to an instance.
+@actions.register('encrypt-instance-volumes')
+class EncryptInstanceVolumes(BaseAction):
+    """Encrypt extant volumes attached to an instance
 
-    Not suitable for autoscale groups.
+    - Requires instance restart
+    - Not suitable for autoscale groups.
     """
 
     def validate(self):
@@ -323,7 +324,7 @@ class EncryptVolume(BaseAction):
             if self.verbose:
                 self.log.debug("Instance: %s stopped" % instance_id)
                         
-
+    
 @actions.register('delete')
 class Delete(BaseAction):
 

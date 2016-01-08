@@ -32,10 +32,10 @@ $ virtualenv cloud-maid
 $ source cloud-maid/bin/activate
 ```
 
-And then install the dependencies
+And then install the dependencies. Deployed systems will just use `requirements.txt`; you'll need the additional testing libraries in `requirements-dev.txt`.
 
 ```bash
-$ pip install -r requirements.txt
+$ pip install -r requirements-dev.txt
 ```
 
 And then the maid itself

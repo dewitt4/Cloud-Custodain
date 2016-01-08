@@ -131,7 +131,7 @@ class Time(Filter):
         if 'off' in parts:
             return False
         return self.process_current_time(i, parts)
-
+ 
     def process_terminate(self, i, parts):
         parts.pop('terminate')
         for p in parts:
