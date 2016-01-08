@@ -1,7 +1,5 @@
 """Provide basic caching services to avoid extraneous
 queries over multiple.
-
-
 """
 
 import cPickle

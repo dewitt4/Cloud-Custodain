@@ -19,10 +19,10 @@ specific report on them.
 CLI Usage
 =========
 
-```
- $ cloud-maid report -s s3://cloud-maid-xyz/policies \
-   -p ec2-tag-compliance-terminate -v > terminated.csv
-   
+.. code-block:: bash
+
+   $ cloud-maid report -s s3://cloud-maid-xyz/policies \\
+     -p ec2-tag-compliance-terminate -v > terminated.csv
 
 
 TODO

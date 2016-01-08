@@ -1,6 +1,6 @@
 """
 Offhours support
-----------------
+================
 
 Turn instances off based on typical hours not in use. Also supports
 one time use instances for quickly trying something out, but wanting
@@ -11,7 +11,7 @@ By default, Off hours support is based on tags being defined on
 applicable resources.
 
 Tag Based Configuration
------------------------
+=======================
 
 Note the tag name is configurable per policy configuration, examples below use
 default tag name, ie. maid_downtime.
@@ -47,46 +47,45 @@ Terminate after time period
 
 
 Policy examples
----------------
+===============
 
 Turn ec2 instances on and off
 
-```yaml
-policies:
-  - name: offhours-stop
-    resource: ec2
-    filters:
-       - offhours
-    actions:
-      - stop
+.. code-block:: yaml
 
-  - name: offhours-start
-    resource: ec2
-    filters:
-      - onhours
-    actions:
-      - start
-```
+   policies:
+     - name: offhours-stop
+       resource: ec2
+       filters:
+          - offhours
+       actions:
+         - stop
+   
+     - name: offhours-start
+       resource: ec2
+       filters:
+         - onhours
+       actions:
+         - start
 
 Options
--------
+=======
 
 - tag: the tag name to use when configuring
 - default_tz: the default timezone to use when interpreting offhours
 - offhour: the time to turn instances off, specified in 0-24
 - onhour: the time to turn instances on, specified in 0-24
-- 
 
-```yaml
-policies:
-  - name: offhours-stop
-    resource: ec2
-    filters:
-      - type: offhours
-        tag: downtime
-        onhour: 8
-        offhour: 20
-```
+.. code-block:: yaml
+
+   policies:
+     - name: offhours-stop
+       resource: ec2
+       filters:
+         - type: offhours
+           tag: downtime
+           onhour: 8
+           offhour: 20
 """
 from janitor.filters import Filter
 

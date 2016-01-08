@@ -70,49 +70,48 @@ Configuration
 
 proposed syntax
 
-```
-policies:
-  - name: s3-encrypted-bucket-policy
-    mode: 
-      type: cloudtrail
-      sources: 
-       - s3.amazonaws.com
-      events: 
-       - CreateBucket
-    filters:
-      # Match on buckets with policies that are missing
-      # required statements
-      - type: missing-policy-statement
-        statement_ids: [RequireEncryptedPutObject]
-    actions:
-      # Apply encryption required policy
-      - encryption-policy
+.. code-block:: yaml
 
-  - name: ec2-require-encrypted-volumes
-    mode:
-      type: ec2-instance-state
-      events:
-      - pending
-    filters:
-      - type: ebs
-        key: Encrypted
-        value: False
-    actions:
-      - mark
-      # TODO delete instance volumes that
-      # are not set to delete on terminate
-      # currently we have a poll policy that
-      # handles this.
-      - terminate
-
-  - name: ec2-require-tag-compliance
-    mode:
-      type: ec2-instance-state
-      events:
-      - running
-    filters:
-
-```
+   policies:
+     - name: s3-encrypted-bucket-policy
+       mode: 
+         type: cloudtrail
+         sources: 
+          - s3.amazonaws.com
+         events: 
+          - CreateBucket
+       filters:
+         # Match on buckets with policies that are missing
+         # required statements
+         - type: missing-policy-statement
+           statement_ids: [RequireEncryptedPutObject]
+       actions:
+         # Apply encryption required policy
+         - encryption-policy
+   
+     - name: ec2-require-encrypted-volumes
+       mode:
+         type: ec2-instance-state
+         events:
+         - pending
+       filters:
+         - type: ebs
+           key: Encrypted
+           value: False
+       actions:
+         - mark
+         # TODO delete instance volumes that
+         # are not set to delete on terminate
+         # currently we have a poll policy that
+         # handles this.
+         - terminate
+   
+     - name: ec2-require-tag-compliance
+       mode:
+         type: ec2-instance-state
+         events:
+         - running
+       filters:
 
 alternatively we could associate relevant events to some
 actions, like encryption-keys with a list of events, and
@@ -570,21 +569,25 @@ class CloudWatchEventSource(object):
 
     Event Pattern for Instance State
 
-    { 
-      "source": ["aws.ec2"],
-      "detail-type": ["EC2 Instance State-change Notification"],
-      "detail": { "state": ["pending"]}
-    }
+    .. code-block:: json
+
+       { 
+         "source": ["aws.ec2"],
+         "detail-type": ["EC2 Instance State-change Notification"],
+         "detail": { "state": ["pending"]}
+       }
 
     Event Pattern for Cloud Trail API
 
-    {
-      "detail-type": ["AWS API Call via CloudTrail"],
-      "detail": {
-         "eventSource": ["s3.amazonaws.com"],
-         "eventName": ["CreateBucket", "DeleteBucket"]
-      }
-    }
+    .. code-block:: json
+
+       {
+         "detail-type": ["AWS API Call via CloudTrail"],
+         "detail": {
+            "eventSource": ["s3.amazonaws.com"],
+            "eventName": ["CreateBucket", "DeleteBucket"]
+         }
+       }
     """
 
     def __init__(self, data, session_factory):

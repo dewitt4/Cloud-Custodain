@@ -21,3 +21,15 @@ depcache:
 	tar cvf maid-deps.tgz deps
 	rm -Rf dep-download
 	rm -Rf deps
+
+sphinx:
+	make -f docs/Makefile.sphinx clean && \
+	make -f docs/Makefile.sphinx html
+
+ghpages:
+	git checkout gh-pages && \
+	rm -r _modules _sources _static generated genindex.html index.html objects.inv py-modindex.html search.html searchindex.js && \
+	cp -r docs/build/html/* . && \
+	git add -u && \
+	git add _modules _sources _static generated *.html *.js && \
+	git commit -m "Updated generated Sphinx documentation"
