@@ -160,6 +160,7 @@ class MarkedForOp(Filter):
     def __call__(self, i):
         tag = self.data.get('tag', 'maid_status')
         op = self.data.get('op', 'stop')
+        skew = self.data.get('skew', 0)
         
         v = None
         for n in i.get('Tags', ()):
@@ -187,7 +188,7 @@ class MarkedForOp(Filter):
         if self.current_date is None:
             self.current_date = datetime.now()
 
-        return self.current_date >= action_date
+        return self.current_date >= (action_date - timedelta(skew))
 
     
 @actions.register('tag')    
