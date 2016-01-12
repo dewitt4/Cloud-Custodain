@@ -4,6 +4,7 @@ from concurrent.futures import (
 
 from janitor.registry import PluginRegistry
 
+import threading
 
 class ExecutorRegistry(PluginRegistry):
 
@@ -49,6 +50,10 @@ class MainThreadFuture(object):
 
     def __init__(self, value):
         self.value = value
+        # Sigh concurrent.futures pokes at privates
+        self._state = 'FINISHED'
+        self._waiters = []
+        self._condition = threading.Condition()
         
     def cancel(self):
         return False

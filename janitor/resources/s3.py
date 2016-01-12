@@ -534,7 +534,7 @@ class EncryptExtantKeys(ScanBucket):
             return False
 
         if self.data.get('report-only'):
-            return k['Key']
+            return k
 
         storage_class = key['StorageClass']
         if storage_class == 'GLACIER':
