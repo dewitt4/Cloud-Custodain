@@ -11,12 +11,12 @@ via offhours resource management.
 
 # Links
 
-- [Architecture](docs/architecture.md)
-- [Roadmap](docs/roadmap.md)
-- [Developer Install](docs/developer.md)
+- [Architecture](docs/architecture.rst)
+- [Roadmap](docs/roadmap.rst)
+- [Developer Install](docs/developer.rst)
 - Resource Guides
-  - [EC2](docs/ec2.md)
-  - [S3](docs/s3.md)
+  - [EC2](docs/ec2.rst)
+  - [S3](docs/s3.rst)
  
 
 # Usage
