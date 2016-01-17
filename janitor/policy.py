@@ -8,6 +8,7 @@ import boto3
 import yaml
 
 from janitor.ctx import ExecutionContext
+from janitor.credentials import assumed_session
 from janitor.manager import resources
 from janitor import utils
 from janitor.version import version
@@ -121,15 +122,8 @@ class Policy(object):
             region_name=self.options.region,
             profile_name=self.options.profile)
         if self.options.assume_role and assume:
-            # Todo stick version here
-            credentials = session.client('sts').assume_role(
-                RoleArn=self.options.assume_role,
-                RoleSessionName="CloudMaid")['Credentials']
-            session = boto3.Session(
-                region_name=self.options.region,
-                aws_access_key_id=credentials['AccessKeyId'],
-                aws_secret_access_key=credentials['SecretAccessKey'],
-                aws_session_token=credentials['SessionToken'])
+            session = assumed_session(
+                self.options.assume_role, "CloudMaid %s" % version)
 
         # FIXME: split all this maid_record stuff into a function; document it
         maid_record = os.environ.get('MAID_RECORD') # FIXME: what are sane values for this?
