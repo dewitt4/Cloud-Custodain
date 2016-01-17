@@ -123,7 +123,7 @@ class Policy(object):
             profile_name=self.options.profile)
         if self.options.assume_role and assume:
             session = assumed_session(
-                self.options.assume_role, "CloudMaid %s" % version)
+                self.options.assume_role, "CloudMaid", session)
 
         # FIXME: split all this maid_record stuff into a function; document it
         maid_record = os.environ.get('MAID_RECORD') # FIXME: what are sane values for this?
