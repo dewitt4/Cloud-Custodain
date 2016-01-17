@@ -1,0 +1,45 @@
+from botocore.credentials import RefreshableCredentials
+from botocore.session import get_session
+
+from boto3 import Session
+
+
+def assumed_session(role_arn, session_name, session=None):
+    """STS Role assume a boto3.Session
+
+    With automatic credential renewal.
+
+    Args:
+      role_arn: iam role arn to assume
+      session_name: client session identifier
+      session: an optional extant session, note session is captured
+           in a function closure for renewing the sts assumed role.
+
+    :return: a boto3 session using the sts assumed role credentials
+
+    Notes: We have to poke at botocore internals a few times
+    """
+    if session is None:
+        session = Session()
+
+    def refresh():
+        credentials = session.client('sts').assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=session_name)['Credentials']
+        return dict(
+            access_key=credentials['AccessKeyId'],
+            secret_key=credentials['SecretAccessKey'],
+            token=credentials['SessionToken'],
+            # Silly that we basically stringify so it can be parsed again
+            expiry_time=credentials['Expiration'].isoformat())
+
+    session_credentials = RefreshableCredentials.create_from_metadata(
+        metadata=refresh(),
+        refresh_using=refresh,
+        method='sts-assume-role')
+
+    # so dirty.. it hurts, no clean way to set this outside of the internals poke
+    s = get_session()
+    s._credentials = session_credentials
+    s.set_config_variable('region', session.get_config_variable('region'))
+    return Session(botocore_session=s)
