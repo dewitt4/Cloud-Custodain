@@ -41,6 +41,6 @@ def assumed_session(role_arn, session_name, session=None):
     # so dirty.. it hurts, no clean way to set this outside of the internals poke
     s = get_session()
     s._credentials = session_credentials
-    region = session.get_config_variable('region') or 'us-east-1'
+    region = s.get_config_variable('region') or 'us-east-1'
     s.set_config_variable('region', region)
     return Session(botocore_session=s)
