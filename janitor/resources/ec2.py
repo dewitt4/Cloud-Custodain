@@ -276,10 +276,12 @@ class Terminate(BaseAction, StateTransitionFilter):
         if self.data.get('force'):
             self.log.info("Disabling termination protection on instances")
             self.disable_deletion_protection(instances)
-        self._run_api(
-            self.manager.client.terminate_instances,
-            InstanceIds=[i['InstanceId'] for i in instances],
-            DryRun=self.manager.config.dryrun)
+        # limit batch sizes to avoid api limits
+        for batch in utils.chunks(instances, 100):
+            self._run_api(
+                self.manager.client.terminate_instances,
+                InstanceIds=[i['InstanceId'] for i in instances],
+                DryRun=self.manager.config.dryrun)
 
     def disable_deletion_protection(self, instances):
         def process_instance(i):
