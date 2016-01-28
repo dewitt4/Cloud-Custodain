@@ -294,7 +294,7 @@ class Terminate(BaseAction, StateTransitionFilter):
                 Value='false',
                 DryRun=self.manager.config.dryrun)
 
-        with self.executor_factory(max_workers=10) as w:
+        with self.executor_factory(max_workers=2) as w:
             list(w.map(process_instance, instances))
             
         
