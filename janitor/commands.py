@@ -30,8 +30,6 @@ def run(options, policy_collection):
 
             
 def report(options, policy_collection):
-    if not options.output_dir.startswith('s3://'):
-        raise ValueError("Reports only supports s3 output")
     log = logging.getLogger('maid.report')
 
     policies = policy_collection.policies(options.policies)

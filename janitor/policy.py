@@ -99,7 +99,7 @@ class Policy(object):
                 "ResourceCount", len(resources), "Count", Scope="Policy")
             self.ctx.metrics.put_metric(
                 "ResourceTime", rt, "Seconds", Scope="Policy")
-            self._write_file('resources.json', utils.dumps(resources))
+            self._write_file('resources.json', utils.dumps(resources, indent=2))
 
             at = time.time()            
             for a in self.resource_manager.actions:
