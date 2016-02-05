@@ -36,9 +36,11 @@ from concurrent.futures import as_completed
 
 from cStringIO import StringIO
 import csv
+from datetime import datetime
 import gzip
 import json
 import logging
+import os
 
 from dateutil.parser import parse as date_parse
 
@@ -58,11 +60,14 @@ def report(policy, start_date, output_fh, raw_output_fh=None, filters=None):
             "No formatter for resource type %s, valid: %s" % (
                 policy.resource_type, ", ".join(RECORD_TYPE_FORMATTERS)))
 
-    records = record_set(
-        policy.session_factory,
-        policy.ctx.output.bucket,
-        policy.ctx.output.key_prefix,
-        start_date)
+    if policy.ctx.output_path.startswith('s3'):
+        records = record_set(
+            policy.session_factory,
+            policy.ctx.output.bucket,
+            policy.ctx.output.key_prefix,
+            start_date)
+    else:
+        records = fs_record_set(policy.ctx.output_path, policy.name)
 
     rows = formatter.to_csv(records)
 
@@ -163,6 +168,21 @@ RECORD_TYPE_FORMATTERS = {
 }
 
 
+def fs_record_set(output_path, policy_name):
+    record_path = os.path.join(output_path, 'resources.json')
+    
+    if not os.path.exists(record_path):
+        return []
+    
+    mdate = datetime.fromtimestamp(
+        os.stat(record_path).st_ctime)
+    
+    with open(record_path) as fh:
+        records = json.load(fh)
+        [r.__setitem__('MaidDate', mdate) for r in records]
+        return records
+
+    
 def record_set(session_factory, bucket, key_prefix, start_date):
     """Retrieve all s3 records for the given policy output url
 

@@ -96,9 +96,9 @@ def update_tags(asg, new_t):
 class PropagateTags(Tag):
     """Propagate tags to an asg instances.
 
-    In AWS changing an asg tag does propagate to instances.
+    In AWS changing an asg tag does not propagate to instances.
 
-    This exists to do that, and can also trim older tags
+    This action exists to do that, and can also trim older tags
     not present on the asg anymore that are present on instances.
     """
     def validate(self):
