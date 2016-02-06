@@ -8,9 +8,12 @@ Structured and Unstructured per action and resource
 - Policy Resource Records
 - Policy Action Records
 - CloudWatch Metrics
+- CloudWatch Logs
 
 S3 Bucket Location
 ==================
+
+For structured and unstructured data, we store to s3.
 
 s3://cloud-maid-sts-digital-dev/
 
@@ -25,10 +28,10 @@ policies
       - <file.json.gz>
       - maid
 
-Actions have output / or even state 
+Actions have output / or even state to store
+in local directories that is then uploaded.
 
-
-Every policy gets a temp directory
+Every policy gets a temp directory for fs output.
 
 - maid-run.log.gz
 
@@ -44,6 +47,7 @@ import os
 
 from boto3.s3.transfer import S3Transfer
 from janitor.utils import local_session
+from janitor.log import CloudWatchLogHandler
 
 
 log = logging.getLogger('maid.output')
@@ -116,8 +120,50 @@ class NullMetricsOutput(MetricsOutput):
             l += " %s:%s" % (d['Name'].lower(), d['Value'].lower())
         return l
 
+
+class LogOutput(object):
+
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     
-class FSOutput(object):
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    def get_handler(self):
+        raise NotImplementedError()
+    
+    def __enter__(self):
+        log.info("Storing output with %s" % repr(self))
+        self.join_log()
+        return self
+    
+    def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
+        if exc_type is not None:
+            log.exception("Error while executing policy")
+        self.leave_log()
+
+    def join_log(self):
+        self.handler = self.get_handler()
+        self.handler.setLevel(logging.DEBUG)
+        self.handler.setFormatter(logging.Formatter(self.log_format))
+        mlog = logging.getLogger('maid')
+        mlog.addHandler(self.handler)
+
+    def leave_log(self):
+        mlog = logging.getLogger('maid')
+        mlog.removeHandler(self.handler)        
+        self.handler.flush()
+        self.handler.close()
+
+    
+class CloudWatchLogOutput(LogOutput):
+
+    log_format = '%(levelname)s - %(name)s - %(message)s'    
+
+    def get_handler(self):
+        return CloudWatchLogHandler()
+
+
+class FSOutput(LogOutput):
 
     @staticmethod
     def select(path):
@@ -126,41 +172,19 @@ class FSOutput(object):
         else:
             return DirectoryOutput
         
-    def __init__(self, ctx):
-        self.ctx = ctx
-        self.root_dir = self.ctx.output_path or tempfile.mkdtemp()
-        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
-        self.handler = None        
-
-    def __enter__(self):
-        log.info("Storing output to %s" % self.root_dir)
-        self.join_log()
-        return self
-
     @staticmethod
     def join(*parts):
         return os.path.join(*parts)
     
-    def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
-        if exc_type is not None:
-            log.exception("Error while executing policy")
-        self.leave_log()
+    def __init__(self, ctx):
+        super(FSOutput, self).__init__(ctx)
+        self.root_dir = self.ctx.output_path or tempfile.mkdtemp()
+        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
 
-    def join_log(self):
-        self.handler = logging.FileHandler(
+    def get_handler(self):
+        return logging.FileHandler(
             os.path.join(self.root_dir, 'maid-run.log'))
-        self.handler.setLevel(logging.DEBUG)
-        self.handler.setFormatter(
-            logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        mlog = logging.getLogger('maid')
-        mlog.addHandler(self.handler)
-
-    def leave_log(self):
-        self.handler.flush()
-        mlog = logging.getLogger('maid')
-        mlog.removeHandler(self.handler)
-        
+    
     def compress(self):
         # Compress files individually so thats easy to walk them, without
         # downloading tar and extracting.
