@@ -35,6 +35,11 @@ class BaseTest(unittest.TestCase):
         return policy.load(e, t.name)
 
     
+def placebo_dir(name):
+    return os.path.join(
+        os.path.dirname(__file__), 'data', 'placebo', name)
+
+
 def load_data(file_name, state=None, **kw):
     data = json.loads(open(
         os.path.join(
