@@ -15,6 +15,8 @@ def _default_options(p):
                    help="Role to assume")
     p.add_argument("-c", "--config", required=True,
                    help="Policy Configuration File")
+    p.add_argument("-l", "--log-group", default=None,
+                   help="Cloudwatch Log Group to send policy logs")    
     p.add_argument("-p", "--policies", default=None,
                    help="Only execute named/matched policies")
     p.add_argument("-v", "--verbose", action="store_true",

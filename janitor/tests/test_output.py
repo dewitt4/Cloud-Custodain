@@ -59,7 +59,7 @@ class S3OutputTest(unittest.TestCase):
         # Reset logging.manager back to nose configured value
         l.manager.disable = v
         
-        with open(output.handler.stream.name) as fh:
+        with open(os.path.join(output.root_dir, "maid-run.log")) as fh:
             content = fh.read().strip()
             self.assertTrue(content.endswith('hello world'))
 

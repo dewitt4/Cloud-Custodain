@@ -35,6 +35,11 @@ class BaseTest(unittest.TestCase):
         return policy.load(e, t.name)
 
     
+def placebo_dir(name):
+    return os.path.join(
+        os.path.dirname(__file__), 'data', 'placebo', name)
+
+
 def load_data(file_name, state=None, **kw):
     data = json.loads(open(
         os.path.join(
@@ -69,6 +74,7 @@ class Config(Bag):
             'region': "us-east-1",
             'cache': '',
             'profile': None,
+            'log_group': None,
             'metrics_enabled': False,
             'output_dir': 's3://test-example/foo',
             'cache_period': 0,
