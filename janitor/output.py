@@ -166,6 +166,12 @@ class CloudWatchLogOutput(LogOutput):
             session_factory=lambda x=None: self.ctx.session_factory(
                 assume=False))
 
+    def __repr__(self):
+        return "<%s to group:%s stream:%s>" % (
+            self.__class__.__name__,
+            self.ctx.options.log_group,
+            self.ctx.policy.name)
+
     
 class FSOutput(LogOutput):
 
@@ -183,7 +189,6 @@ class FSOutput(LogOutput):
     def __init__(self, ctx):
         super(FSOutput, self).__init__(ctx)
         self.root_dir = self.ctx.output_path or tempfile.mkdtemp()
-        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')
 
     def get_handler(self):
         return logging.FileHandler(
@@ -211,7 +216,10 @@ class DirectoryOutput(FSOutput):
             if not os.path.exists(self.ctx.output_path):
                 os.makedirs(self.ctx.output_path)
 
+    def __repr__(self):
+        return "<%s to dir:%s>" % (self.__class__.__name__, self.root_dir)
 
+    
 class S3Output(FSOutput):
     """
     Usage:
@@ -227,10 +235,17 @@ class S3Output(FSOutput):
     
     def __init__(self, ctx):
         super(S3Output, self).__init__(ctx)
+        self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')        
         self.s3_path, self.bucket, self.key_prefix = self.parse_s3(
             self.ctx.output_path)
         self.root_dir = tempfile.mkdtemp()
         self.transfer = None
+
+    def __repr__(self):
+        return "<%s to bucket:%s prefix:%s>" % (
+            self.__class__.__name__,
+            self.bucket,
+            "%s/%s" % (self.key_prefix, self.date_path))
 
     @staticmethod
     def join(*parts):

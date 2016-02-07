@@ -122,7 +122,7 @@ def assemble_bucket(item):
                 methods.append((m, k))
                 continue
             else:
-                log.error("Bucket:%s unable to invoke method:%s error:%s " % (
+                log.warning("Bucket:%s unable to invoke method:%s error:%s " % (
                     b['Name'], m, e.response['Error']['Message']))
                 return None
         # As soon as we learn location (which generally works)

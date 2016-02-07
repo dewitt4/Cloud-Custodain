@@ -1,4 +1,5 @@
 import time
+import threading
 
 from janitor.output import FSOutput, MetricsOutput, CloudWatchLogOutput
 
@@ -41,6 +42,5 @@ class ExecutionContext(object):
         self.metrics.flush()
         if self.cloudwatch_logs:
             self.cloudwatch_logs.__exit__(exc_type, exc_value, exc_traceback)
+            self.cloudwatch_logs = None
         self.output.__exit__(exc_type, exc_value, exc_traceback)
-
-            

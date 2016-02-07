@@ -62,6 +62,10 @@ class CloudWatchLogHandler(logging.Handler):
         # queue/threading overhead
         self.buf = []
         self.last_seen = time.time()
+        # Logging module internally is tracking all handlers, for final
+        # cleanup atexit, maid is a bit more explicitly scoping shutdown to
+        # each policy, so use a sentinel value to avoid deadlocks.
+        self.shutdown = False
         
         try:
             self.session_factory().client(
@@ -96,17 +100,23 @@ class CloudWatchLogHandler(logging.Handler):
     
     def flush(self):
         """Ensure all logging output has been flushed."""
+        if self.shutdown:
+            return
         self.flush_buffers(force=True)
         self.queue.put(FLUSH_MARKER)
         self.queue.join()
         
     def close(self):
+        if self.shutdown:
+            return
+        self.shutdown = True        
         self.queue.put(SHUTDOWN_MARKER)
         self.queue.join()
         for t in self.threads:
             t.join()
         self.threads = []
 
+        
     ## End logging.Handler API
             
     def format_message(self, msg):

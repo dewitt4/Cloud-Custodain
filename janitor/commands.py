@@ -27,7 +27,7 @@ def run(options, policy_collection):
             # Output does an exception log
             log.warning("Error while executing policy %s, continuing" % (
                 policy.name))
-
+    
             
 def report(options, policy_collection):
     log = logging.getLogger('maid.report')
