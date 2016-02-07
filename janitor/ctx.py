@@ -1,6 +1,7 @@
 import time
+import threading
 
-from janitor.output import FSOutput, MetricsOutput
+from janitor.output import FSOutput, MetricsOutput, CloudWatchLogOutput
 
 
 class ExecutionContext(object):
@@ -10,7 +11,9 @@ class ExecutionContext(object):
         self.policy = policy
         self.options = options
         self.session_factory = session_factory
-
+        self.cloudwatch_logs = None
+        self.start_time = None
+        
         metrics_enabled = getattr(options, 'metrics_enabled', None)
         factory = MetricsOutput.select(metrics_enabled)
         self.metrics = factory(self)
@@ -21,7 +24,8 @@ class ExecutionContext(object):
         self.output_path = factory.join(output_dir, policy.name)
         self.output = factory(self)
 
-        self.start_time = None
+        if options.log_group:
+            self.cloudwatch_logs = CloudWatchLogOutput(self)
 
     @property
     def log_dir(self):
@@ -29,11 +33,14 @@ class ExecutionContext(object):
 
     def __enter__(self):
         self.output.__enter__()
+        if self.cloudwatch_logs:
+            self.cloudwatch_logs.__enter__()
         self.start_time = time.time()
         return self
 
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
-        self.metrics.flush()        
+        self.metrics.flush()
+        if self.cloudwatch_logs:
+            self.cloudwatch_logs.__exit__(exc_type, exc_value, exc_traceback)
+            self.cloudwatch_logs = None
         self.output.__exit__(exc_type, exc_value, exc_traceback)
-
-            
