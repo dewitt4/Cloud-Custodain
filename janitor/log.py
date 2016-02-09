@@ -66,7 +66,6 @@ class CloudWatchLogHandler(logging.Handler):
         # cleanup atexit, maid is a bit more explicitly scoping shutdown to
         # each policy, so use a sentinel value to avoid deadlocks.
         self.shutdown = False
-        
         try:
             self.session_factory().client(
                 'logs').create_log_group(logGroupName=self.log_group)
@@ -116,7 +115,6 @@ class CloudWatchLogHandler(logging.Handler):
             t.join()
         self.threads = []
 
-        
     ## End logging.Handler API
             
     def format_message(self, msg):
