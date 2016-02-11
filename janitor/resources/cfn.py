@@ -2,7 +2,7 @@ import itertools
 import logging
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, AgeFilter
+from janitor.filters import FilterRegistry
 
 from janitor.manager import ResourceManager, resources
 from janitor.utils import local_session
@@ -26,12 +26,11 @@ class CloudFormation(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('cloudformation')
-        query = self.resource_query()  # FIXME: Not used
         self.log.info("Querying cloudformation")
         p = c.get_paginator('describe_stacks')
         results = p.paginate()
-        images = list(itertools.chain(*[rp['Stacks'] for rp in results]))
-        return self.filter_resources(images)
+        stacks = list(itertools.chain(*[rp['Stacks'] for rp in results]))
+        return self.filter_resources(stacks)
 
 
 @actions.register('delete')

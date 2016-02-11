@@ -172,7 +172,7 @@ class CloudWatchLogOutput(LogOutput):
             self.ctx.options.log_group,
             self.ctx.policy.name)
 
-    
+
 class FSOutput(LogOutput):
 
     @staticmethod

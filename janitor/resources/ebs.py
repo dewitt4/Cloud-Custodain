@@ -4,7 +4,8 @@ import logging
 from concurrent.futures import as_completed
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, ValueFilter, ANNOTATION_KEY
+from janitor.filters import (
+    FilterRegistry, ValueFilter, ANNOTATION_KEY, MarkedForOp)
 
 from janitor.manager import ResourceManager, resources
 from janitor.utils import local_session, set_annotation, query_instances
@@ -14,6 +15,8 @@ log = logging.getLogger('maid.ebs')
 
 filters = FilterRegistry('ebs.filters')
 actions = ActionRegistry('ebs.actions')
+
+filters.register('marked-for-op', MarkedForOp)
 
 
 @resources.register('ebs')
@@ -28,11 +31,17 @@ class EBS(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('ec2')
-        query = self.resource_query()  # FIXME: This is always []. What's going on?
+        query = self.resource_query()
+        if self._cache.load():
+            vols = self._cache.get({'resource': 'ebs', 'q': query})
+            if  vols is not None:
+                self.log.debug("Using cached ebs: %d" % len(vols))
+                return self.filter_resources(vols)
         self.log.info("Querying ebs volumes")
         p = c.get_paginator('describe_volumes')
         results = p.paginate(Filters=query)
         volumes = list(itertools.chain(*[rp['Volumes'] for rp in results]))
+        self._cache.save({'resource': 'ebs', 'q': query}, volumes)
         return self.filter_resources(volumes)
 
     
@@ -94,33 +103,13 @@ class CopyInstanceTags(BaseAction):
             for i in r['Instances']:
                 if i['InstanceId'] == instance_id:
                     found = i
-                    break        
+                    break
         if not found:
             log.debug("Could not find instance %s for volume %s" % (
                 instance_id, volume['VolumeId']))
             return
 
-        copy_tags = []
-        extant_tags = dict([
-            (t['Key'], t['Value']) for t in volume.get('Tags', [])])
-        
-        for t in found['Tags']:
-            if t['Key'] in extant_tags:
-                continue
-            if t['Key'].startswith('aws:'):
-                continue
-            copy_tags.append(t)
-    
-        copy_tags.append(
-            {'Key': 'LastAttachTime',
-             'Value': attachment['AttachTime'].isoformat()})
-        copy_tags.append(
-            {'Key': 'LastAttachInstance', 'Value': attachment['InstanceId']})
-
-        # Don't add tags if we're already current
-        if 'LastAttachInstance' in extant_tags \
-           and extant_tags['LastAttachInstance'] == attachment['InstanceId']:
-            return
+        copy_tags = self.get_volume_tags(volume, found, attachment)
 
         # Can't add more tags than the resource supports
         if len(copy_tags) > 10:
@@ -129,13 +118,61 @@ class CopyInstanceTags(BaseAction):
                 volume['VolumeId'],
                 attachment['InstanceId']))
             return
+        elif not copy_tags:
+            return
         
         client.create_tags(
             Resources=[volume['VolumeId']],
             Tags=copy_tags,
             DryRun=self.manager.config.dryrun)
 
+    def get_volume_tags(self, volume, instance, attachment):
+        only_tags = self.data.get('tags', [])  # specify which tags to copy
+        copy_tags = []
+        extant_tags = dict([
+            (t['Key'], t['Value']) for t in volume.get('Tags', [])])
+        
+        for t in instance['Tags']:
+            if only_tags and not t['Key'] in only_tags:
+                continue
+            if t['Key'] in extant_tags and t['Value'] == extant_tags[t['Key']]:
+                continue
+            if t['Key'].startswith('aws:'):
+                continue
+            copy_tags.append(t)
 
+        # Don't add attachment tags if we're already current
+        if 'LastAttachInstance' in extant_tags \
+           and extant_tags['LastAttachInstance'] == attachment['InstanceId']:
+            return copy_tags
+            
+        copy_tags.append(
+            {'Key': 'LastAttachTime',
+             'Value': attachment['AttachTime'].isoformat()})
+        copy_tags.append(
+            {'Key': 'LastAttachInstance', 'Value': attachment['InstanceId']})
+        return copy_tags
+
+
+@actions.register('mark-for-op')
+class MarkForOp(BaseAction):
+
+    def validate(self):
+        key = self.data.get('op')
+        if not key:
+            raise ValueError(
+                "action:mark-for-op requires op specification")
+
+    def process(self, volumes):
+        tag = self.data.get('tag', 'maid_status')
+        msg_tmpl = self.data.get(
+            'msg',
+            'Unused volume will be removed: {op}@{stop_date}')
+        
+        with self.executor_factory(max_workers=5) as w:
+            futures = {}
+
+            
 @actions.register('encrypt-instance-volumes')
 class EncryptInstanceVolumes(BaseAction):
     """Encrypt extant volumes attached to an instance
@@ -275,7 +312,7 @@ class EncryptInstanceVolumes(BaseAction):
         # Wait on encrypted volume creation
         self.wait_on_resource(ec2, volume_id=results['VolumeId'])
         
-        # Delete transient snapshots        
+        # Delete transient snapshots
         for sid in transient_snapshots:
             ec2.delete_snapshot(SnapshotId=sid)
         return results['VolumeId']

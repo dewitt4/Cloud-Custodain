@@ -1,14 +1,13 @@
-from dateutil.parser import parse as parse_date
 from dateutil.tz import tzutc
 
 from datetime import datetime, timedelta
 import itertools
-import logging
 import operator
 
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter, AgeFilter, OPERATORS
+from janitor.filters import (
+    FilterRegistry, Filter, AgeFilter, OPERATORS, MarkedForOp)
 from janitor.manager import ResourceManager, resources
 from janitor.offhours import Time, OffHour, OnHour
 from janitor import utils
@@ -19,6 +18,7 @@ actions = ActionRegistry('ec2.actions')
 
 
 filters.register('time', Time)
+filters.register('marked-for-op', MarkedForOp)
 
 
 @resources.register('ec2')
@@ -89,7 +89,6 @@ class EC2(ResourceManager):
         return qf
 
 
-
 class StateTransitionFilter(object):
     """Filter instances by state.
 
@@ -148,49 +147,8 @@ class TagCountFilter(Filter):
 class InstanceAgeFilter(AgeFilter):
 
     date_attribute = "LaunchTime"
-    
                 
-@filters.register('marked-for-op')
-class MarkedForOp(Filter):
 
-    log = logging.getLogger("maid.ec2.filters.marked_for_op")
-
-    current_date = None
-
-    def __call__(self, i):
-        tag = self.data.get('tag', 'maid_status')
-        op = self.data.get('op', 'stop')
-        skew = self.data.get('skew', 0)
-        
-        v = None
-        for n in i.get('Tags', ()):
-            if n['Key'] == tag:
-                v = n['Value']
-                break
-
-        if v is None:
-            return False
-        if not ':' in v or not '@' in v:
-            return False
-
-        msg, tgt = v.rsplit(':', 1)
-        action, action_date_str = tgt.strip().split('@', 1)
-
-        if action != op:
-            return False
-        
-        try:
-            action_date = parse_date(action_date_str)
-        except:
-            self.log.warning("%s could not parse tag:%s value:%s" % (
-                i['InstanceId'], tag, v))
-
-        if self.current_date is None:
-            self.current_date = datetime.now()
-
-        return self.current_date >= (action_date - timedelta(skew))
-
-    
 @actions.register('tag')    
 @actions.register('mark')        
 class Mark(BaseAction):
