@@ -33,7 +33,6 @@ OPERATORS = {
     'lt': operator.lt}
 
 
-
 class FilterRegistry(PluginRegistry):
 
     def __init__(self, *args, **kw):
@@ -224,3 +223,44 @@ class AgeFilter(Filter):
             v = parse(v)
         return self.threshold_date > v
 
+
+class MarkedForOp(Filter):
+
+    log = logging.getLogger("maid.filters.marked_for_op")
+
+    current_date = None
+
+    def __call__(self, i):
+        tag = self.data.get('tag', 'maid_status')
+        op = self.data.get('op', 'stop')
+        skew = self.data.get('skew', 0)
+        
+        v = None
+        for n in i.get('Tags', ()):
+            if n['Key'] == tag:
+                v = n['Value']
+                break
+
+        if v is None:
+            return False
+        if not ':' in v or not '@' in v:
+            return False
+
+        msg, tgt = v.rsplit(':', 1)
+        action, action_date_str = tgt.strip().split('@', 1)
+
+        if action != op:
+            return False
+        
+        try:
+            action_date = parse(action_date_str)
+        except:
+            self.log.warning("could not parse tag:%s value:%s on" % (
+                tag, v, i))
+
+        if self.current_date is None:
+            self.current_date = datetime.now()
+
+        return self.current_date >= (action_date - timedelta(skew))
+
+    

@@ -34,8 +34,8 @@ Operationally we can work in either of two modes
    coalescing on address, and sending outbound email.
 
 
-Usage
------
+Proposed Usage
+--------------
 
  - policies:
     - name: ec2-tag-compliance
@@ -63,6 +63,9 @@ period we'll do outbound formatting and processing
 
 
 Email Message Structure
+iii
+
+
 -----------------------
 
 We also want direct formatted emails, these are not batched
@@ -209,7 +212,7 @@ def setup_parser():
     parser.add_argument(
         '-d', '--database-path')    
     parser.add_argument(
-        '-f', '--from-addr', default="no-reply-cloud-maid@capitalone.com")    
+        '-f', '--from-addr', default="cloudmaid@capitalone.com")    
 
     return parser
 

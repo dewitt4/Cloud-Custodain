@@ -8,7 +8,7 @@ import logging
 import itertools
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry
+from janitor.filters import FilterRegistry, MarkedForOp
 
 from janitor.manager import ResourceManager, resources
 from janitor.offhours import Time, OffHour, OnHour
@@ -23,6 +23,7 @@ actions = ActionRegistry('asg.actions')
 filters.register('time', Time)
 filters.register('offhour', OffHour)
 filters.register('onhour', OnHour)
+filters.register('marked-for-op', MarkedForOp)
 
 
 @resources.register('asg')
