@@ -1,3 +1,5 @@
+from dateutil.tz import tzutc
+from datetime import datetime, timedelta
 import itertools
 import logging
 
@@ -8,7 +10,8 @@ from janitor.filters import (
     FilterRegistry, ValueFilter, ANNOTATION_KEY, MarkedForOp)
 
 from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session, set_annotation, query_instances
+from janitor.utils import (
+    local_session, set_annotation, query_instances, chunks)
 
 
 log = logging.getLogger('maid.ebs')
@@ -154,6 +157,31 @@ class CopyInstanceTags(BaseAction):
         return copy_tags
 
 
+@actions.register('unmark')
+class UnMark(BaseAction):
+
+    def process(self, volumes):
+        tags = self.data.get('tags', ['maid_status'])
+        with self.executor_factory(max_workers=2) as w:
+            futures = []
+            for vol_set in chunks(volumes, size=100):
+                futures.append(
+                    w.submit(self.process_volume_set, vol_set, tags))
+
+        for f in as_completed(futures):
+            if f.exception():
+                log.error(
+                    "Exception removing tags: %s on volset: %s \n %s" % (
+                        tags, vol_set, f.exception()))
+
+    def process_volume_set(self, vol_set, tag_keys):
+        client = local_session(self.manager.session_factory).client('ec2')
+        client.delete_tags(
+            Resources=[v['VolumeId'] for v in vol_set],
+            Tags={'Key': k for k in tag_keys},
+            DryRun=self.manager.config.dryrun)
+
+
 @actions.register('mark-for-op')
 class MarkForOp(BaseAction):
 
@@ -164,15 +192,40 @@ class MarkForOp(BaseAction):
                 "action:mark-for-op requires op specification")
 
     def process(self, volumes):
-        tag = self.data.get('tag', 'maid_status')
         msg_tmpl = self.data.get(
             'msg',
             'Unused volume will be removed: {op}@{stop_date}')
-        
-        with self.executor_factory(max_workers=5) as w:
-            futures = {}
+        tag = self.data.get('tag', 'maid_status')
+        op = self.data.get('op', 'delete')
+        date = self.data.get('days', 4)
 
-            
+        n = datetime.now(tz=tzutc())
+        stop_date = n + timedelta(days=date)
+        
+        msg = msg_tmpl.format(
+            op=op, stop_date=stop_date.strftime('%Y/%m/%d'))
+        tags = [{'Key': tag, 'Value': msg}]
+
+        with self.executor_factory(max_workers=2) as w:
+            futures = []
+            for vol_set in chunks(volumes, size=100):
+                futures.append(
+                    w.submit(self.process_volume_set, vol_set, tags))
+
+        for f in as_completed(futures):
+            if f.exception():
+                log.error(
+                    "Exception removing tags: %s on volset: %s \n %s" % (
+                        tags, vol_set, f.exception()))
+
+    def process_volume_set(self, vol_set, tags):
+        client = local_session(self.manager.session_factory).client('ec2')        
+        client.create_tags(
+            Resources=[v['VolumeId'] for v in vol_set],
+            Tags=tags,
+            DryRun=self.manager.config.dryrun)
+
+
 @actions.register('encrypt-instance-volumes')
 class EncryptInstanceVolumes(BaseAction):
     """Encrypt extant volumes attached to an instance
@@ -207,6 +260,7 @@ class EncryptInstanceVolumes(BaseAction):
             futures = {}
             for instance_id, vol_set in instance_vol_map.items():
                 futures[w.submit(self.process_volume, instance_id, vol_set)] = instance_id
+                
             for f in as_completed(futures):
                 if f.exception():
                     instance_id = futures[f]
@@ -329,6 +383,10 @@ class EncryptInstanceVolumes(BaseAction):
         # due to overly long resource creation is complex to unwind,
         # with multi-volume instances. Wait up to three times (actual
         # wait time is a per resource type configuration.
+
+        # Note we wait for all resource creation before attempting to
+        # patch an instance, so even on resource creation failure, the
+        # instance is not modified
         try:
             return self._wait_on_resource(*args, **kw)
         except Exception:

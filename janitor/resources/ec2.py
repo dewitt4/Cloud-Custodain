@@ -1,5 +1,4 @@
 from dateutil.tz import tzutc
-
 from datetime import datetime, timedelta
 import itertools
 import operator
