@@ -385,10 +385,13 @@ class ScanBucket(BucketActionBase):
             }
         }
 
-    def get_bucket_op(self, b, op_name):
-        bucket_style = (
+    def get_bucket_style(self, b):
+        return (
             b.get('Versioning', {'Status': ''}).get('Status') == 'Enabled'
             and 'versioned' or 'standard')
+    
+    def get_bucket_op(self, b, op_name):
+        bucket_style = self.get_bucket_style(b)
         op = self.bucket_ops[bucket_style][op_name]
         if op_name == 'key_processor':
             return getattr(self, op)
@@ -403,8 +406,8 @@ class ScanBucket(BucketActionBase):
 
     def process_bucket(self, b):
         log.info(
-            "Scanning bucket:%s visitor:%s" % (
-                b['Name'], self.__class__.__name__))
+            "Scanning bucket:%s visitor:%s style:%s" % (
+                b['Name'], self.__class__.__name__, self.get_bucket_style(b)))
         s = self.manager.session_factory()
         s3 = bucket_client(s, b)
 
@@ -427,15 +430,18 @@ class ScanBucket(BucketActionBase):
     def _process_bucket(self, b, p, key_log, w):
         content_key = self.get_bucket_op(b, 'contents_key')
         count = 0
-        
         for key_set in p:
+            count += len(key_set.get(content_key, []))
+
             # Empty bucket check
-            if not content_key in key_set:
+            if not content_key in key_set and not key_set['IsTruncated']:
                 return {'Bucket': b['Name'],
                         'Remediated': key_log.count,
                         'Count': count}
             futures = []
-            for batch in chunks(key_set[content_key], size=100):
+            for batch in chunks(key_set.get(content_key, []), size=100):
+                if not batch:
+                    continue
                 futures.append(w.submit(self.process_chunk, batch, b))
 
             for f in as_completed(futures):
@@ -446,8 +452,6 @@ class ScanBucket(BucketActionBase):
                 r = f.result()
                 if r:
                     key_log.add(r)
-
-            count += len(key_set[content_key])
 
             # Log completion at info level, progress at debug level
             if key_set['IsTruncated']:
@@ -537,13 +541,14 @@ class EncryptExtantKeys(ScanBucket):
             return k
 
         storage_class = key['StorageClass']
+        
         if storage_class == 'GLACIER':
             if not 'Restore' in info:
                 # This takes multiple hours, we let the next maid
                 # run take care of followups.
                 s3.restore_object(
                     Bucket=bucket_name,
-                    Key=key,
+                    Key=k,
                     RestoreRequest={'Days': 30})
                 return False
             elif not restore_complete(info['Restore']):
@@ -575,7 +580,7 @@ class EncryptExtantKeys(ScanBucket):
 
         if key['IsLatest']:
             r = self.process_key(s3, key, bucket_name, info)
-            # Glacier request, wait till we have the restored object
+            # Glacier request processing, wait till we have the restored object
             if not r:
                 return r
         s3.delete_object(
