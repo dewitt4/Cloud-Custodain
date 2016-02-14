@@ -73,6 +73,8 @@ proposed syntax
 .. code-block:: yaml
 
    policies:
+
+     # Cloud Watch Events over CloudTrail api calls (1-15m trailing)
      - name: s3-encrypted-bucket-policy
        mode: 
          type: cloudtrail
@@ -88,7 +90,8 @@ proposed syntax
        actions:
          # Apply encryption required policy
          - encryption-policy
-   
+
+     # On EC2 Instance state events (real time, seconds)
      - name: ec2-require-encrypted-volumes
        mode:
          type: ec2-instance-state
@@ -105,31 +108,21 @@ proposed syntax
          # currently we have a poll policy that
          # handles this.
          - terminate
-   
-     - name: ec2-require-tag-compliance
+
+     # Periodic Function
+     # Syntax for scheduler per http://goo.gl/x3oMQ4
+     # Supports both rate per unit time and cron expressions
+     - name: s3-bucket-check
+       resource: s3
        mode:
-         type: ec2-instance-state
-         events:
-         - running
-       filters:
+         type: periodic
+         schedule: "rate(1 day)"
+
 
 alternatively we could associate relevant events to some
 actions, like encryption-keys with a list of events, and
 encryption-policy with a list of events.
   
-Event Sources
--------------
-
-We need to distribute cloud-watch events api json atm for install
-
-
-Todo
-----
-
-Maid additionally could use lambda execution for resource intensive policy
-actions, using dynamodb for results aggregation, and a periodic result checker,
-alternatively sqs with periodic aggregator, or when lambda is vpc accessible
-elasticache.
 """
 
 import abc
@@ -209,6 +202,14 @@ TODO:
    separate versions, the policy version and the maid code version.
  - With s3 for the function code, we can track this information better
    both via metadata and/or versioning.
+
+Todo
+----
+
+Maid additionally could use lambda execution for resource intensive policy
+actions, using dynamodb for results aggregation, and a periodic result checker,
+alternatively sqs with periodic aggregator, or when lambda is vpc accessible
+elasticache.
 """
 
 
@@ -631,6 +632,8 @@ class CloudWatchEventSource(object):
             payload['source'] = 'aws.ec2'
             payload['detail-type'] = ["EC2 Instance State-change Notifications"]
             payload['detail'] = {"state": self.get('events', [])}
+        elif event_type == 'periodic':
+            pass
         else:
             raise ValueError("Unknown lambda event source type: %s" % event_type)
         if not payload:
