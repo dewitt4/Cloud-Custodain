@@ -3,7 +3,8 @@ import unittest
 from dateutil.parser import parse as date_parse
 
 from janitor.report import RECORD_TYPE_FORMATTERS
-from janitor.tests.common import load_data
+from .common import load_data
+
 
 class TestEC2Report(unittest.TestCase):
     def setUp(self):

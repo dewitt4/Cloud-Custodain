@@ -3,7 +3,7 @@ import mock
 
 from janitor.resources.elb import ELB
 
-from janitor.tests.common import BaseTest
+from .common import BaseTest
 
 
 class ResourceManagerTest(BaseTest):

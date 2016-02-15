@@ -3,7 +3,7 @@ from dateutil import zoneinfo
 
 from mock import mock
 
-from common import BaseTest, instance
+from .common import BaseTest, instance
 
 from janitor.offhours import OffHour, OnHour
 

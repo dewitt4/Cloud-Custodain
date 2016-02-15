@@ -3,7 +3,7 @@ import unittest
 import logging
 
 from janitor.log import CloudWatchLogHandler
-from janitor.tests.common import BaseTest
+from .common import BaseTest
 
 
 class LogTest(BaseTest):

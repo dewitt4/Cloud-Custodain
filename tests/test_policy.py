@@ -4,8 +4,7 @@ import tempfile
 from janitor import policy, manager
 from janitor.resources.ec2 import EC2
 
-from janitor.tests.common import BaseTest, Config
-
+from .common import BaseTest, Config
 
 
 class DummyResource(manager.ResourceManager):
@@ -37,7 +36,6 @@ class DummyResource(manager.ResourceManager):
         return [_a(p1), _a(p2)]
     
         
-
 class TestPolicy(BaseTest):
 
     def test_policy_name_filtering(self):

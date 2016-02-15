@@ -7,10 +7,10 @@ import tempfile
 from unittest import TestCase
 
 from janitor.resources.s3 import (
-    EncryptedPrefix,
-    NoGlobalGrants,
-    EncryptionRequiredPolicy,
-    EncryptExtantKeys,
+#    EncryptedPrefix,
+#    NoGlobalGrants,
+#    EncryptionRequiredPolicy,
+#    EncryptExtantKeys,
     BucketScanLog,
     restore_complete
 )

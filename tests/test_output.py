@@ -9,7 +9,7 @@ import os
 from janitor.ctx import ExecutionContext
 from janitor.output import MetricsOutput, S3Output
 
-from janitor.tests.common import Config, Bag
+from .common import Config, Bag
 
 
 class MetricsOutput(unittest.TestCase):

@@ -5,7 +5,7 @@ import zipfile
 
 from janitor.mu import maid_archive, LambdaManager, PolicyLambda
 from janitor.policy import Policy
-from janitor.tests.common import BaseTest, Config
+from .common import BaseTest, Config
 
 
 class PolicyLambdaProvision(BaseTest):

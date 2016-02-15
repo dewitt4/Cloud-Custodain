@@ -1,6 +1,6 @@
 from janitor.ctx import ExecutionContext
 from janitor.resources.ec2 import EC2, Mark
-from janitor.tests.common import BaseTest, instance, Bag, Config
+from .common import BaseTest, instance, Bag, Config
 
 
 class TestEC2Manager(BaseTest):
