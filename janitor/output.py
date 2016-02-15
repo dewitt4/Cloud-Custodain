@@ -46,7 +46,7 @@ import tempfile
 import os
 
 from boto3.s3.transfer import S3Transfer
-from janitor.utils import local_session
+from janitor.utils import local_session, parse_s3
 from janitor.log import CloudWatchLogHandler
 
 
@@ -236,7 +236,7 @@ class S3Output(FSOutput):
     def __init__(self, ctx):
         super(S3Output, self).__init__(ctx)
         self.date_path = datetime.datetime.now().strftime('%Y-%m-%d-%H')        
-        self.s3_path, self.bucket, self.key_prefix = self.parse_s3(
+        self.s3_path, self.bucket, self.key_prefix = parse_s3(
             self.ctx.output_path)
         self.root_dir = tempfile.mkdtemp()
         self.transfer = None
@@ -250,22 +250,7 @@ class S3Output(FSOutput):
     @staticmethod
     def join(*parts):
         return "/".join([s.strip('/') for s in parts])
-    
-    @staticmethod
-    def parse_s3(s3_path):
-        if not s3_path.startswith('s3://'):
-            raise ValueError("invalid s3 path")
-        ridx = s3_path.find('/', 5)
-        if ridx == -1:
-            ridx = None
-        bucket = s3_path[5:ridx]
-        s3_path = s3_path.rstrip('/')
-        if ridx is None:
-            key_prefix = ""
-        else:
-            key_prefix = s3_path[s3_path.find('/', 5):]
-        return s3_path, bucket, key_prefix
-    
+        
     def __exit__(self, exc_type=None, exc_value=None, exc_traceback=None):
         if exc_type is not None:
             log.exception("Error while executing policy")
@@ -293,4 +278,4 @@ class S3Output(FSOutput):
                     
 
 s3_join = S3Output.join
-parse_s3 = S3Output.parse_s3
+

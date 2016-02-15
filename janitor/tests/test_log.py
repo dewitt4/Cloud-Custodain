@@ -1,23 +1,15 @@
-import boto3
-import placebo
 import time
 import unittest
 import logging
 
 from janitor.log import CloudWatchLogHandler
-from janitor.tests.common import placebo_dir
+from janitor.tests.common import BaseTest
 
 
-class LogTest(unittest.TestCase):
+class LogTest(BaseTest):
 
     def test_existing_stream(self):
-        
-        def session_factory():
-            s = boto3.Session()
-            pill = placebo.attach(s, placebo_dir('test_log_existing_stream'))
-            pill.playback()
-            return s
-        
+        session_factory = self.replay_flight_data('test_log_existing_stream')
         handler = CloudWatchLogHandler(session_factory=session_factory)
         log = logging.getLogger("maid")
         log.addHandler(handler)
@@ -31,15 +23,10 @@ class LogTest(unittest.TestCase):
         handler.close()
 
     def test_time_flush(self):
-
-        def session_factory():
-            s = boto3.Session()
-            pill = placebo.attach(s, placebo_dir('test_log_time_flush'))
-            pill.playback()
-            return s
-        
+        session_factory = self.replay_flight_data('test_log_time_flush')
         log = logging.getLogger("test-maid")
-        handler = CloudWatchLogHandler("test-maid-4", "alpha", session_factory=session_factory)
+        handler = CloudWatchLogHandler(
+            "test-maid-4", "alpha", session_factory=session_factory)
         handler.batch_interval = 1
         log.addHandler(handler)
         log.setLevel(logging.DEBUG)

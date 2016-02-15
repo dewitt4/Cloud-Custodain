@@ -1,13 +1,20 @@
 import json
 import inspect
+import logging
 import os
 import unittest
 import shutil
 import tempfile
 import yaml
 
+import boto3
+import placebo
+
 from janitor import policy
 from janitor.ctx import ExecutionContext
+
+logging.getLogger('placebo').setLevel(logging.WARNING)
+logging.getLogger('botocore').setLevel(logging.WARNING)
 
 
 class BaseTest(unittest.TestCase):
@@ -34,6 +41,34 @@ class BaseTest(unittest.TestCase):
             e = Config.empty()
         return policy.load(e, t.name)
 
+    def patch(self, obj, attr, new):
+        old = getattr(obj, attr, None)
+        setattr(obj, attr, new)
+        self.addCleanup(setattr, obj, attr, old)
+    
+    def record_flight_data(self, test_case):
+        test_dir = placebo_dir(test_case)
+        if os.path.exists(test_dir):
+            shutil.rmtree(test_dir)
+        os.makedirs(test_dir)
+
+        session = boto3.Session()
+        pill = placebo.attach(session, test_dir)
+        pill.record()
+        # return session factory
+        return lambda x=None: session
+    
+    def replay_flight_data(self, test_case):
+        test_dir = placebo_dir(test_case)
+        if not os.path.exists(test_dir):
+            raise RuntimeError(
+                "Invalid Test Dir for flight data %s" % test_dir)
+
+        session = boto3.Session()
+        pill = placebo.attach(session, test_dir)
+        pill.playback()
+        return lambda x=None: session
+    
     
 def placebo_dir(name):
     return os.path.join(
