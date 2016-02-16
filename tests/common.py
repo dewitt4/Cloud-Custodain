@@ -28,8 +28,16 @@ class BaseTest(unittest.TestCase):
             policy or Bag({'name':'test-policy'}),
             config)
         return ctx
+
+    def load_policy(self, data, config=None, session_factory=None):
+        config = config or {}
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp_dir)
+        config['output_dir'] = temp_dir
+        conf = Config.empty(**config)
+        return policy.Policy(data, conf, session_factory)
     
-    def load_policy(self, data, config=None):
+    def load_policy_set(self, data, config=None):
         t = tempfile.NamedTemporaryFile()
         t.write(yaml.dump(data, Dumper=yaml.SafeDumper))
         t.flush()

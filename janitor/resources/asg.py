@@ -310,38 +310,11 @@ class Suspend(BaseAction):
         asg_client = session.client('autoscaling')
         asg_client.suspend_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])
-        if self.record_asg_load_balancer(asg_client, asg):
-            asg_client.detach_load_balancers(
-                AutoScalingGroupName=asg['AutoScalingGroupName'],
-                LoadBalancerNames=asg['LoadBalancerNames'])
         ec2_client = session.client('ec2')
         ec2_client.stop_instances(
             InstanceIds=[i['InstanceId'] for i in asg['Instances']])
         
-    def record_asg_load_balancer(self, client, asg):
-        # todo should be idempotent, or we should guard against
-        # multiple invocations on the same asg, by merging values
-        found = None
-        for t in asg.get('Tags', []):
-            if t['Key'] == self.LoadBalancerTagKey:
-                found = t
-                break
-        if not found:
-            return False
-        tvalue = ",".join(asg['LoadBalancerNames'])
-        if found and found['Value'] == tvalue:
-            return
-        elb_tag = {
-            "Key": self.LoadBalancerTagKey,
-            "Value": tvalue,
-            "PropagateAtLaunch": False,
-            "ResourceType": "auto-scaling-group",
-            "ResourceId": asg['AutoScalingGroupName']
-            }
-        client.create_or_update_tags(Tags=[elb_tag])
-        return True
 
-            
 @actions.register('resume')
 class Resume(BaseAction):
     """
@@ -371,20 +344,6 @@ class Resume(BaseAction):
 
         ec2_client.start_instances(
             InstanceIds=[i['InstanceId'] for i in asg['Instances']])
-
-        found = None
-        for t in asg.get('Tags', []):
-            if t['Key'] == self.LoadBalancerTagKey:
-                found = t['Value']
-                break
-        if not found:
-            log.debug("No Load Balancers to attach found on asg:%s" % (
-                asg['AutoScalingGroupName']))
-        else:
-            balancers = found.split(',')
-            asg_client.attach_load_balancers(
-                AutoScalingGroupName=asg['AutoScalingGroupName'],
-                LoadBalancerNames=balancers)
 
         asg_client.resume_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])

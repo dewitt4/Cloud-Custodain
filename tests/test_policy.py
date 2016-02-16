@@ -40,7 +40,7 @@ class TestPolicy(BaseTest):
 
     def test_policy_name_filtering(self):
 
-        collection = self.load_policy(
+        collection = self.load_policy_set(
             {'policies': [
                 {'name': 's3-remediate',
                  'resource': 's3'},
@@ -68,7 +68,7 @@ class TestPolicy(BaseTest):
             ValueError, policy.load, Config.empty(), "/asdf12")
 
     def test_get_resource_manager(self):
-        collection = self.load_policy(
+        collection = self.load_policy_set(
             {'policies': [
                 {'name': 'query-instances',
                  'resource': 'ec2',
@@ -85,7 +85,7 @@ class TestPolicy(BaseTest):
         self.output_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.output_dir)
 
-        collection = self.load_policy(
+        collection = self.load_policy_set(
             {'policies': [
                 {'name': 'process-instances',
                  'resource': 'dummy'}]},
