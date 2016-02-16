@@ -89,4 +89,17 @@ def set_annotation(i, k, v):
     else:
         i[k] = v
 
-    
+
+def parse_s3(s3_path):
+    if not s3_path.startswith('s3://'):
+        raise ValueError("invalid s3 path")
+    ridx = s3_path.find('/', 5)
+    if ridx == -1:
+        ridx = None
+    bucket = s3_path[5:ridx]
+    s3_path = s3_path.rstrip('/')
+    if ridx is None:
+        key_prefix = ""
+    else:
+        key_prefix = s3_path[s3_path.find('/', 5):]
+    return s3_path, bucket, key_prefix        

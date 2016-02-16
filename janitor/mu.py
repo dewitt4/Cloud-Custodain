@@ -73,6 +73,8 @@ proposed syntax
 .. code-block:: yaml
 
    policies:
+
+     # Cloud Watch Events over CloudTrail api calls (1-15m trailing)
      - name: s3-encrypted-bucket-policy
        mode: 
          type: cloudtrail
@@ -88,7 +90,8 @@ proposed syntax
        actions:
          # Apply encryption required policy
          - encryption-policy
-   
+
+     # On EC2 Instance state events (real time, seconds)
      - name: ec2-require-encrypted-volumes
        mode:
          type: ec2-instance-state
@@ -105,31 +108,21 @@ proposed syntax
          # currently we have a poll policy that
          # handles this.
          - terminate
-   
-     - name: ec2-require-tag-compliance
+
+     # Periodic Function
+     # Syntax for scheduler per http://goo.gl/x3oMQ4
+     # Supports both rate per unit time and cron expressions
+     - name: s3-bucket-check
+       resource: s3
        mode:
-         type: ec2-instance-state
-         events:
-         - running
-       filters:
+         type: periodic
+         schedule: "rate(1 day)"
+
 
 alternatively we could associate relevant events to some
 actions, like encryption-keys with a list of events, and
 encryption-policy with a list of events.
   
-Event Sources
--------------
-
-We need to distribute cloud-watch events api json atm for install
-
-
-Todo
-----
-
-Maid additionally could use lambda execution for resource intensive policy
-actions, using dynamodb for results aggregation, and a periodic result checker,
-alternatively sqs with periodic aggregator, or when lambda is vpc accessible
-elasticache.
 """
 
 import abc
@@ -145,11 +138,12 @@ import tempfile
 import uuid
 import zipfile
 
+from boto3.s3.transfer import S3Transfer, TransferConfig
 from botocore.exceptions import ClientError
 
 import janitor
 
-from janitor.policy import load
+from janitor.utils import parse_s3
 
 log = logging.getLogger('maid.lambda')
 
@@ -209,26 +203,25 @@ TODO:
    separate versions, the policy version and the maid code version.
  - With s3 for the function code, we can track this information better
    both via metadata and/or versioning.
+
+Todo
+----
+
+Maid additionally could use lambda execution for resource intensive policy
+actions, using dynamodb for results aggregation, and a periodic result checker,
+alternatively sqs with periodic aggregator, or when lambda is vpc accessible
+elasticache.
 """
 
 
-def resource_handle(resource_type, event, lambda_context):
+def resource_handle(event, lambda_context):
     """
     Generic resource handler dispatch
     """
+    from janitor.policy import load
     policies = load('config.json', format='json')
     resources = None
-    
-    if not 'Records' in event:
-        log.warning("Could not found resource records in event")
-        return
-    
     for p in policies:
-        if p.resource_type != resource_type:
-            continue
-        # Actualize resources once for all policies
-        if resources is None:
-            resources = p.resource_manager.load(event['Records'])
         p.process_event(event, lambda_context, resources)
 
         
@@ -238,23 +231,20 @@ def format_event(evt):
     return io.getvalue()
 
 
-def ec2_instance_state_handle(event, context):
-    log.info("Processing event \n %s", format_event(event))
-    
+def periodic_handle(event, context):
+    log.info("Processing scheduled event\n %s", format_event(event))
+    return resource_handle(event, context)
 
-def cloudtrail_handle(event, context):
-    log.info("Processing event \n %s", format_event(event))
-    source = event.get('source')
-    if not source:
-        raise ValueError("Missing source for cloudtrail event")
-    if not source.startswith('aws.'):
-        raise ValueError("Unknown source for cloudtrail event %s" % source)
-    # TODO this is a bit simplistic we probably need to map both service
-    # and api calls onto maid resource types (ie ec2 encompasses networking
-    # and storage, in addition to instances).
-    ns, resource_type = source.split('.', 1)
-    resource_handle(resource_type, event, context)
     
+def ec2_instance_state_handle(event, context):
+    log.info("Processing instance event \n %s", format_event(event))
+    return resource_handle(event, context)
+
+    
+def cloudtrail_handle(event, context):
+    log.info("Processing trail event \n %s", format_event(event))
+    return resource_handle(event, context)
+
 
 class PythonPackageArchive(object):
     """Creates a zip file for python lambda functions
@@ -263,12 +253,13 @@ class PythonPackageArchive(object):
     directory structure.
     """
     
-    def __init__(self, src_path, virtualenv_dir, skip=None):
+    def __init__(self, src_path, virtualenv_dir, skip=None, lib_filter=None):
         self.src_path = src_path
         self.virtualenv_dir = virtualenv_dir
         self._temp_archive_file = None
         self._zip_file = None
         self._closed = False
+        self.lib_filter = lib_filter
         self.skip = skip
 
     @property
@@ -309,6 +300,8 @@ class PythonPackageArchive(object):
             self.virtualenv_dir, 'lib', 'python2.7', 'site-packages')
                     
         for root, dirs, files in os.walk(venv_lib_path):
+            if self.lib_filter:
+                dirs, files = self.lib_filter(root, dirs, files)
             arc_prefix = os.path.relpath(root, venv_lib_path)
             files = self.filter_files(files)
             for f in files:
@@ -322,7 +315,7 @@ class PythonPackageArchive(object):
         self._zip_file.writestr(dest, contents)
 
     def close(self):
-        # Note underlying tempfile is removed when  garbage collected.
+        # Note underlying tempfile is removed when archive is garbage collected
         self._closed = True
         self._zip_file.close()
         log.debug("Created maid lambda archive size: %0.2fmb",
@@ -342,11 +335,24 @@ class PythonPackageArchive(object):
 
 def maid_archive(skip=None):
     """Create a lambda code archive for running maid."""
+
+    # Some aggressive shrinking
+    required = ["concurrent", "yaml"]
+    
+    def lib_filter(root, dirs, files):
+        if os.path.basename(root) == 'site-packages':
+            for n in tuple(dirs):
+                if n not in required:
+                    dirs.remove(n)
+        return dirs, files
+   
     return PythonPackageArchive(
         os.path.dirname(inspect.getabsfile(janitor)),
         os.path.abspath(os.path.join(
             os.path.dirname(sys.executable), '..')),
-        skip=skip)
+        skip=skip,
+        lib_filter=lib_filter
+    )
     
         
 class LambdaManager(object):
@@ -356,34 +362,54 @@ class LambdaManager(object):
         self.session_factory = session_factory
         self.client = self.session_factory().client('lambda')
         self.s3_asset_path = s3_asset_path
-        
-    def publish(self, func, alias=None):
+
+    def list_functions(self, prefix=None):
+        p = self.client.get_paginator('list_functions')
+        for rp in p.paginate():
+            for f in rp.get('Functions', []):
+                if not prefix:
+                    yield f
+                if f['FunctionName'].startswith(prefix):
+                    yield f
+    
+    def publish(self, func, alias=None, role=None, s3_uri=None):
         log.info('Publishing maid policy lambda function %s', func.name)
 
-        result = self._create_or_update(func)
-        func.alias = self.publish_alias(result, alias)
+        result = self._create_or_update(func, role, s3_uri)
+        if alias:
+            func.alias = self.publish_alias(result, alias)
 
         for e in func.get_events(self.session_factory):
             if e.add(func):
                 log.debug(
                     "Added event source: %s to function: %s",
                     func.alias, e)
+        return result
 
     def remove(self, func, alias=None):
         log.info("Removing maid policy lambda function %s", func.name)
         for e in func.get_events(self.session_factory):
             e.remove(func)
-
-    def _create_or_update(self, func):
+        self.client.delete_function(FunctionName=func.name)
+            
+    def _create_or_update(self, func, role=None, s3_uri=None):
+        role = func.role or role
+        assert role, "Lambda function role must be specified"
         archive = func.get_archive()
         lfunc = self.get(func.name)
+
+        if s3_uri:
+            bucket, key = self._upload_func(s3_uri, func, archive)
+            code_ref = {'S3Bucket': bucket, 'S3Key': key}
+        else:
+            code_ref = {'ZipFile': archive.get_bytes()}
+
         if lfunc:
             log.debug("Updating function %s code", func.name)
-            result = self.client.update_function_code(
-                FunctionName=func.name,
-                ZipFile=archive.get_bytes(),
-                Publish=True
-            )
+            params = dict(FunctionName=func.name, Publish=True)
+            params.update(code_ref)
+            result = self.client.update_function_code(**params)
+
             # TODO update function configuration
             # also set publish above to false, and publish
             # after configuration change?
@@ -394,9 +420,9 @@ class LambdaManager(object):
         else:
             result = self.client.create_function(
                 FunctionName=func.name,
-                Code={'ZipFile': archive.get_bytes()},
+                Code=code_ref,
                 Runtime=func.runtime,
-                Role=func.role,
+                Role=role,
                 Handler=func.handler,
                 Description=func.description,
                 Timeout=func.timeout,
@@ -404,6 +430,21 @@ class LambdaManager(object):
                 Publish=True)
         return result
 
+    def _upload_func(self, s3_uri, func, archive):
+        _, bucket, key_prefix = parse_s3(s3_uri)
+        key = "%s/%s" % (key_prefix, func.name)
+        transfer = S3Transfer(
+            self.session_factory().client('s3'),
+            config=TransferConfig(
+                multipart_threshold=1024*1024*4))
+        transfer.upload_file(
+            archive.path,
+            bucket=bucket,
+            key=key,
+            extra_args={
+                'ServerSideEncryption': 'AES256'})
+        return bucket, key
+    
     def publish_alias(self, func_data, alias):
         """Create or update an alias for the given function.
         """
@@ -515,10 +556,8 @@ class PolicyLambda(LambdaFunction):
 
     @property
     def role(self):
-        return self.policy.data['mode'].get(
-            'role',
-            'arn:aws:iam::873150696559:role/CapOne-CrossAccount-CustomRole-CloudMaid')
-            
+        return self.policy.data['mode'].get('role', '')
+
     @property
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)
@@ -589,7 +628,12 @@ class CloudWatchEventSource(object):
          }
        }
     """
-
+    ASG_EVENT_MAPPING = {
+        'launch-success': 'EC2 Instance Launch Successful',
+        'launch-failure': 'EC2 Instance Launch Unsuccessful',
+        'terminate-success': 'EC2 Instance Terminate Successful',
+        'terminate-failure': 'EC2 Instance Terminate Unsuccessful'}
+    
     def __init__(self, data, session_factory):
         self.session_factory = session_factory
         self.client = self.session_factory().client('events')
@@ -628,11 +672,22 @@ class CloudWatchEventSource(object):
                 'eventSource': self.data.get('sources', []),
                 'detail': self.data.get('events', [])}
         elif event_type == "ec2-instance-state":
-            payload['source'] = 'aws.ec2'
-            payload['detail-type'] = ["EC2 Instance State-change Notifications"]
-            payload['detail'] = {"state": self.get('events', [])}
+            payload['source'] = ['aws.ec2']
+            payload['detail-type'] = [
+                "EC2 Instance State-change Notifications"]
+            # Technically could let empty be all events, but likely misconfig
+            payload['detail'] = {"state": self.data.get('events', [])}
+        elif event_type == "asg-instance-state":
+            payload['source'] = ['aws.autoscaling']
+            events = []
+            for e in self.data.get('events', []):
+                events.append(self.ASG_EVENT_MAPPING.get(e, e))
+            payload['detail-type'] = events
+        elif event_type == 'periodic':
+            pass
         else:
-            raise ValueError("Unknown lambda event source type: %s" % event_type)
+            raise ValueError(
+                "Unknown lambda event source type: %s" % event_type)
         if not payload:
             return None
         return json.dumps(payload, indent=2)

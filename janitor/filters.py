@@ -39,6 +39,8 @@ class FilterRegistry(PluginRegistry):
         super(FilterRegistry, self).__init__(*args, **kw)
         self.register('value', ValueFilter)
         self.register('or', Or)
+        self.register('and', And)
+        self.register('event', EventFilter)
         
     def parse(self, data, manager):
         results = []
@@ -97,7 +99,7 @@ class Filter(object):
         """ Name of the filter"""
         raise NotImplementedError()
     
-    def process(self, resources):
+    def process(self, resources, event=None):
         """ Bulk process resources and return filtered set."""
         return filter(self, resources)
             
@@ -263,4 +265,11 @@ class MarkedForOp(Filter):
 
         return self.current_date >= (action_date - timedelta(skew))
 
+    
+class EventFilter(ValueFilter):
+
+    def process(self, resources, event=None):
+        if event is None:
+            return False
+        return self(event)
     

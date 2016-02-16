@@ -158,7 +158,7 @@ class NoGlobalGrants(Filter):
     GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
     AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
     
-    def process(self, buckets):
+    def process(self, buckets, event=None):
         with self.executor_factory(max_workers=5) as w:
             results = w.map(self.process_bucket, buckets)
             results = filter(None, list(results))
@@ -238,7 +238,7 @@ class EncryptedPrefix(BucketActionBase):
 class MissingPolicyStatementFilter(Filter):
     """Find buckets missing a set of named policy statements."""
     
-    def process(self, buckets):
+    def process(self, buckets, event=None):
         with self.executor_factory(max_workers=5) as w:
             results = w.map(self.process_bucket, buckets)
             results = filter(None, list(results))

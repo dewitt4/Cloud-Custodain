@@ -27,10 +27,10 @@ class ResourceManager(object):
         """Return server side query filter for the given api."""
         return []
     
-    def filter_resources(self, resources):
+    def filter_resources(self, resources, event=None):
         original = len(resources)
         for f in self.filters:
-            resources = f.process(resources)
+            resources = f.process(resources, event)
         self.log.info("Filtered from %d to %d %s" % (
             original, len(resources), self.__class__.__name__.lower()))
         return resources

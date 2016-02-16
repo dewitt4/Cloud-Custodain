@@ -6,10 +6,10 @@ install:
 	source bin/activate && python setup.py develop
 
 coverage:
-	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover janitor
+	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover tests
 
-tests:
-	./bin/nosetests -s -v janitor
+test:
+	./bin/nosetests -s -v tests
 
 ftests:
 	./bin/nosetests -s -v ftests
