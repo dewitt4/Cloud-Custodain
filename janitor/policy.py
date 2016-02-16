@@ -52,14 +52,16 @@ class Policy(object):
 
     log = logging.getLogger('maid.policy')
 
-    def __init__(self, data, options):
+    def __init__(self, data, options, session_factory=None):
         self.data = data
         self.options = options
         assert "name" in self.data
-        self.session_factory = SessionFactory(
-            options.region,
-            options.profile,
-            options.assume_role)        
+        if session_factory is None:
+            session_factory = SessionFactory(
+                options.region,
+                options.profile,
+                options.assume_role)
+        self.session_factory = session_factory
         self.ctx = ExecutionContext(self.session_factory, self, self.options)
         self.resource_manager = self.get_resource_manager()
             
@@ -117,7 +119,7 @@ class Policy(object):
         with self.ctx:
             self.log.info(
                 "Provisioning policy lambda %s", self.policy_name)
-            LambdaManager(self.policy.session_factory).publish(
+            return LambdaManager(self.policy.session_factory).publish(
                 PolicyLambda(self),
                 'current',
                 role=self.policy.options.assume_role)
@@ -150,14 +152,17 @@ class Policy(object):
                 self._write_file("action-%s" % a.name, utils.dumps(results))
             self.ctx.metrics.put_metric(
                 "ActionTime", time.time() - at, "Seconds", Scope="Policy")
-                        
+            return resources
+
     def __call__(self):
         """Run policy in default mode"""
         if self.is_lambda:
-            self.provision()
+            return self.provision()
         else:
-            self.poll()
-            
+            return self.poll()
+
+    run = __call__
+    
     def _write_file(self, rel_p, value):
         with open(
                 os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:

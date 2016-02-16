@@ -110,7 +110,39 @@ class StateTransitionFilter(object):
             self.__class__.__name__, len(results), orig_length))
         return results
 
-        
+
+@filters.register('ebs')
+class AttachedVolume(ValueFilter):
+
+    def process(self, resources, event=None):
+        self.volume_map = self.get_volume_mapping(resources)
+        self.operator = self.data.get(
+            'operator', 'and') == 'and' and all or any
+        return filter(self, resources)
+
+    def get_volume_mapping(self, resources):
+        volume_map = {}
+        ec2 = utils.local_session(self.manager.session_factory).client('ec2')
+        for instance_set in utils.chunks(
+                [i['InstanceId'] for i in resources], 200):
+            self.log.debug("Processsing %d instance of %d" % (
+                len(instance_set), len(resources)))
+            results = ec2.describe_volumes(
+                Filters=[
+                    {'Name':'attachment.instance-id',
+                     'Values': instance_set}])
+            for v in results['Volumes']:
+                volume_map.setdefault(
+                    v['Attachments'][0]['InstanceId'], []).append(v)
+        return volume_map
+
+    def __call__(self, i):
+        volumes = self.volume_map.get(i['InstanceId'])
+        if not volumes:
+            return False
+        return self.operator(map(self.match, volumes))
+
+
 @filters.register('offhour')
 class InstanceOffHour(OffHour, StateTransitionFilter):
 
