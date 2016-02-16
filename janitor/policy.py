@@ -4,14 +4,14 @@ import logging
 import os
 import time
 
-import boto3
+import jmespath
 import yaml
 
 from janitor.ctx import ExecutionContext
-from janitor.credentials import assumed_session
+from janitor.credentials import SessionFactory
 from janitor.manager import resources
+from janitor.mu import PolicyLambda, LambdaManager
 from janitor import utils
-from janitor.version import version
 
 # This import causes our resources to be initialized
 import janitor.resources
@@ -31,7 +31,6 @@ def load(options, path, format='yaml'):
 
 class PolicyCollection(object):
 
-    # FIXME: rename data to policySpec?
     def __init__(self, data, options):
         self.data = data
         self.options = options
@@ -42,12 +41,8 @@ class PolicyCollection(object):
             'policies', [])]
         if not filters:
             return policies
-        # FIXME: return filter(lambda p: fnmatch.fnmatch(p.name, filters), policies) ?
-        sort_order = [p.get('name') for p in self.data.get('policies', [])]
-        policy_map = dict([(p.name, p) for p in policies])
-        
-        matched = fnmatch.filter(policy_map.keys(), filters)
-        return [policy_map[n] for n in sort_order if n in matched]
+
+        return [p for p in policies if fnmatch.fnmatch(p.name, filters)]
 
     def __iter__(self):
         return iter(self.policies())
@@ -61,9 +56,13 @@ class Policy(object):
         self.data = data
         self.options = options
         assert "name" in self.data
+        self.session_factory = SessionFactory(
+            options.region,
+            options.profile,
+            options.assume_role)        
         self.ctx = ExecutionContext(self.session_factory, self, self.options)
         self.resource_manager = self.get_resource_manager()
-
+            
     @property
     def name(self):
         return self.data['name']
@@ -72,20 +71,59 @@ class Policy(object):
     def resource_type(self):
         return self.data['resource']
 
-    def process_event(self, event, lambda_ctx, resource):
-        """Run policy on a lambda event.
-
+    @property
+    def is_lambda(self):
+        if not 'mode' in self.data:
+            return False
+        return True
+    
+    def push(self, event, lambda_ctx, resources):
+        """Run policy in push mode against given event.
+ 
         Lambda automatically generates cloud watch logs, and metrics
         for us.
-        """
-        results = self.resource_manager.filter_resources([resource])
-        if not results:
-            return
-        for a in self.resource_manager.actions:
-            a(results)
 
-    def __call__(self):
-        """Run policy in pull mode"""
+        TODO: better customization around execution context outputs
+        TODO: support centralized lambda exec across accounts.
+        """
+        mode = self.data.get('mode', {})
+        mode_type = mode.get('type')
+        
+        if mode_type == 'periodic':
+            return self.poll()
+        elif mode_type == 'ec2-instance-state':
+            self.resource_manager.queries = self.resource_manager.queries.parse(
+                {'instance-id': event['detail']['instance-id']})
+            return self.poll()
+        elif mode_type == 'asg-instance-state':
+            raise NotImplementedError("asg-instance-state event not supported")
+        elif mode_type != 'cloudtrail':
+            raise ValueError("Invalid push event mode %s" % self.data)
+        
+        resource_ids = jmespath.search(mode.get('resources'), event)
+        resources = self.resource_manager.get(resource_ids)
+        resources = self.resource_manager.filter_resources(resources, event)
+        
+        if not resources:
+            self.log.info("policy: %s resources: %s no resources matched" % (
+                self.name, self.resource_type))
+            return
+        
+        for action in self.resource_manager.actions:
+            action(resources)
+
+    def provision(self):
+        """Provision policy as a lambda function."""
+        with self.ctx:
+            self.log.info(
+                "Provisioning policy lambda %s", self.policy_name)
+            LambdaManager(self.policy.session_factory).publish(
+                PolicyLambda(self),
+                'current',
+                role=self.policy.options.assume_role)
+            
+    def poll(self):
+        """Query resources and apply policy."""
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()
@@ -99,7 +137,8 @@ class Policy(object):
                 "ResourceCount", len(resources), "Count", Scope="Policy")
             self.ctx.metrics.put_metric(
                 "ResourceTime", rt, "Seconds", Scope="Policy")
-            self._write_file('resources.json', utils.dumps(resources, indent=2))
+            self._write_file(
+                'resources.json', utils.dumps(resources, indent=2))
 
             at = time.time()            
             for a in self.resource_manager.actions:
@@ -111,37 +150,19 @@ class Policy(object):
                 self._write_file("action-%s" % a.name, utils.dumps(results))
             self.ctx.metrics.put_metric(
                 "ActionTime", time.time() - at, "Seconds", Scope="Policy")
+                        
+    def __call__(self):
+        """Run policy in default mode"""
+        if self.is_lambda:
+            self.provision()
+        else:
+            self.poll()
             
     def _write_file(self, rel_p, value):
         with open(
                 os.path.join(self.ctx.log_dir, rel_p), 'w') as fh:
             fh.write(value)
 
-    def session_factory(self, assume=True):
-        session = boto3.Session(
-            region_name=self.options.region,
-            profile_name=self.options.profile)
-        if self.options.assume_role and assume:
-            session = assumed_session(
-                self.options.assume_role, "CloudMaid", session)
-
-        # FIXME: split all this maid_record stuff into a function; document it
-        maid_record = os.environ.get('MAID_RECORD') # FIXME: what are sane values for this?
-        if maid_record:
-            maid_record = os.path.expanduser(maid_record)
-            if not os.path.exists(maid_record):
-                self.log.error(
-                    "Maid record path: %s does not exist" % maid_record)
-                raise ValueError("record path does not exist")
-            self.log.info("Recording aws traffic to: %s" % maid_record)
-            import placebo
-            pill = placebo.attach(session, maid_record)
-            pill.record()
-
-        session._session.user_agent_name = "CloudMaid"
-        session._session.user_agent_version = version
-        return session
-        
     def get_resource_manager(self):
         resource_type = self.data.get('resource')
         factory = resources.get(resource_type)
@@ -149,3 +170,5 @@ class Policy(object):
             raise ValueError(
                 "Invalid resource type: %s" % resource_type)
         return factory(self.ctx, self.data)
+
+    

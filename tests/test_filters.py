@@ -1,4 +1,3 @@
-
 from dateutil import tz
 
 from datetime import datetime, timedelta
@@ -7,7 +6,7 @@ import unittest
 from janitor import filters as base_filters
 from janitor.resources.ec2 import filters
 from janitor.utils import annotation
-from .common import instance
+from .common import instance, event_data
 
 
 class BaseFilterTest(unittest.TestCase):
@@ -37,7 +36,7 @@ class TestFilter(unittest.TestCase):
         self.assertRaises(
             base_filters.FilterValidationError,
             filters.factory, {'type': 'ax', 'xyz': 1})
-            
+
 
 class TestOrFilter(unittest.TestCase):
 
@@ -70,9 +69,9 @@ class TestAndFilter(unittest.TestCase):
             f(instance(
                 Architecture='x86_64',
                 Color='blue')),
-            False)        
+            False)
 
-        
+
 class TestInstanceAge(BaseFilterTest):
 
     def test_filter_instance_age(self):
@@ -95,6 +94,30 @@ class TestInstanceAge(BaseFilterTest):
 
 class TestMarkedForAction(BaseFilterTest):
 
+    def test_marked_for_op_with_skew(self):
+        now = datetime.now()
+        yesterday = datetime.now() - timedelta(7)
+        next_week = now + timedelta(7)
+
+        def i(d, action='stop'):
+            return instance(Tags=[
+                {"Key": "maid_status",
+                 "Value": "not compliant: %s@%s" % (
+                    action, d.strftime("%Y/%m/%d"))}])
+
+        for inst, skew, expected in [
+                (i(next_week), 7, True),
+                (i(next_week), 3, False),
+                (i(now), 0, True),
+                (i(now), 5, True),
+                (i(yesterday), 5, True),
+                (i(now+timedelta(1)), 1, True),
+                (i(now+timedelta(2)), 1, False),
+                (i(now+timedelta(3)), 1, False)
+        ]:
+            self.assertFilter(
+                {'type': 'marked-for-op', 'skew': skew}, inst, expected)
+
     def test_filter_action_date(self):
         now = datetime.now()
         yesterday = now - timedelta(1)
@@ -114,7 +137,18 @@ class TestMarkedForAction(BaseFilterTest):
                 (i(yesterday, 'terminate'), False)
         ]:
             self.assertFilter({'type': 'marked-for-op'}, ii, v)
-        
+
+
+class EventFilterTest(BaseFilterTest):
+
+    def test_event_filter(self):
+        event = event_data('event-instance-state.json')
+        f = {'type': 'event',
+             'key': 'detail.state',
+             'value': 'pending'}
+        self.assertTrue(filters.factory(f).process(
+            [instance()], event))
+
         
 class TestInstanceValue(BaseFilterTest):
 
@@ -129,7 +163,7 @@ class TestInstanceValue(BaseFilterTest):
         i = instance(Tags=tags)
         self.assertFilter(
             {'type': 'tag-count'}, i, True)
-        
+
     def test_filter_tag(self):
         i = instance(Tags=[
             {'Key': 'ASV', 'Value': 'abcd'}])
@@ -166,14 +200,14 @@ class TestInstanceValue(BaseFilterTest):
             base_filters.FilterValidationError,
             filters.factory,
             {"value": "xyz",
-             "type": "value"})        
+             "type": "value"})
         self.assertRaises(
             base_filters.FilterValidationError,
             filters.factory,
             {"key": "xyz",
              "value": "xyz",
              "op": "oo",
-             "type": "value"})        
+             "type": "value"})
 
     def test_complex_value_filter(self):
         self.assertFilter(
@@ -184,9 +218,9 @@ class TestInstanceValue(BaseFilterTest):
             instance(),
             True)
 
-    def xtest_not_null_filter(self):
+    def test_not_null_filter(self):
         self.assertFilter(
-            {"key": "aws:cloudformation:stack-name:",
+            {"key": "tag:aws:cloudformation:stack-name",
              "value": "not-null",
              "type": "value"},
             instance(),
@@ -194,4 +228,3 @@ class TestInstanceValue(BaseFilterTest):
 
 if __name__ == '__main__':
     unittest.main()
-        

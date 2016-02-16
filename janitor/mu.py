@@ -143,7 +143,6 @@ from botocore.exceptions import ClientError
 
 import janitor
 
-from janitor.policy import load
 from janitor.utils import parse_s3
 
 log = logging.getLogger('maid.lambda')
@@ -215,23 +214,14 @@ elasticache.
 """
 
 
-def resource_handle(resource_type, event, lambda_context):
+def resource_handle(event, lambda_context):
     """
     Generic resource handler dispatch
     """
+    from janitor.policy import load
     policies = load('config.json', format='json')
     resources = None
-    
-    if not 'Records' in event:
-        log.warning("Could not found resource records in event")
-        return
-    
     for p in policies:
-        if p.resource_type != resource_type:
-            continue
-        # Actualize resources once for all policies
-        if resources is None:
-            resources = p.resource_manager.load(event['Records'])
         p.process_event(event, lambda_context, resources)
 
         
@@ -243,25 +233,18 @@ def format_event(evt):
 
 def periodic_handle(event, context):
     log.info("Processing scheduled event\n %s", format_event(event))
-    
+    return resource_handle(event, context)
+
     
 def ec2_instance_state_handle(event, context):
-    log.info("Processing event \n %s", format_event(event))
-    
+    log.info("Processing instance event \n %s", format_event(event))
+    return resource_handle(event, context)
 
-def cloudtrail_handle(event, context):
-    log.info("Processing event \n %s", format_event(event))
-    source = event.get('source')
-    if not source:
-        raise ValueError("Missing source for cloudtrail event")
-    if not source.startswith('aws.'):
-        raise ValueError("Unknown source for cloudtrail event %s" % source)
-    # TODO this is a bit simplistic we probably need to map both service
-    # and api calls onto maid resource types (ie ec2 encompasses networking
-    # and storage, in addition to instances).
-    ns, resource_type = source.split('.', 1)
-    resource_handle(resource_type, event, context)
     
+def cloudtrail_handle(event, context):
+    log.info("Processing trail event \n %s", format_event(event))
+    return resource_handle(event, context)
+
 
 class PythonPackageArchive(object):
     """Creates a zip file for python lambda functions
@@ -379,12 +362,22 @@ class LambdaManager(object):
         self.session_factory = session_factory
         self.client = self.session_factory().client('lambda')
         self.s3_asset_path = s3_asset_path
-        
+
+    def list_functions(self, prefix=None):
+        p = self.client.get_paginator('list_functions')
+        for rp in p.paginate():
+            for f in rp.get('Functions', []):
+                if not prefix:
+                    yield f
+                if f['FunctionName'].startswith(prefix):
+                    yield f
+    
     def publish(self, func, alias=None, role=None, s3_uri=None):
         log.info('Publishing maid policy lambda function %s', func.name)
 
         result = self._create_or_update(func, role, s3_uri)
-        func.alias = self.publish_alias(result, alias)
+        if alias:
+            func.alias = self.publish_alias(result, alias)
 
         for e in func.get_events(self.session_factory):
             if e.add(func):
@@ -392,12 +385,13 @@ class LambdaManager(object):
                     "Added event source: %s to function: %s",
                     func.alias, e)
         return result
-    
+
     def remove(self, func, alias=None):
         log.info("Removing maid policy lambda function %s", func.name)
         for e in func.get_events(self.session_factory):
             e.remove(func)
-
+        self.client.delete_function(FunctionName=func.name)
+            
     def _create_or_update(self, func, role=None, s3_uri=None):
         role = func.role or role
         assert role, "Lambda function role must be specified"
@@ -562,10 +556,8 @@ class PolicyLambda(LambdaFunction):
 
     @property
     def role(self):
-        return self.policy.data['mode'].get(
-            'role',
-            'arn:aws:iam::873150696559:role/CapOne-CrossAccount-CustomRole-CloudMaid')
-            
+        return self.policy.data['mode'].get('role', '')
+
     @property
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)

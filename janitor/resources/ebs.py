@@ -52,7 +52,7 @@ class EBS(ResourceManager):
 class AttachedInstanceFilter(ValueFilter):
     """Filter volumes based on filtering on their attached instance"""
 
-    def process(self, resources):
+    def process(self, resources, event=None):
         original_count = len(resources)
         resources = [r for r in resources if r.get('Attachments')]
         self.log.debug('Filtered from %d volumes to %d attached volumes' % (

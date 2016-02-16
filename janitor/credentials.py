@@ -1,9 +1,33 @@
+"""
+Authentication utilities
+"""
 from botocore.credentials import RefreshableCredentials
 from botocore.session import get_session
-
 from boto3 import Session
 
+from janitor.version import version
 
+
+class SessionFactory(object):
+    
+    def __init__(self, region, profile=None, assume_role=None):
+        self.region = region
+        self.profile = profile
+        self.assume_role = assume_role
+
+    def __call__(self, assume=True):
+        session = Session(
+            region_name=self.region,
+            profile_name=self.profile)
+        if self.assume_role and assume:
+            session = assumed_session(
+                self.assume_role, "CloudMaid", session)
+
+        session._session.user_agent_name = "CloudMaid"
+        session._session.user_agent_version = version
+        return session
+
+    
 def assumed_session(role_arn, session_name, session=None):
     """STS Role assume a boto3.Session
 
@@ -38,7 +62,12 @@ def assumed_session(role_arn, session_name, session=None):
         refresh_using=refresh,
         method='sts-assume-role')
 
-    # so dirty.. it hurts, no clean way to set this outside of the internals poke
+    # so dirty.. it hurts, no clean way to set this outside of the
+    # internals poke. There's some work upstream on making this nicer
+    # but its pretty baroque as well with upstream support.
+    # https://github.com/boto/boto3/issues/443
+    # https://github.com/boto/botocore/issues/761
+    
     s = get_session()
     s._credentials = session_credentials
     region = s.get_config_variable('region') or 'us-east-1'

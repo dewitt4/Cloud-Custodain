@@ -8,6 +8,18 @@ from janitor.policy import Policy
 from .common import BaseTest, Config
 
 
+class PolicyLambdaHandler(BaseTest):
+
+    def xtest_ec2_state_event(self):
+        pass
+    
+    def xtest_periodic_event(self):
+        pass
+
+    def xtest_cloudtrail_event(self):
+        pass
+
+
 class PolicyLambdaProvision(BaseTest):
 
     def assert_items(self, result, expected):
@@ -32,7 +44,7 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev')
+        result = mgr.publish(pl, 'Dev', role="illuminati")
 
         self.assert_items(
             result,
@@ -54,7 +66,7 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev')
+        result = mgr.publish(pl, 'Dev', role="illuminati")
         self.assert_items(
             result,
             {'Description': 'cloud-maid lambda policy',
@@ -77,7 +89,39 @@ class PolicyLambdaProvision(BaseTest):
              "detail": {
                  "state": ["pending"]},
              "detail-type": ["EC2 Instance State-change Notifications"]})
-            
+
+    def test_cwe_asg_instance(self):
+        session_factory = self.replay_flight_data('test_cwe_asg')
+        p = Policy({
+            'resource': 'asg',
+            'name': 'asg-spin-detector',
+            'mode': {
+                'type': 'asg-instance-state',
+                'events': ['launch-failure']}
+        }, Config.empty())
+        pl = PolicyLambda(p)
+        mgr = LambdaManager(session_factory)
+        result = mgr.publish(pl, 'Dev', role="jedi")
+        self.assert_items(
+            result,
+            {'FunctionName': 'maid-asg-spin-detector',
+             'Handler': 'maid_policy.run',
+             'MemorySize': 512,
+             'Runtime': 'python2.7',
+             'Timeout': 60})
+
+        events = session_factory().client('events')
+        result = events.list_rules(NamePrefix="maid-asg-spin-detector")
+        self.assert_items(
+            result['Rules'][0],
+            {"State": "ENABLED", 
+             "Name": "maid-asg-spin-detector"})
+
+        self.assertEqual(
+            json.loads(result['Rules'][0]['EventPattern']),
+            {"source": ["aws.autoscaling"],
+             "detail-type": ["EC2 Instance Launch Unsuccessful"]})
+        
     def test_cwe_schedule(self):
         session_factory = self.replay_flight_data('test_cwe_schedule')
         p = Policy({
@@ -91,7 +135,7 @@ class PolicyLambdaProvision(BaseTest):
 
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev')
+        result = mgr.publish(pl, 'Dev', role="jedi")
         self.assert_items(
             result,
             {'FunctionName': 'maid-periodic-ec2-checker',
@@ -132,7 +176,7 @@ class PythonArchiveTest(unittest.TestCase):
             fileset = [n.filename for n in reader.filelist]
             for i in ['janitor/__init__.pyc',
                       'janitor/resources/s3.pyc',
-                      'boto3/__init__.pyc']:
+                      'boto3/__init__.py']:
                 self.assertFalse(i in fileset)
         
 

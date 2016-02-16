@@ -1,5 +1,4 @@
 import json
-import inspect
 import logging
 import os
 import unittest
@@ -75,6 +74,13 @@ def placebo_dir(name):
         os.path.dirname(__file__), 'data', 'placebo', name)
 
 
+def event_data(name):
+    with open(
+            os.path.join(
+                os.path.dirname(__file__), 'data', 'cwe', name)) as fh:
+        return json.load(fh)
+        
+
 def load_data(file_name, state=None, **kw):
     data = json.loads(open(
         os.path.join(
@@ -109,6 +115,7 @@ class Config(Bag):
             'region': "us-east-1",
             'cache': '',
             'profile': None,
+            'assume_role': None,
             'log_group': None,
             'metrics_enabled': False,
             'output_dir': 's3://test-example/foo',

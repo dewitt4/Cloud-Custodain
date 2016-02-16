@@ -6,7 +6,9 @@ import operator
 
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import (
-    FilterRegistry, Filter, AgeFilter, OPERATORS, MarkedForOp)
+    FilterRegistry, Filter, AgeFilter, OPERATORS, MarkedForOp,
+    ValueFilter
+)
 from janitor.manager import ResourceManager, resources
 from janitor.offhours import Time, OffHour, OnHour
 from janitor import utils
@@ -107,14 +109,14 @@ class StateTransitionFilter(object):
         self.log.info("%s %d of %d instances" % (
             self.__class__.__name__, len(results), orig_length))
         return results
+
         
-    
 @filters.register('offhour')
 class InstanceOffHour(OffHour, StateTransitionFilter):
 
     valid_origin_states = ('running',)
 
-    def process(self, resources):
+    def process(self, resources, event=None):
         return super(InstanceOffHour, self).process(
             self.filter_instance_state(resources))
 
@@ -124,7 +126,7 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
     
     valid_origin_states = ('stopped',)
 
-    def process(self, resources):
+    def process(self, resources, event=None):
         return super(InstanceOnHour, self).process(
             self.filter_instance_state(resources))
     
@@ -145,6 +147,7 @@ class TagCountFilter(Filter):
 @filters.register('instance-age')        
 class InstanceAgeFilter(AgeFilter):
 
+    # TODO use mount point attachment on /dev/sda
     date_attribute = "LaunchTime"
                 
 

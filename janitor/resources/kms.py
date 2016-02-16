@@ -39,7 +39,7 @@ class KMS(ResourceManager):
 @filters.register('grant-count')
 class GrantCount(Filter):
 
-    def process(self, keys):
+    def process(self, keys, event=None):
         with self.executor_factory(max_workers=10) as w:
             return filter(None, (w.map(self.process_key, keys)))
 
