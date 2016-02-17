@@ -1,3 +1,5 @@
+from botocore.client import ClientError
+
 from collections import Counter
 from concurrent.futures import as_completed
 
@@ -38,7 +40,7 @@ class ASG(ResourceManager):
 
     def resources(self):
         c = self.session_factory().client('autoscaling')
-        query = self.resource_query()  # FIXME: This is always []. What's going on?
+        query = self.resource_query()
         if self._cache.load():
             asgs = self._cache.get({'resource': 'asg', 'q': query})
             if asgs is not None:
@@ -342,8 +344,12 @@ class Resume(BaseAction):
         asg_client = session.client('autoscaling')
         ec2_client = session.client('ec2')
 
-        ec2_client.start_instances(
-            InstanceIds=[i['InstanceId'] for i in asg['Instances']])
+        try:
+            ec2_client.start_instances(
+                InstanceIds=[i['InstanceId'] for i in asg['Instances']])
+        except ClientError as e:
+            log.warning("asg:%s instances:%d error during instance restart %s" % (
+                asg['AutoScalingGroupName'], len(asg['Instances']), e))
 
         asg_client.resume_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])

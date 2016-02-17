@@ -141,10 +141,13 @@ import zipfile
 from boto3.s3.transfer import S3Transfer, TransferConfig
 from botocore.exceptions import ClientError
 
+
 import janitor
 
 from janitor.utils import parse_s3
 
+logging.root.setLevel(logging.INFO)
+logging.getLogger('botocore').setLevel(logging.WARNING)
 log = logging.getLogger('maid.lambda')
 
 
@@ -213,16 +216,41 @@ alternatively sqs with periodic aggregator, or when lambda is vpc accessible
 elasticache.
 """
 
+# TODO move me        
+class Config(dict):
+
+    def __getattr__(self, k):
+        try:
+            return self[k]
+        except KeyError:
+            raise AttributeError(k)
+        
+    @classmethod
+    def empty(cls, **kw):
+        d = {}
+        d.update({
+            'region': "us-east-1",
+            'cache': '',
+            'profile': None,
+            'assume_role': None,
+            'log_group': None,
+            'metrics_enabled': False,
+            'output_dir': '/tmp/',
+            'cache_period': 0,
+            'dryrun': False})
+        d.update(kw)
+        return cls(d)
+
 
 def resource_handle(event, lambda_context):
     """
     Generic resource handler dispatch
     """
     from janitor.policy import load
-    policies = load('config.json', format='json')
+    policies = load(Config.empty(), 'config.json', format='json')
     resources = None
     for p in policies:
-        p.process_event(event, lambda_context, resources)
+        p.push(event, lambda_context, resources)
 
         
 def format_event(evt):
@@ -337,7 +365,7 @@ def maid_archive(skip=None):
     """Create a lambda code archive for running maid."""
 
     # Some aggressive shrinking
-    required = ["concurrent", "yaml"]
+    required = ["concurrent", "yaml", "pkg_resources"]
     
     def lib_filter(root, dirs, files):
         if os.path.basename(root) == 'site-packages':
@@ -383,7 +411,7 @@ class LambdaManager(object):
             if e.add(func):
                 log.debug(
                     "Added event source: %s to function: %s",
-                    func.alias, e)
+                    e, func.alias)
         return result
 
     def remove(self, func, alias=None):
@@ -530,7 +558,7 @@ PolicyHandlerTemplate = """\
 from janitor import mu
 
 def run(event, context):
-    return mu.%s_handler(event, context)
+    return mu.%s_handle(event, context)
 
 """
 
@@ -572,7 +600,7 @@ class PolicyLambda(LambdaFunction):
         self.archive.create()
         self.archive.add_contents(
             zinfo('config.json'),
-            json.dumps({'policies': self.policy.data}, indent=2))
+            json.dumps({'policies': [self.policy.data]}, indent=2))
         self.archive.add_contents(
             zinfo('maid_policy.py'),
             PolicyHandlerTemplate % (
@@ -660,8 +688,10 @@ class CloudWatchEventSource(object):
         return False
 
     def __repr__(self):
-        return "<CloudWatchEvent Source:%s Events:%s>" % (
-            self.data.get('type'), ', '.join(self.data.get('events', [])))
+        return "<CWEvent Type:%s Sources:%s Events:%s>" % (
+            self.data.get('type'),
+            ', '.join(self.data.get('sources', [])),
+            ', '.join(self.data.get('events', [])))
     
     def render_event_pattern(self):
         event_type = self.data.get('type')
@@ -670,7 +700,7 @@ class CloudWatchEventSource(object):
             payload['detail-type'] = ['AWS API Call via CloudTrail']
             payload['detail'] = {
                 'eventSource': self.data.get('sources', []),
-                'detail': self.data.get('events', [])}
+                'eventName': self.data.get('events', [])}
         elif event_type == "ec2-instance-state":
             payload['source'] = ['aws.ec2']
             payload['detail-type'] = [
@@ -700,7 +730,7 @@ class CloudWatchEventSource(object):
         pattern = self.render_event_pattern()
         if pattern:
             params['EventPattern'] = pattern
-            log.debug("%s Event Pattern: %s", self, pattern)
+            #log.debug("%s Event Pattern: %s", self, pattern)
         schedule = self.data.get('schedule')        
         if schedule:
             params['ScheduleExpression'] = schedule

@@ -64,6 +64,16 @@ class S3(ResourceManager):
             self.data.get('filters', []), self)
         self.actions = actions.parse(
             self.data.get('actions', []), self)
+
+    def get_resources(self, resource_ids):
+        with self.executor_factory(
+                max_workers=min((5, len(resource_ids)))) as w:
+            buckets = {'Name': r for r in resource_ids}
+            results = w.map(
+                assemble_bucket,
+                zip(itertools.repeat(self.session_factory), buckets))
+            results = filter(None, results)
+        return results
         
     def resources(self):
         c = self.session_factory().client('s3')

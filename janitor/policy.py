@@ -105,7 +105,11 @@ class Policy(object):
             raise ValueError("Invalid push event mode %s" % self.data)
         
         resource_ids = jmespath.search(mode.get('resources'), event)
-        resources = self.resource_manager.get(resource_ids)
+        if not resource_ids:
+            self.log.warning("Could not find resource ids with %s" % (
+                mode.get('resources')))
+            return
+        resources = self.resource_manager.get_resources(resource_ids)
         resources = self.resource_manager.filter_resources(resources, event)
         
         if not resources:
@@ -114,7 +118,7 @@ class Policy(object):
             return
         
         for action in self.resource_manager.actions:
-            action(resources)
+            action.process(resources)
 
     def provision(self):
         """Provision policy as a lambda function."""
