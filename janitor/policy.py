@@ -7,6 +7,8 @@ import time
 import jmespath
 import yaml
 
+from botocore.client import ClientError
+
 from janitor.ctx import ExecutionContext
 from janitor.credentials import SessionFactory
 from janitor.manager import resources
@@ -118,11 +120,16 @@ class Policy(object):
         """Provision policy as a lambda function."""
         with self.ctx:
             self.log.info(
-                "Provisioning policy lambda %s", self.policy_name)
-            return LambdaManager(self.policy.session_factory).publish(
-                PolicyLambda(self),
-                'current',
-                role=self.policy.options.assume_role)
+                "Provisioning policy lambda %s", self.name)
+            try:
+                manager = LambdaManager(self.session_factory)
+            except ClientError:
+                # For cli usage by normal users, don't assume the role just use
+                # it for the lambda
+                manager = LambdaManager(
+                    lambda assume=False: self.session_factory(assume))
+            return manager.publish(
+                PolicyLambda(self), 'current', role=self.options.assume_role)
             
     def poll(self):
         """Query resources and apply policy."""
