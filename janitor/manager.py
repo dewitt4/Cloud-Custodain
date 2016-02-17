@@ -26,6 +26,9 @@ class ResourceManager(object):
     def resource_query(self):
         """Return server side query filter for the given api."""
         return []
+
+    def get_resources(self, resource_ids):
+        pass
     
     def filter_resources(self, resources, event=None):
         original = len(resources)

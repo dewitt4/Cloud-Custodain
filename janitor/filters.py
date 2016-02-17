@@ -214,15 +214,19 @@ class AgeFilter(Filter):
             raise NotImplementedError(
                 "date_attribute must be overriden in subclass")
         return self
+
+    def get_resource_date(self, i):
+        v = i[self.date_attribute]
+        if not isinstance(v, datetime):
+            v = parse(v)
+        return v
     
     def __call__(self, i):
         if not self.threshold_date:
             days = self.data.get('days', 60)
             n = datetime.now(tz=tzutc())
             self.threshold_date = n - timedelta(days)
-        v = i[self.date_attribute]
-        if not isinstance(v, datetime):
-            v = parse(v)
+        v = self.get_resource_date(i)
         return self.threshold_date > v
 
 

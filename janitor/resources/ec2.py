@@ -39,9 +39,14 @@ class EC2(ResourceManager):
     @property
     def client(self):
         return self.session_factory().client('ec2')
-        
+
+    def get_resources(self, resource_ids):
+        return utils.query_instances(
+            None,
+            client=self.session_factory().client('ec2'),
+            InstanceIds=resource_ids)
+
     def resources(self):
-        # FIXME: Explain why this is different from the other ResourceManagers
         qf = self.resource_query()
         instances = None
 
