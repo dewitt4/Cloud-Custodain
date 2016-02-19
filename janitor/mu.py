@@ -68,7 +68,7 @@ Configuration
 -------------
 
 
-proposed syntax
+Examples
 
 .. code-block:: yaml
 
@@ -79,9 +79,11 @@ proposed syntax
        mode: 
          type: cloudtrail
          sources: 
-          - s3.amazonaws.com
+          - ec2.amazonaws.com
          events: 
-          - CreateBucket
+          - RunInstances
+         # For cloud trail events we need to reference the resources id
+         resources: "detail.responseElements.instancesSet.items[].instanceId"
        filters:
          # Match on buckets with policies that are missing
          # required statements
@@ -117,12 +119,6 @@ proposed syntax
        mode:
          type: periodic
          schedule: "rate(1 day)"
-
-
-alternatively we could associate relevant events to some
-actions, like encryption-keys with a list of events, and
-encryption-policy with a list of events.
-  
 """
 
 import abc
@@ -186,10 +182,6 @@ filters and actions.
 
 TODO:
 
-- Execution Mode Abstraction for all policies, execution needs
-  to defer to this, with default on non poll being provisioning
-  resources.
-
 - Resource Manager Abstraction for all policies (or just policy
   collection).
 
@@ -216,7 +208,7 @@ alternatively sqs with periodic aggregator, or when lambda is vpc accessible
 elasticache.
 """
 
-# TODO move me        
+# TODO move me / we should load config options directly from policy config   
 class Config(dict):
 
     def __getattr__(self, k):
