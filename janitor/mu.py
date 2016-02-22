@@ -68,7 +68,7 @@ Configuration
 -------------
 
 
-proposed syntax
+Examples
 
 .. code-block:: yaml
 
@@ -79,9 +79,11 @@ proposed syntax
        mode: 
          type: cloudtrail
          sources: 
-          - s3.amazonaws.com
+          - ec2.amazonaws.com
          events: 
-          - CreateBucket
+          - RunInstances
+         # For cloud trail events we need to reference the resources id
+         resources: "detail.responseElements.instancesSet.items[].instanceId"
        filters:
          # Match on buckets with policies that are missing
          # required statements
@@ -117,12 +119,6 @@ proposed syntax
        mode:
          type: periodic
          schedule: "rate(1 day)"
-
-
-alternatively we could associate relevant events to some
-actions, like encryption-keys with a list of events, and
-encryption-policy with a list of events.
-  
 """
 
 import abc
@@ -186,10 +182,6 @@ filters and actions.
 
 TODO:
 
-- Execution Mode Abstraction for all policies, execution needs
-  to defer to this, with default on non poll being provisioning
-  resources.
-
 - Resource Manager Abstraction for all policies (or just policy
   collection).
 
@@ -216,7 +208,7 @@ alternatively sqs with periodic aggregator, or when lambda is vpc accessible
 elasticache.
 """
 
-# TODO move me        
+# TODO move me / we should load config options directly from policy config   
 class Config(dict):
 
     def __getattr__(self, k):
@@ -281,13 +273,14 @@ class PythonPackageArchive(object):
     directory structure.
     """
     
-    def __init__(self, src_path, virtualenv_dir, skip=None, lib_filter=None):
+    def __init__(self, src_path, virtualenv_dir, skip=None, lib_filter=None, src_filter=None):
         self.src_path = src_path
         self.virtualenv_dir = virtualenv_dir
         self._temp_archive_file = None
         self._zip_file = None
         self._closed = False
         self.lib_filter = lib_filter
+        self.src_filter = src_filter
         self.skip = skip
 
     @property
@@ -314,14 +307,21 @@ class PythonPackageArchive(object):
             compression=zipfile.ZIP_DEFLATED)
 
         prefix = os.path.dirname(self.src_path)
-        # Package Source
-        for root, dirs, files in os.walk(self.src_path):
-            arc_prefix = os.path.relpath(root, os.path.dirname(self.src_path))
-            files = self.filter_files(files)
-            for f in files:
-                self._zip_file.write(
-                    os.path.join(root, f),
-                    os.path.join(arc_prefix, f))
+        if os.path.isfile(self.src_path):
+            # Module Source
+            self._zip_file.write(
+                os.path.join(self.src_path), os.path.basename(self.src_path))
+        elif os.path.isdir(self.src_path):
+            # Package Source
+            for root, dirs, files in os.walk(self.src_path):
+                arc_prefix = os.path.relpath(root, os.path.dirname(self.src_path))
+                if self.src_filter:
+                    self.src_filter(root, dirs, files)
+                files = self.filter_files(files)
+                for f in files:
+                    self._zip_file.write(
+                        os.path.join(root, f),
+                        os.path.join(arc_prefix, f))
             
         # Library Source
         venv_lib_path = os.path.join(
@@ -662,14 +662,15 @@ class CloudWatchEventSource(object):
         'terminate-success': 'EC2 Instance Terminate Successful',
         'terminate-failure': 'EC2 Instance Terminate Unsuccessful'}
     
-    def __init__(self, data, session_factory):
+    def __init__(self, data, session_factory, prefix="maid-"):
         self.session_factory = session_factory
         self.client = self.session_factory().client('events')
         self.data = data
+        self.prefix = prefix
         
     def _make_notification_id(self, function_name):
-        if not function_name.startswith("maid-"):
-            return "maid-%s" % function_name
+        if not function_name.startswith(self.prefix):
+            return "%s%s" % (self.prefix, function_name)
         return function_name
 
     def get(self, rule_name):
@@ -766,6 +767,18 @@ class CloudWatchEventSource(object):
     def update(self, func):
         self.add(func)
 
+    def pause(self, func):
+        try:
+            self.client.disable_rule(Rule=func.name)
+        except ClientError as e:
+            pass
+
+    def resume(self, func):
+        try:
+            self.client.enable_rule(Rule=func.name)
+        except ClientError as e:
+            pass
+        
     def remove(self, func):
         if self.get(func.name):
             self.client.delete_rule(
