@@ -75,7 +75,7 @@ Examples
    policies:
 
      # Cloud Watch Events over CloudTrail api calls (1-15m trailing)
-     - name: s3-encrypted-bucket-policy
+     - name: ec2-tag-compliance
        mode: 
          type: cloudtrail
          sources: 
@@ -85,13 +85,11 @@ Examples
          # For cloud trail events we need to reference the resources id
          resources: "detail.responseElements.instancesSet.items[].instanceId"
        filters:
-         # Match on buckets with policies that are missing
-         # required statements
-         - type: missing-policy-statement
-           statement_ids: [RequireEncryptedPutObject]
+         - or:
+           - tag:required1: absent
+           - tag:required2: absent
        actions:
-         # Apply encryption required policy
-         - encryption-policy
+         - stop
 
      # On EC2 Instance state events (real time, seconds)
      - name: ec2-require-encrypted-volumes
