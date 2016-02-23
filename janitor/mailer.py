@@ -37,35 +37,37 @@ Operationally we can work in either of two modes
 Proposed Usage
 --------------
 
- - policies:
-    - name: ec2-tag-compliance
-      resource: ec2
-      filters:
-        - "tag:required": absent
-      actions:
-        - type: notify
-          target: owner
-          owner-tags: OwnerContact, OwnerEmail
-          delivery: ses
+
+.. code-block:: yaml
+
+   - policies:
+      - name: ec2-tag-compliance
+        resource: ec2
+        filters:
+          - "tag:required": absent
+        actions:
+          - type: notify
+            target: owner
+            owner-tags: OwnerContact, OwnerEmail
+            delivery: ses
 
 
 Data Message Structure
 ----------------------
 
-  - resource_type: ec2
-    message: ""
-    resources: [
-      {'InstanceId': 'xyz'},
-    ]
+.. code-block:: yaml
+
+    - resource_type: ec2
+      message: ""
+      resources: [
+        {'InstanceId': 'xyz'},
+      ]
 
 We'll receive those and queue them up. And then at batch
 period we'll do outbound formatting and processing
 
 
 Email Message Structure
-iii
-
-
 -----------------------
 
 We also want direct formatted emails, these are not batched
