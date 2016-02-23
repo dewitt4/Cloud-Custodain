@@ -190,7 +190,8 @@ class MarkForOp(BaseAction):
         if not key:
             raise ValueError(
                 "action:mark-for-op requires op specification")
-
+        return self
+    
     def process(self, volumes):
         msg_tmpl = self.data.get(
             'msg',
