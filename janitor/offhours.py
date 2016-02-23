@@ -130,7 +130,7 @@ class Time(Filter):
         if 'off' in parts:
             return False
         return self.process_current_time(i, parts)
- 
+
     def process_terminate(self, i, parts):
         parts.pop('terminate')
         for p in parts:
@@ -147,11 +147,12 @@ class Time(Filter):
         return sentinel <= now
 
     def get_tag_parts(self, i):
-        tag_key = self.data.get('tag', 'maid_offhours')
-        tag_map = {t['Key']: t['Value'] for t in i.get('Tags', [])}
-        if not tag_key in tag_map:
+        # Look for downtime tag, Normalize tag key and tag value
+        tag_key = self.data.get('tag', 'maid_offhours').lower()
+        tag_map = {t['Key'].lower(): t['Value'] for t in i.get('Tags', [])}
+        if tag_key not in tag_map:
             return False
-        value = tag_map[tag_key]
+        value = tag_map[tag_key].lower()
         # Sigh.. some folks seem to be interpreting the docs quote marks as
         # literal for values.
         value = value.strip("'").strip('"')
