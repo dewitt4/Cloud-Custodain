@@ -50,20 +50,22 @@
           <div class="body" role="main">
             
   <h1>Source code for janitor.policy</h1><div class="highlight"><pre>
-<span class="kn">import</span> <span class="nn">fnmatch</span>
+<span></span><span class="kn">import</span> <span class="nn">fnmatch</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
-<span class="kn">import</span> <span class="nn">boto3</span>
+<span class="kn">import</span> <span class="nn">jmespath</span>
 <span class="kn">import</span> <span class="nn">yaml</span>
 
+<span class="kn">from</span> <span class="nn">botocore.client</span> <span class="kn">import</span> <span class="n">ClientError</span>
+
 <span class="kn">from</span> <span class="nn">janitor.ctx</span> <span class="kn">import</span> <span class="n">ExecutionContext</span>
-<span class="kn">from</span> <span class="nn">janitor.credentials</span> <span class="kn">import</span> <span class="n">assumed_session</span>
+<span class="kn">from</span> <span class="nn">janitor.credentials</span> <span class="kn">import</span> <span class="n">SessionFactory</span>
 <span class="kn">from</span> <span class="nn">janitor.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">janitor.mu</span> <span class="kn">import</span> <span class="n">PolicyLambda</span><span class="p">,</span> <span class="n">LambdaManager</span>
 <span class="kn">from</span> <span class="nn">janitor</span> <span class="kn">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">janitor.version</span> <span class="kn">import</span> <span class="n">version</span>
 
 <span class="c1"># This import causes our resources to be initialized</span>
 <span class="kn">import</span> <span class="nn">janitor.resources</span>
@@ -83,7 +85,6 @@
 
 <div class="viewcode-block" id="PolicyCollection"><a class="viewcode-back" href="../../generated/janitor.html#janitor.policy.PolicyCollection">[docs]</a><span class="k">class</span> <span class="nc">PolicyCollection</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span></div>
 
-    <span class="c1"># FIXME: rename data to policySpec?</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
@@ -94,12 +95,8 @@
             <span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[])]</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">filters</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">policies</span>
-        <span class="c1"># FIXME: return filter(lambda p: fnmatch.fnmatch(p.name, filters), policies) ?</span>
-        <span class="n">sort_order</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[])]</span>
-        <span class="n">policy_map</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">])</span>
-        
-        <span class="n">matched</span> <span class="o">=</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">policy_map</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">filters</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">policy_map</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">sort_order</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">matched</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span> <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">filters</span><span class="p">)]</span>
 
     <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">())</span>
@@ -109,13 +106,19 @@
 
     <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;maid.policy&#39;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">session_factory</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
         <span class="k">assert</span> <span class="s2">&quot;name&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="n">session_factory</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">session_factory</span> <span class="o">=</span> <span class="n">SessionFactory</span><span class="p">(</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">()</span>
-
+            
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
@@ -124,20 +127,68 @@
     <span class="k">def</span> <span class="nf">resource_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">]</span>
 
-    <span class="k">def</span> <span class="nf">process_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">lambda_ctx</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Run policy on a lambda event.</span>
-
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">is_lambda</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">True</span>
+    
+    <span class="k">def</span> <span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">lambda_ctx</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Run policy in push mode against given event.</span>
+<span class="sd"> </span>
 <span class="sd">        Lambda automatically generates cloud watch logs, and metrics</span>
 <span class="sd">        for us.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">([</span><span class="n">resource</span><span class="p">])</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">:</span>
-            <span class="n">a</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Run policy in pull mode&quot;&quot;&quot;</span>
+<span class="sd">        TODO: better customization around execution context outputs</span>
+<span class="sd">        TODO: support centralized lambda exec across accounts.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">mode_type</span> <span class="o">=</span> <span class="n">mode</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;periodic&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;ec2-instance-state&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">queries</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">queries</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span>
+                <span class="p">{</span><span class="s1">&#39;instance-id&#39;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;detail&#39;</span><span class="p">][</span><span class="s1">&#39;instance-id&#39;</span><span class="p">]})</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;asg-instance-state&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;asg-instance-state event not supported&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">mode_type</span> <span class="o">!=</span> <span class="s1">&#39;cloudtrail&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid push event mode </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        
+        <span class="n">resource_ids</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">mode</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resources&#39;</span><span class="p">),</span> <span class="n">event</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">resource_ids</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not find resource ids with </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">mode</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resources&#39;</span><span class="p">)))</span>
+            <span class="k">return</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="n">resource_ids</span><span class="p">)</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> resources: </span><span class="si">%s</span><span class="s2"> no resources matched&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">))</span>
+            <span class="k">return</span>
+        
+        <span class="k">for</span> <span class="n">action</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">:</span>
+            <span class="n">action</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Provision policy as a lambda function.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Provisioning policy lambda </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span><span class="p">:</span>
+                <span class="c1"># For cli usage by normal users, don&#39;t assume the role just use</span>
+                <span class="c1"># it for the lambda</span>
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span>
+                    <span class="k">lambda</span> <span class="n">assume</span><span class="o">=</span><span class="bp">False</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span><span class="n">assume</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">manager</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
+                <span class="n">PolicyLambda</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="s1">&#39;current&#39;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">)</span>
+            
+    <span class="k">def</span> <span class="nf">poll</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Query resources and apply policy.&quot;&quot;&quot;</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running policy </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
@@ -151,7 +202,8 @@
                 <span class="s2">&quot;ResourceCount&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="s2">&quot;Count&quot;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
                 <span class="s2">&quot;ResourceTime&quot;</span><span class="p">,</span> <span class="n">rt</span><span class="p">,</span> <span class="s2">&quot;Seconds&quot;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_write_file</span><span class="p">(</span><span class="s1">&#39;resources.json&#39;</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_write_file</span><span class="p">(</span>
+                <span class="s1">&#39;resources.json&#39;</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
 
             <span class="n">at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>            
             <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">:</span>
@@ -163,37 +215,22 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_write_file</span><span class="p">(</span><span class="s2">&quot;action-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
                 <span class="s2">&quot;ActionTime&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">at</span><span class="p">,</span> <span class="s2">&quot;Seconds&quot;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">)</span>
-            
+            <span class="k">return</span> <span class="n">resources</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Run policy in default mode&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_lambda</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">provision</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+
+    <span class="n">run</span> <span class="o">=</span> <span class="n">__call__</span>
+    
     <span class="k">def</span> <span class="nf">_write_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rel_p</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="n">rel_p</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
             <span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">session_factory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">assume</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
-        <span class="n">session</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span>
-            <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
-            <span class="n">profile_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">profile</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span> <span class="ow">and</span> <span class="n">assume</span><span class="p">:</span>
-            <span class="n">session</span> <span class="o">=</span> <span class="n">assumed_session</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">,</span> <span class="s2">&quot;CloudMaid&quot;</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
-
-        <span class="c1"># FIXME: split all this maid_record stuff into a function; document it</span>
-        <span class="n">maid_record</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;MAID_RECORD&#39;</span><span class="p">)</span> <span class="c1"># FIXME: what are sane values for this?</span>
-        <span class="k">if</span> <span class="n">maid_record</span><span class="p">:</span>
-            <span class="n">maid_record</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="n">maid_record</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">maid_record</span><span class="p">):</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                    <span class="s2">&quot;Maid record path: </span><span class="si">%s</span><span class="s2"> does not exist&quot;</span> <span class="o">%</span> <span class="n">maid_record</span><span class="p">)</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;record path does not exist&quot;</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Recording aws traffic to: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">maid_record</span><span class="p">)</span>
-            <span class="kn">import</span> <span class="nn">placebo</span>
-            <span class="n">pill</span> <span class="o">=</span> <span class="n">placebo</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">maid_record</span><span class="p">)</span>
-            <span class="n">pill</span><span class="o">.</span><span class="n">record</span><span class="p">()</span>
-
-        <span class="n">session</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">user_agent_name</span> <span class="o">=</span> <span class="s2">&quot;CloudMaid&quot;</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">_session</span><span class="o">.</span><span class="n">user_agent_version</span> <span class="o">=</span> <span class="n">version</span>
-        <span class="k">return</span> <span class="n">session</span>
-        
     <span class="k">def</span> <span class="nf">get_resource_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resource&#39;</span><span class="p">)</span>
         <span class="n">factory</span> <span class="o">=</span> <span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource_type</span><span class="p">)</span>
@@ -201,6 +238,8 @@
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;Invalid resource type: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource_type</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">factory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+    
 </pre></div>
 
           </div>
@@ -254,7 +293,7 @@
           
     <div class="footer" role="contentinfo">
         &copy; Copyright 2015, Kapil Thangavelu.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
     </div>
         </div>
         <div class="clearer"></div>

@@ -50,23 +50,17 @@
           <div class="body" role="main">
             
   <h1>Source code for concurrent.futures.thread</h1><div class="highlight"><pre>
-<span class="c1"># Copyright 2009 Brian Quinlan. All Rights Reserved.</span>
+<span></span><span class="c1"># Copyright 2009 Brian Quinlan. All Rights Reserved.</span>
 <span class="c1"># Licensed to PSF under a Contributor Agreement.</span>
 
 <span class="sd">&quot;&quot;&quot;Implements ThreadPoolExecutor.&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">with_statement</span>
 <span class="kn">import</span> <span class="nn">atexit</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">_base</span>
+<span class="kn">import</span> <span class="nn">Queue</span> <span class="kn">as</span> <span class="nn">queue</span>
 <span class="kn">import</span> <span class="nn">threading</span>
 <span class="kn">import</span> <span class="nn">weakref</span>
 <span class="kn">import</span> <span class="nn">sys</span>
-
-<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">_base</span>
-
-<span class="k">try</span><span class="p">:</span>
-    <span class="kn">import</span> <span class="nn">queue</span>
-<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-    <span class="kn">import</span> <span class="nn">Queue</span> <span class="kn">as</span> <span class="nn">queue</span>
 
 <span class="n">__author__</span> <span class="o">=</span> <span class="s1">&#39;Brian Quinlan (brian@sweetapp.com)&#39;</span>
 
@@ -90,11 +84,11 @@
 <span class="k">def</span> <span class="nf">_python_exit</span><span class="p">():</span>
     <span class="k">global</span> <span class="n">_shutdown</span>
     <span class="n">_shutdown</span> <span class="o">=</span> <span class="bp">True</span>
-    <span class="n">items</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_threads_queues</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_threads_queues</span><span class="o">.</span><span class="n">items</span><span class="p">())</span> <span class="k">if</span> <span class="n">_threads_queues</span> <span class="k">else</span> <span class="p">()</span>
     <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
         <span class="n">q</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
-        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">maxint</span><span class="p">)</span>
 
 <span class="n">atexit</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">_python_exit</span><span class="p">)</span>
 
@@ -123,6 +117,8 @@
             <span class="n">work_item</span> <span class="o">=</span> <span class="n">work_queue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">work_item</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
                 <span class="n">work_item</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+                <span class="c1"># Delete references to object. See issue16284</span>
+                <span class="k">del</span> <span class="n">work_item</span>
                 <span class="k">continue</span>
             <span class="n">executor</span> <span class="o">=</span> <span class="n">executor_reference</span><span class="p">()</span>
             <span class="c1"># Exit if:</span>
@@ -186,7 +182,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_work_queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">wait</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span><span class="p">:</span>
-                <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+                <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">maxint</span><span class="p">)</span>
     <span class="n">shutdown</span><span class="o">.</span><span class="n">__doc__</span> <span class="o">=</span> <span class="n">_base</span><span class="o">.</span><span class="n">Executor</span><span class="o">.</span><span class="n">shutdown</span><span class="o">.</span><span class="n">__doc__</span>
 </pre></div>
 
@@ -241,7 +237,7 @@
           
     <div class="footer" role="contentinfo">
         &copy; Copyright 2015, Kapil Thangavelu.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
     </div>
         </div>
         <div class="clearer"></div>

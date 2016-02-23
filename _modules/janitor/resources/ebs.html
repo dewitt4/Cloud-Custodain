@@ -50,22 +50,28 @@
           <div class="body" role="main">
             
   <h1>Source code for janitor.resources.ebs</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="kn">import</span> <span class="n">tzutc</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">janitor.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">janitor.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">ANNOTATION_KEY</span>
+<span class="kn">from</span> <span class="nn">janitor.filters</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="n">MarkedForOp</span><span class="p">)</span>
 
 <span class="kn">from</span> <span class="nn">janitor.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">janitor.utils</span> <span class="kn">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">query_instances</span>
+<span class="kn">from</span> <span class="nn">janitor.utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">query_instances</span><span class="p">,</span> <span class="n">chunks</span><span class="p">)</span>
 
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;maid.ebs&#39;</span><span class="p">)</span>
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;ebs.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;ebs.actions&#39;</span><span class="p">)</span>
+
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">MarkedForOp</span><span class="p">)</span>
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;ebs&#39;</span><span class="p">)</span>
@@ -80,11 +86,17 @@
 
     <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>  <span class="c1"># FIXME: This is always []. What&#39;s going on?</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
+            <span class="n">vols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">({</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;ebs&#39;</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">})</span>
+            <span class="k">if</span>  <span class="n">vols</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Using cached ebs: </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">vols</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">vols</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Querying ebs volumes&quot;</span><span class="p">)</span>
         <span class="n">p</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_volumes&#39;</span><span class="p">)</span>
         <span class="n">results</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">Filters</span><span class="o">=</span><span class="n">query</span><span class="p">)</span>
         <span class="n">volumes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">rp</span><span class="p">[</span><span class="s1">&#39;Volumes&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">rp</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">({</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;ebs&#39;</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span> <span class="n">volumes</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">volumes</span><span class="p">)</span>
 
     
@@ -92,7 +104,7 @@
 <div class="viewcode-block" id="AttachedInstanceFilter"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.AttachedInstanceFilter">[docs]</a><span class="k">class</span> <span class="nc">AttachedInstanceFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter volumes based on filtering on their attached instance&quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="AttachedInstanceFilter.process"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.AttachedInstanceFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+<div class="viewcode-block" id="AttachedInstanceFilter.process"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.AttachedInstanceFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="n">original_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
         <span class="n">resources</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Attachments&#39;</span><span class="p">)]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Filtered from </span><span class="si">%d</span><span class="s1"> volumes to </span><span class="si">%d</span><span class="s1"> attached volumes&#39;</span> <span class="o">%</span> <span class="p">(</span>
@@ -146,33 +158,13 @@
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">]:</span>
                 <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">instance_id</span><span class="p">:</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="n">i</span>
-                    <span class="k">break</span>        
+                    <span class="k">break</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not find instance </span><span class="si">%s</span><span class="s2"> for volume </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="n">instance_id</span><span class="p">,</span> <span class="n">volume</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]))</span>
             <span class="k">return</span>
 
-        <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">extant_tags</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([</span>
-            <span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">volume</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])])</span>
-        
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">found</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">extant_tags</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;aws:&#39;</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
-    
-        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;LastAttachTime&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;AttachTime&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()})</span>
-        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;LastAttachInstance&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]})</span>
-
-        <span class="c1"># Don&#39;t add tags if we&#39;re already current</span>
-        <span class="k">if</span> <span class="s1">&#39;LastAttachInstance&#39;</span> <span class="ow">in</span> <span class="n">extant_tags</span> \
-           <span class="ow">and</span> <span class="n">extant_tags</span><span class="p">[</span><span class="s1">&#39;LastAttachInstance&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]:</span>
-            <span class="k">return</span>
+        <span class="n">copy_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_volume_tags</span><span class="p">(</span><span class="n">volume</span><span class="p">,</span> <span class="n">found</span><span class="p">,</span> <span class="n">attachment</span><span class="p">)</span>
 
         <span class="c1"># Can&#39;t add more tags than the resource supports</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">10</span><span class="p">:</span>
@@ -181,11 +173,109 @@
                 <span class="n">volume</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">],</span>
                 <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]))</span>
             <span class="k">return</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">copy_tags</span><span class="p">:</span>
+            <span class="k">return</span>
         
         <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span>
             <span class="n">Resources</span><span class="o">=</span><span class="p">[</span><span class="n">volume</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]],</span>
             <span class="n">Tags</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">,</span>
-            <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div></div>
+            <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CopyInstanceTags.get_volume_tags"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.CopyInstanceTags.get_volume_tags">[docs]</a>    <span class="k">def</span> <span class="nf">get_volume_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volume</span><span class="p">,</span> <span class="n">instance</span><span class="p">,</span> <span class="n">attachment</span><span class="p">):</span>
+        <span class="n">only_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">[])</span>  <span class="c1"># specify which tags to copy</span>
+        <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">extant_tags</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([</span>
+            <span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">volume</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])])</span>
+        
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">instance</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">only_tags</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">only_tags</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">extant_tags</span> <span class="ow">and</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">extant_tags</span><span class="p">[</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]]:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;aws:&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="c1"># Don&#39;t add attachment tags if we&#39;re already current</span>
+        <span class="k">if</span> <span class="s1">&#39;LastAttachInstance&#39;</span> <span class="ow">in</span> <span class="n">extant_tags</span> \
+           <span class="ow">and</span> <span class="n">extant_tags</span><span class="p">[</span><span class="s1">&#39;LastAttachInstance&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">copy_tags</span>
+            
+        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;LastAttachTime&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;AttachTime&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()})</span>
+        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;LastAttachInstance&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">attachment</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]})</span>
+        <span class="k">return</span> <span class="n">copy_tags</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UnMark"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.UnMark">[docs]</a><span class="k">class</span> <span class="nc">UnMark</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span></div>
+
+    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volumes</span><span class="p">):</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;maid_status&#39;</span><span class="p">])</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">vol_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">volumes</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_volume_set</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">tags</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">&quot;Exception removing tags: </span><span class="si">%s</span><span class="s2"> on volset: </span><span class="si">%s</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">tags</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+
+    <span class="k">def</span> <span class="nf">process_volume_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">delete_tags</span><span class="p">(</span>
+            <span class="n">Resources</span><span class="o">=</span><span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vol_set</span><span class="p">],</span>
+            <span class="n">Tags</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tag_keys</span><span class="p">},</span>
+            <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="MarkForOp"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ebs.MarkForOp">[docs]</a><span class="k">class</span> <span class="nc">MarkForOp</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span></div>
+
+    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;action:mark-for-op requires op specification&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">volumes</span><span class="p">):</span>
+        <span class="n">msg_tmpl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;msg&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Unused volume will be removed: {op}@{stop_date}&#39;</span><span class="p">)</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="s1">&#39;maid_status&#39;</span><span class="p">)</span>
+        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span>
+        <span class="n">stop_date</span> <span class="o">=</span> <span class="n">n</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">date</span><span class="p">)</span>
+        
+        <span class="n">msg</span> <span class="o">=</span> <span class="n">msg_tmpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">stop_date</span><span class="o">=</span><span class="n">stop_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">))</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">tag</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}]</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">vol_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">volumes</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_volume_set</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">tags</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">&quot;Exception removing tags: </span><span class="si">%s</span><span class="s2"> on volset: </span><span class="si">%s</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">tags</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+
+    <span class="k">def</span> <span class="nf">process_volume_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>        
+        <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span>
+            <span class="n">Resources</span><span class="o">=</span><span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vol_set</span><span class="p">],</span>
+            <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+            <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span>
 
 
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encrypt-instance-volumes&#39;</span><span class="p">)</span>
@@ -222,6 +312,7 @@
             <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">instance_id</span><span class="p">,</span> <span class="n">vol_set</span> <span class="ow">in</span> <span class="n">instance_vol_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_volume</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">,</span> <span class="n">vol_set</span><span class="p">)]</span> <span class="o">=</span> <span class="n">instance_id</span>
+                
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
                     <span class="n">instance_id</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
@@ -327,7 +418,7 @@
         <span class="c1"># Wait on encrypted volume creation</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">wait_on_resource</span><span class="p">(</span><span class="n">ec2</span><span class="p">,</span> <span class="n">volume_id</span><span class="o">=</span><span class="n">results</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
         
-        <span class="c1"># Delete transient snapshots        </span>
+        <span class="c1"># Delete transient snapshots</span>
         <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">transient_snapshots</span><span class="p">:</span>
             <span class="n">ec2</span><span class="o">.</span><span class="n">delete_snapshot</span><span class="p">(</span><span class="n">SnapshotId</span><span class="o">=</span><span class="n">sid</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span>
@@ -344,6 +435,10 @@
         <span class="c1"># due to overly long resource creation is complex to unwind,</span>
         <span class="c1"># with multi-volume instances. Wait up to three times (actual</span>
         <span class="c1"># wait time is a per resource type configuration.</span>
+
+        <span class="c1"># Note we wait for all resource creation before attempting to</span>
+        <span class="c1"># patch an instance, so even on resource creation failure, the</span>
+        <span class="c1"># instance is not modified</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_wait_on_resource</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
@@ -443,7 +538,7 @@
           
     <div class="footer" role="contentinfo">
         &copy; Copyright 2015, Kapil Thangavelu.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
     </div>
         </div>
         <div class="clearer"></div>

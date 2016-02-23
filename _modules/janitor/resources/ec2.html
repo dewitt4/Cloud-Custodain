@@ -50,17 +50,17 @@
           <div class="body" role="main">
             
   <h1>Source code for janitor.resources.ec2</h1><div class="highlight"><pre>
-<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="kn">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
-<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="kn">import</span> <span class="n">tzutc</span>
-
+<span></span><span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="kn">import</span> <span class="n">tzutc</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
-<span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">operator</span>
 
 
 <span class="kn">from</span> <span class="nn">janitor.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">janitor.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
+<span class="kn">from</span> <span class="nn">janitor.filters</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">MarkedForOp</span><span class="p">,</span>
+    <span class="n">ValueFilter</span>
+<span class="p">)</span>
 <span class="kn">from</span> <span class="nn">janitor.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">janitor.offhours</span> <span class="kn">import</span> <span class="n">Time</span><span class="p">,</span> <span class="n">OffHour</span><span class="p">,</span> <span class="n">OnHour</span>
 <span class="kn">from</span> <span class="nn">janitor</span> <span class="kn">import</span> <span class="n">utils</span>
@@ -71,6 +71,7 @@
 
 
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;time&#39;</span><span class="p">,</span> <span class="n">Time</span><span class="p">)</span>
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">MarkedForOp</span><span class="p">)</span>
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
@@ -90,9 +91,14 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">client</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        
+
+    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">utils</span><span class="o">.</span><span class="n">query_instances</span><span class="p">(</span>
+            <span class="bp">None</span><span class="p">,</span>
+            <span class="n">client</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">),</span>
+            <span class="n">InstanceIds</span><span class="o">=</span><span class="n">resource_ids</span><span class="p">)</span>
+
     <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="c1"># FIXME: Explain why this is different from the other ResourceManagers</span>
         <span class="n">qf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>
         <span class="n">instances</span> <span class="o">=</span> <span class="bp">None</span>
 
@@ -141,7 +147,6 @@
         <span class="k">return</span> <span class="n">qf</span>
 
 
-
 <div class="viewcode-block" id="StateTransitionFilter"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.StateTransitionFilter">[docs]</a><span class="k">class</span> <span class="nc">StateTransitionFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter instances by state.</span>
 
@@ -161,14 +166,46 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instances&quot;</span> <span class="o">%</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">orig_length</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
-        
-    
+
+
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;ebs&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AttachedVolume"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.AttachedVolume">[docs]</a><span class="k">class</span> <span class="nc">AttachedVolume</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span></div>
+
+    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">volume_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_volume_mapping</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">operator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;operator&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;and&#39;</span> <span class="ow">and</span> <span class="nb">all</span> <span class="ow">or</span> <span class="nb">any</span>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_volume_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">volume_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">ec2</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">instance_set</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">],</span> <span class="mi">200</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Processsing </span><span class="si">%d</span><span class="s2"> instance of </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">instance_set</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">ec2</span><span class="o">.</span><span class="n">describe_volumes</span><span class="p">(</span>
+                <span class="n">Filters</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span><span class="s1">&#39;attachment.instance-id&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">instance_set</span><span class="p">}])</span>
+            <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Volumes&#39;</span><span class="p">]:</span>
+                <span class="n">volume_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                    <span class="n">v</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">volume_map</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">volumes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">volume_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">volumes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">,</span> <span class="n">volumes</span><span class="p">))</span>
+
+
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;offhour&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="InstanceOffHour"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.InstanceOffHour">[docs]</a><span class="k">class</span> <span class="nc">InstanceOffHour</span><span class="p">(</span><span class="n">OffHour</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span></div>
 
     <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,)</span>
 
-    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">InstanceOffHour</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
 
@@ -178,7 +215,7 @@
     
     <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;stopped&#39;</span><span class="p">,)</span>
 
-    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">InstanceOnHour</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
     
@@ -199,50 +236,10 @@
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;instance-age&#39;</span><span class="p">)</span>        
 <div class="viewcode-block" id="InstanceAgeFilter"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.InstanceAgeFilter">[docs]</a><span class="k">class</span> <span class="nc">InstanceAgeFilter</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span></div>
 
+    <span class="c1"># TODO use mount point attachment on /dev/sda</span>
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;LaunchTime&quot;</span>
-    
                 
-<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="MarkedForOp"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.MarkedForOp">[docs]</a><span class="k">class</span> <span class="nc">MarkedForOp</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span></div>
 
-    <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;maid.ec2.filters.marked_for_op&quot;</span><span class="p">)</span>
-
-    <span class="n">current_date</span> <span class="o">=</span> <span class="bp">None</span>
-
-    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-        <span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="s1">&#39;maid_status&#39;</span><span class="p">)</span>
-        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;stop&#39;</span><span class="p">)</span>
-        <span class="n">skew</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skew&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-        
-        <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
-        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
-            <span class="k">if</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">tag</span><span class="p">:</span>
-                <span class="n">v</span> <span class="o">=</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span>
-                <span class="k">break</span>
-
-        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">False</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;:&#39;</span> <span class="ow">in</span> <span class="n">v</span> <span class="ow">or</span> <span class="ow">not</span> <span class="s1">&#39;@&#39;</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">False</span>
-
-        <span class="n">msg</span><span class="p">,</span> <span class="n">tgt</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="n">action</span><span class="p">,</span> <span class="n">action_date_str</span> <span class="o">=</span> <span class="n">tgt</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;@&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">action</span> <span class="o">!=</span> <span class="n">op</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">False</span>
-        
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">action_date</span> <span class="o">=</span> <span class="n">parse_date</span><span class="p">(</span><span class="n">action_date_str</span><span class="p">)</span>
-        <span class="k">except</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> could not parse tag:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="n">tag</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
-
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="n">action_date</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">skew</span><span class="p">))</span>
-
-    
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>    
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;mark&#39;</span><span class="p">)</span>        
 <div class="viewcode-block" id="Mark"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.Mark">[docs]</a><span class="k">class</span> <span class="nc">Mark</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span></div>
@@ -328,10 +325,12 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Disabling termination protection on instances&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">disable_deletion_protection</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
-            <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">],</span>
-            <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div>
+        <span class="c1"># limit batch sizes to avoid api limits</span>
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
+                <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">],</span>
+                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Terminate.disable_deletion_protection"><a class="viewcode-back" href="../../../generated/janitor.resources.html#janitor.resources.ec2.Terminate.disable_deletion_protection">[docs]</a>    <span class="k">def</span> <span class="nf">disable_deletion_protection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
         <span class="k">def</span> <span class="nf">process_instance</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
@@ -344,7 +343,7 @@
                 <span class="n">Value</span><span class="o">=</span><span class="s1">&#39;false&#39;</span><span class="p">,</span>
                 <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span>
 
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_instance</span><span class="p">,</span> <span class="n">instances</span><span class="p">))</span></div></div>
             
         
@@ -503,7 +502,7 @@
           
     <div class="footer" role="contentinfo">
         &copy; Copyright 2015, Kapil Thangavelu.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.4.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
     </div>
         </div>
         <div class="clearer"></div>
