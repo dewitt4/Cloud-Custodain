@@ -1,12 +1,13 @@
-"""CloudMaid Lambda Integration
-----------------------------
+"""
+Lambda Support
+--------------
 
 Lambda provides for powerful realtime and near realtime compliance
 execution when integrated in with a number of different amazon
 services as event sources.
 
 AWS Cloud Config
-----------------
+################
 
 One event source is using AWS Cloud Config, which provides versioned
 json representation of objects into s3 with rules execution against
@@ -38,7 +39,7 @@ only on a delta to a resource or against each config snapshot..
 For a wider range of coverage and functionality we turn to
 
 Cloud Watch Events
-------------------
+##################
 
 Cloud watchs events is a general event bus for aws infrastructure, atm
 it covers two major sources of information, real time instance status events
@@ -53,7 +54,7 @@ compliance, that effectively means the non compliant resource never
 became available.
 
 Cloud Maid Integration
-----------------------
+######################
 
 Maid provides for policy level execution against any lambda subscribable
 event stream.
@@ -65,7 +66,7 @@ the policy actions.
 Mu is the letter after lambda, lambda is a keyword in python.
 
 Configuration
--------------
+#############
 
 
 Examples

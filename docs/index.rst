@@ -15,12 +15,12 @@ Contents:
    architecture
    developer
    roadmap
-   lambda
-   offhours
    filter-values
    ec2
    s3
    comparisons
+   lambda
+   offhours
 
 Indices and tables
 ==================
