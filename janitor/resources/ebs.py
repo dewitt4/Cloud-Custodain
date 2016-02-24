@@ -178,7 +178,7 @@ class UnMark(BaseAction):
         client = local_session(self.manager.session_factory).client('ec2')
         client.delete_tags(
             Resources=[v['VolumeId'] for v in vol_set],
-            Tags={'Key': k for k in tag_keys},
+            Tags=[{'Key': k for k in tag_keys}],
             DryRun=self.manager.config.dryrun)
 
 
@@ -217,7 +217,7 @@ class MarkForOp(BaseAction):
             if f.exception():
                 log.error(
                     "Exception removing tags: %s on volset: %s \n %s" % (
-                        tags, vol_set, f.exception()))
+                        tags, len(vol_set), f.exception()))
 
     def process_volume_set(self, vol_set, tags):
         client = local_session(self.manager.session_factory).client('ec2')        

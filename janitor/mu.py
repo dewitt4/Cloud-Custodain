@@ -274,8 +274,13 @@ class PythonPackageArchive(object):
     directory structure.
     """
     
-    def __init__(self, src_path, virtualenv_dir, skip=None, lib_filter=None, src_filter=None):
+    def __init__(self,
+                 src_path, virtualenv_dir=None, skip=None,
+                 lib_filter=None, src_filter=None):
         self.src_path = src_path
+        if virtualenv_dir is None:
+            virtualenv_dir = os.path.abspath(
+                os.path.join(os.path.dirname(sys.executable), '..'))
         self.virtualenv_dir = virtualenv_dir
         self._temp_archive_file = None
         self._zip_file = None
@@ -362,11 +367,6 @@ class PythonPackageArchive(object):
         with open(self._temp_archive_file.name) as fh:
             return base64.b64encode(checksum(fh, hashlib.sha256()))
 
-    @property
-    def size(self):
-        assert self._closed, "Archive not closed"
-        return os.stat(self._temp_archive_file.name).st_size
-    
     def get_bytes(self):
         # return the entire zip file as byte string.
         assert self._closed, "Archive not closed"

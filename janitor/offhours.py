@@ -90,6 +90,7 @@ Options
 from janitor.filters import Filter
 
 import datetime
+
 from dateutil import zoneinfo
 
 
@@ -166,10 +167,15 @@ class Time(Filter):
             minute=self.data.get('minute', 0))
 
     def get_local_tz(self, parts):
+        tz_spec = None
         for p in parts:
             if p.startswith('tz='):
                 tz_spec = p
                 break
+        if tz_spec is None:
+            self.log.debug(
+                "offhours: tz parse could not find spec %s" % ", ".join(parts))
+            tz_spec = self.data.get('default_tz', 'et')
         _, tz_spec = tz_spec.split('=')
 
         if tz_spec in TZ_ALIASES:
