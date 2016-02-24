@@ -54,6 +54,10 @@ def setup_parser():
     identify.set_defaults(command=commands.identify)
     _default_options(identify)
 
+    logs = subs.add_parser('logs')
+    logs.set_defaults(command=commands.logs)
+    _default_options(logs)
+    
     run = subs.add_parser("run")
     run.set_defaults(command=commands.run)
     _default_options(run)

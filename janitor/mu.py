@@ -121,9 +121,11 @@ Examples
 """
 
 import abc
+import base64
 import inspect
 from cStringIO import StringIO
 import fnmatch
+import hashlib
 import json
 import logging
 import os
@@ -353,11 +355,30 @@ class PythonPackageArchive(object):
         # dispose of the temp file for garbag collection
         if self._temp_archive_file:
             self._temp_archive_file = None
-            
+
+    def get_checksum(self):
+        """Return the b64 encoded sha256 checksum."""
+        assert self._closed, "Archive not closed"
+        with open(self._temp_archive_file.name) as fh:
+            return base64.b64encode(checksum(fh, hashlib.sha256()))
+
+    @property
+    def size(self):
+        assert self._closed, "Archive not closed"
+        return os.stat(self._temp_archive_file.name).st_size
+    
     def get_bytes(self):
         # return the entire zip file as byte string.
         assert self._closed, "Archive not closed"
         return open(self._temp_archive_file.name, 'rb').read()
+
+
+def checksum(fh, hasher, blocksize=65536):
+    buf = fh.read(blocksize)
+    while len(buf) > 0:
+        hasher.update(buf)
+        buf = fh.read(blocksize)
+    return hasher.digest()
 
 
 def maid_archive(skip=None):
@@ -400,9 +421,9 @@ class LambdaManager(object):
                     yield f
     
     def publish(self, func, alias=None, role=None, s3_uri=None):
-        log.info('Publishing maid policy lambda function %s', func.name)
+        #log.info('Publishing maid policy lambda function %s', func.name)
 
-        result = self._create_or_update(func, role, s3_uri)
+        result = self._create_or_update(func, role, s3_uri, qualifier=alias)
         if alias:
             func.alias = self.publish_alias(result, alias)
 
@@ -418,43 +439,65 @@ class LambdaManager(object):
         for e in func.get_events(self.session_factory):
             e.remove(func)
         self.client.delete_function(FunctionName=func.name)
+
+    def logs(self, func):
+        logs = self.session_factory().client('logs')
+        group_name = "/aws/lambda/%s" % func.name
+        try:
+            log_groups = logs.describe_log_groups(
+                logGroupNamePrefix=group_name)
+        except ClientError as e:
+            return
+        log_streams = logs.describe_log_streams(
+            logGroupName=group_name,
+            orderBy="LastEventTime", limit=3, descending=True)
+        for s in reversed(log_streams['logStreams']):
+            result = logs.get_log_events(
+                logGroupName=group_name, logStreamName=s['logStreamName'])
+            for e in result['events']:
+                yield e
+        
+    @staticmethod
+    def delta_function(lambda_func, func):
+        conf = func.get_config()
+        for k in conf:
+            if conf[k] != lambda_func['Configuration'][k]:
+                return True
             
-    def _create_or_update(self, func, role=None, s3_uri=None):
+    def _create_or_update(self, func, role=None, s3_uri=None, qualifier=None):
         role = func.role or role
         assert role, "Lambda function role must be specified"
         archive = func.get_archive()
-        lfunc = self.get(func.name)
+        lfunc = self.get(func.name, qualifier)
 
         if s3_uri:
+            # Todo support versioned buckets
             bucket, key = self._upload_func(s3_uri, func, archive)
             code_ref = {'S3Bucket': bucket, 'S3Key': key}
         else:
             code_ref = {'ZipFile': archive.get_bytes()}
 
         if lfunc:
-            log.debug("Updating function %s code", func.name)
-            params = dict(FunctionName=func.name, Publish=True)
-            params.update(code_ref)
-            result = self.client.update_function_code(**params)
-
-            # TODO update function configuration
-            # also set publish above to false, and publish
+            result = lfunc['Configuration']
+            if archive.get_checksum() != lfunc['Configuration']['CodeSha256']:
+                log.debug("Updating function %s code", func.name)
+                params = dict(FunctionName=func.name, Publish=True)
+                params.update(code_ref)
+                result = self.client.update_function_code(**params)
+            #else:
+            #    log.debug("Code unchanged")
+            # TODO/Consider also set publish above to false, and publish
             # after configuration change?
-            #
-            #if self.delta(lfunc, func):
-            #    self.client.update_function_configuration(
-            #        )
+            if self.delta_function(lfunc, func):
+                log.debug("Updating function: %s config" % func.name)
+                result = self.client.update_function_configuration(**func.get_config())
+            #else:
+            #    log.debug("Config unchanged")
         else:
-            result = self.client.create_function(
-                FunctionName=func.name,
-                Code=code_ref,
-                Runtime=func.runtime,
-                Role=role,
-                Handler=func.handler,
-                Description=func.description,
-                Timeout=func.timeout,
-                MemorySize=func.memory_size,
-                Publish=True)
+            params = func.get_config()
+            params.update({'Publish': True, 'Code': code_ref})
+            result = self.client.create_function(**params)
+
         return result
 
     def _upload_func(self, s3_uri, func, archive):
@@ -479,26 +522,34 @@ class LambdaManager(object):
             return func_data['FunctionArn']
         func_name = func_data['FunctionName']
         func_version = func_data['Version']
-        log.debug("Publishing maid lambda alias %s", alias)
 
         exists = resource_exists(
             self.client.get_alias, FunctionName=func_name, Name=alias)
 
         if not exists:
+            log.debug("Publishing maid lambda alias %s", alias)            
             alias_result = self.client.create_alias(
                 FunctionName=func_name,
                 Name=alias,
                 FunctionVersion=func_version)
         else:
+            if (exists['FunctionVersion'] == func_version and
+                exists['Name'] == alias):
+                #log.debug("Alias unchanged")
+                return exists['AliasArn']
+            log.debug('Updating maid lambda alias %s', alias)
             alias_result = self.client.update_alias(
                 FunctionName=func_name,
                 Name=alias,
                 FunctionVersion=func_version)
         return alias_result['AliasArn']
                         
-    def get(self, func_name):
+    def get(self, func_name, qualifier=None):
+        params = {'FunctionName': func_name}
+        if qualifier:
+            params['Qualifier'] = qualifier
         return resource_exists(
-            self.client.get_function, FunctionName=func_name)
+            self.client.get_function, **params)
 
     
 def resource_exists(op, *args, **kw):
@@ -551,7 +602,17 @@ class LambdaFunction:
     @abc.abstractmethod
     def get_archive(self):
         """Return the lambda distribution archive object."""
-
+        
+    def get_config(self):
+        return {
+            'FunctionName': self.name,
+            'MemorySize': self.memory_size,
+            'Role': self.role,
+            'Description': self.description,
+            'Runtime': self.runtime,
+            'Handler': self.handler,
+            'Timeout': self.timeout}
+        
         
 PolicyHandlerTemplate = """\
 from janitor import mu
@@ -742,8 +803,6 @@ class CloudWatchEventSource(object):
         elif not rule:
             log.debug("Creating cwe rule for %s" % self)
             response = self.client.put_rule(**params)
-        else:
-            log.debug("Existing cwe rule found for %s" % self)
             
         found = False
         response = self.client.list_targets_by_rule(Rule=func.name)
@@ -752,9 +811,9 @@ class CloudWatchEventSource(object):
                 found = True
 
         if found:
-            log.debug('Existing cwe rule target found for %s' % self)
             return
-            
+
+        log.debug('Creating cwe rule target found for %s' % self)
         self.client.put_targets(
             Rule=func.name,
             Targets=[
