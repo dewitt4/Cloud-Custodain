@@ -562,6 +562,7 @@ def resource_exists(op, *args, **kw):
     
     
 class LambdaFunction:
+    """Abstract baes class for lambda functions."""
 
     __metaclass__ = abc.ABCMeta
 
@@ -596,7 +597,7 @@ class LambdaFunction:
         """ """                
 
     @abc.abstractmethod
-    def get_events(self):
+    def get_events(self, session_factory):
         """event sources that should be bound to this lambda."""
     
     @abc.abstractmethod
@@ -738,7 +739,8 @@ class CloudWatchEventSource(object):
             self.client.describe_rule,
             Name=self._make_notification_id(rule_name))
 
-    def delta(self, src, tgt):
+    @staticmethod
+    def delta(src, tgt):
         """Given two cwe rules determine if the configuration is the same.
 
         Name is already implied.

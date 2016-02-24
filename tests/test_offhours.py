@@ -26,7 +26,22 @@ class OffHoursFilterTest(BaseTest):
             self.assertEqual(
                 datetime.datetime.now(tz), t)
             self.assertEqual(t.hour, 19)
-            
+
+    def test_offhours_real_world_values(self):
+        t = datetime.datetime(year=2015, month=12, day=1, hour=19, minute=5,
+                              tzinfo=zoneinfo.gettz('America/New_York'))
+
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            for i in [
+                    instance(Tags=[
+                        {'Key': 'maid_offhours', 'Value': ''}]),
+                    instance(Tags=[
+                        {'Key': 'maid_offhours', 'Value': '"Offhours tz=ET"'}]),
+                    instance(Tags=[
+                        {'Key': 'maid_offhours', 'Value': 'Offhours tz=PT'}])]:
+                self.assertEqual(OffHour({})(i), True)
+        
     def test_offhours(self):
         t = datetime.datetime(year=2015, month=12, day=1, hour=19, minute=5,
                               tzinfo=zoneinfo.gettz('America/New_York'))
