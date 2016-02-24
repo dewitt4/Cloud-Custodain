@@ -105,13 +105,16 @@ class Policy(object):
             raise ValueError("Invalid push event mode %s" % self.data)
         
         resource_ids = jmespath.search(mode.get('resources'), event)
+        self.log.info('found resource ids: %s' % resource_ids)
+
         if not resource_ids:
             self.log.warning("Could not find resource ids with %s" % (
                 mode.get('resources')))
             return
         resources = self.resource_manager.get_resources(resource_ids)
+        self.log.info('resources queried: %s' % len(resources))
         resources = self.resource_manager.filter_resources(resources, event)
-        
+
         if not resources:
             self.log.info("policy: %s resources: %s no resources matched" % (
                 self.name, self.resource_type))

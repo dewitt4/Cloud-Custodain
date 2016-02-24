@@ -155,7 +155,6 @@ class ValueFilter(Filter):
             if not self.data['op'] in OPERATORS:
                 raise FilterValidationError(
                     "Invalid operatorin value filter %s" %  self.data)
-
         return self
 
     def __call__(self, i):
@@ -274,6 +273,7 @@ class EventFilter(ValueFilter):
 
     def process(self, resources, event=None):
         if event is None:
-            return False
-        return self(event)
-    
+            return resources
+        if self(event):
+            return resources
+        return []
