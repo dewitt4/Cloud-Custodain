@@ -248,7 +248,7 @@ def resource_handle(event, lambda_context):
         
 def format_event(evt):
     io = StringIO()
-    pprint.pprint(evt, io)
+    json.dump(evt, io, indent=2)
     return io.getvalue()
 
 
