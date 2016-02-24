@@ -176,7 +176,8 @@ class Time(Filter):
             self.log.debug(
                 "offhours: tz parse could not find spec %s" % ", ".join(parts))
             tz_spec = self.data.get('default_tz', 'et')
-        _, tz_spec = tz_spec.split('=')
+        else:
+            _, tz_spec = tz_spec.split('=')
 
         if tz_spec in TZ_ALIASES:
             tz_spec = TZ_ALIASES[tz_spec]
