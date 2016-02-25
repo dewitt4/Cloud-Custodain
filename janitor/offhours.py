@@ -173,8 +173,6 @@ class Time(Filter):
                 tz_spec = p
                 break
         if tz_spec is None:
-            self.log.debug(
-                "offhours: tz parse could not find spec %s" % ", ".join(parts))
             tz_spec = self.data.get('default_tz', 'et')
         else:
             _, tz_spec = tz_spec.split('=')

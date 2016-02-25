@@ -30,7 +30,6 @@ class OffHoursFilterTest(BaseTest):
     def test_offhours_real_world_values(self):
         t = datetime.datetime(year=2015, month=12, day=1, hour=19, minute=5,
                               tzinfo=zoneinfo.gettz('America/New_York'))
-
         with mock.patch('datetime.datetime') as dt:
             dt.now.side_effect = lambda tz=None: t
             for i in [
