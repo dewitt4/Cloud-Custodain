@@ -1,5 +1,6 @@
 import jmespath
 
+
 class CloudTrailResource(object):
     """A mapping of events to resource types."""
     
@@ -26,6 +27,10 @@ class CloudTrailResource(object):
             'ids': 'responseElements.instancesSet.items[].instanceId',
             'source': 'ec2.amazonaws.com'},
         }
+
+    @classmethod
+    def get(cls, event_name):
+        return cls.mappings.get(event_name)
     
     @classmethod
     def match(cls, event):

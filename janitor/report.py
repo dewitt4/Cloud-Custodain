@@ -200,6 +200,7 @@ def record_set(session_factory, bucket, key_prefix, start_date):
         Bucket=bucket,
         Prefix=key_prefix.strip('/') + '/',
         Marker=marker)
+    
     with ThreadPoolExecutor(max_workers=20) as w:
         for key_set in p:
             if 'Contents' not in key_set:

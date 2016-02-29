@@ -1,14 +1,8 @@
-"""
-Offhours support
+"""Offhours support
 ================
 
-Turn instances off based on typical hours not in use. Also supports
-one time use instances for quickly trying something out, but wanting
-to turn terminate it after a length of time (like one week, one month, 
-etc).
-
-By default, Off hours support is based on tags being defined on
-applicable resources.
+Turn instances off based on typical hours not in use. By default, Off
+hours support is based on tags being defined on applicable resources.
 
 Tag Based Configuration
 =======================
@@ -86,6 +80,13 @@ Options
            tag: downtime
            onhour: 8
            offhour: 20
+
+TODO:
+ 
+Also support one time use instances for quickly trying something out,
+but wanting to turn terminate it after a length of time (like one
+week, one month, etc).
+
 """
 from janitor.filters import Filter
 
@@ -181,7 +182,8 @@ class Time(Filter):
             tz_spec = TZ_ALIASES[tz_spec]
         tz = zoneinfo.gettz(tz_spec)
         if tz is None:
-            self.log.warning("filter:offhours could not parse tz %s" % tz_spec)
+            self.log.warning(
+                "filter:offhours could not parse tz %s for %s" % (tz_spec, parts))
             return None
         return tz
     

@@ -1,39 +1,8 @@
 """
-Record Outputs
-==============
+Outputs metrics, logs, structured records across
+a variety of sources.
 
-Structured and Unstructured per action and resource
-
-- Python Execution Log
-- Policy Resource Records
-- Policy Action Records
-- CloudWatch Metrics
-- CloudWatch Logs
-
-S3 Bucket Location
-==================
-
-For structured and unstructured data, we store to s3.
-
-s3://cloud-maid-sts-digital-dev/
-
-policies
-
-- <policy-name>
-
-  - <date>
-
-    - <file.log.gz>
-
-      - <file.json.gz>
-      - maid
-
-Actions have output / or even state to store
-in local directories that is then uploaded.
-
-Every policy gets a temp directory for fs output.
-
-- maid-run.log.gz
+See docs/usage/outputs.rst
 
 """
 

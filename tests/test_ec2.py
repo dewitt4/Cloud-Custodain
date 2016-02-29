@@ -2,6 +2,7 @@ import unittest
 
 from janitor.resources import ec2
 from janitor.resources.ec2 import actions, QueryFilter
+from janitor import tags
 
 from .common import BaseTest
 
@@ -52,7 +53,7 @@ class TestActions(unittest.TestCase):
 
         self.assertIsInstance(
             actions.factory('mark', None),
-            ec2.Mark)
+            tags.Tag)
 
         self.assertIsInstance(
             actions.factory('stop', None),

@@ -13,7 +13,6 @@ from janitor.ctrail import CloudTrailResource
 from janitor.ctx import ExecutionContext
 from janitor.credentials import SessionFactory
 from janitor.manager import resources
-from janitor.mu import PolicyLambda, LambdaManager
 from janitor import utils
 
 # This import causes our resources to be initialized
@@ -82,7 +81,7 @@ class Policy(object):
             return False
         return True
     
-    def push(self, event, lambda_ctx, resources):
+    def push(self, event, lambda_ctx):
         """Run policy in push mode against given event.
  
         Lambda automatically generates cloud watch logs, and metrics
@@ -130,6 +129,9 @@ class Policy(object):
 
     def provision(self):
         """Provision policy as a lambda function."""
+        # Avoiding runtime lambda dep, premature optimization?
+        from janitor.mu import PolicyLambda, LambdaManager
+
         with self.ctx:
             self.log.info(
                 "Provisioning policy lambda %s", self.name)
