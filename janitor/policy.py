@@ -110,7 +110,11 @@ class Policy(object):
         if info:
             resource_ids = info['ids'].search(event)
         else:
-            resource_ids = jmespath.search(mode.get('resources'), event)
+            id_query = mode.get('ids') or mode.get('resources')
+            if not id_query:
+                raise ValueError("No id query configured")
+            resource_ids = jmespath.search(id_query, event)
+                
         self.log.info('found resource ids: %s' % resource_ids)
         if not resource_ids:
             self.log.warning("Could not find resource ids with %s" % (
