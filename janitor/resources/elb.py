@@ -1,3 +1,47 @@
+"""
+Elastic Load Balancers
+----------------------
+
+
+Common Policies
+###############
+
+SSL Policy enforcement
+
+Empty instance waste collection
+
+Actions
+#######
+
+filters:
+  - Instances: []
+actions:
+  - type: mark-for-op
+    op: 'delete'
+    days: 7
+
+filters:
+  - type: marked-for-op
+    op: delete
+actions:
+  - delete
+
+
+Filters
+#######
+
+In addition to value filters
+
+.. code-block:: yaml
+
+  filters:
+    - type: ssl-policy:
+      name: []
+      whitelist: []
+      blacklist:
+      - "Protocol-SSLv2"
+
+"""
 import logging
 import itertools
 

@@ -89,7 +89,7 @@ class TestInstanceAge(BaseFilterTest):
                 (i(two_months), True),
                 (i(one_month), False)
         ]:
-            self.assertFilter({'type': 'instance-age'}, ii, v)
+            self.assertFilter({'type': 'instance-uptime'}, ii, v)
 
 
 class TestMarkedForAction(BaseFilterTest):

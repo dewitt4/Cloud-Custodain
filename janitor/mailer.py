@@ -49,7 +49,8 @@ Proposed Usage
           - type: notify
             target: owner
             owner-tags: OwnerContact, OwnerEmail
-            delivery: ses
+            transport: [ses]
+: ses
 
 
 Data Message Structure

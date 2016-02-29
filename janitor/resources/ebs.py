@@ -7,9 +7,10 @@ from concurrent.futures import as_completed
 
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import (
-    FilterRegistry, ValueFilter, ANNOTATION_KEY, MarkedForOp)
+    FilterRegistry, ValueFilter, ANNOTATION_KEY)
 
 from janitor.manager import ResourceManager, resources
+from janitor import tags
 from janitor.utils import (
     local_session, set_annotation, query_instances, chunks)
 
@@ -19,7 +20,7 @@ log = logging.getLogger('maid.ebs')
 filters = FilterRegistry('ebs.filters')
 actions = ActionRegistry('ebs.actions')
 
-filters.register('marked-for-op', MarkedForOp)
+tags.register_tags(filters, actions, 'VolumeId')
 
 
 @resources.register('ebs')
@@ -78,6 +79,9 @@ class AttachedInstanceFilter(ValueFilter):
 @actions.register('copy-instance-tags')
 class CopyInstanceTags(BaseAction):
     """Copy instance tags to its attached volume.
+
+    Useful for cost allocation to ebs volumes and tracking usage
+    info for volumes.
 
     Mostly useful for volumes not set to delete on termination, which
     are otherwise candidates for garbage collection, copying the
@@ -157,29 +161,6 @@ class CopyInstanceTags(BaseAction):
         return copy_tags
 
 
-@actions.register('unmark')
-class UnMark(BaseAction):
-
-    def process(self, volumes):
-        tags = self.data.get('tags', ['maid_status'])
-        with self.executor_factory(max_workers=2) as w:
-            futures = []
-            for vol_set in chunks(volumes, size=100):
-                futures.append(
-                    w.submit(self.process_volume_set, vol_set, tags))
-
-        for f in as_completed(futures):
-            if f.exception():
-                log.error(
-                    "Exception removing tags: %s on volset: %s \n %s" % (
-                        tags, vol_set, f.exception()))
-
-    def process_volume_set(self, vol_set, tag_keys):
-        client = local_session(self.manager.session_factory).client('ec2')
-        client.delete_tags(
-            Resources=[v['VolumeId'] for v in vol_set],
-            Tags=[{'Key': k for k in tag_keys}],
-            DryRun=self.manager.config.dryrun)
 
 
 @actions.register('mark-for-op')

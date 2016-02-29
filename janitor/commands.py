@@ -20,11 +20,12 @@ def identify(options, policy_collection):
         resources = manager.resources()
         manager.format_json(resources, fh)        
 
+        
 def run(options, policy_collection):
     for policy in policy_collection.policies(options.policies):
         try:
             policy()
-        except Exception, e:
+        except Exception as e:
             if options.debug:
                 raise
             # Output does an exception log
@@ -65,7 +66,6 @@ def logs(options, policy_collection):
                 "%Y-%m-%d %H:%M:%S", time.localtime(e['timestamp']/1000)),
             e['message'])
                 
-                
     
 def resources(options, policy_collection):
     session_factory = SessionFactory(
@@ -76,7 +76,6 @@ def resources(options, policy_collection):
 
     if options.all:
         print(yaml.dump(funcs, dumper=yaml.SafeDumper))
-
 
 
 def resources_gc(options, policy_collection):

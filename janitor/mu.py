@@ -1,135 +1,17 @@
 """
-Lambda Support
---------------
+Cloud Maid Lambda Provisioning Support
 
-Lambda provides for powerful realtime and near realtime compliance
-execution when integrated in with a number of different amazon
-services as event sources.
-
-AWS Cloud Config
-################
-
-One event source is using AWS Cloud Config, which provides versioned
-json representation of objects into s3 with rules execution against
-them.  Config Rules allow for lambda execution against these resource
-states to determine compliance along with a nice dashboard targeted
-towards visualizing compliance information over time. At the moment
-config rules execute after the resource is already active, based on the
-underlying resource poll and config snapshot delivery. 
-
-Underlying the hood aws config and config rules, appear to be just
-productizing a poll of some resources into json files in s3 with
-lambda and versioned metrics reports. At the moment config rules
-only support items managed under the ec2 api (ec2, ebs, network) which
-means they have significant coverage gap when looking at the totality
-of aws services since they only cover a single api. As a result atm,
-they are best suited to orgs that are using a small subset of aws that
-requires audit (ie. just ec2) and prefer a pre-configured dashboard on
-that subset. Of course overtime the config service will evolve.
-
-However for capabilities and reporting around compliance Netflix
-security monkey would be a better choice atm imo. Maid distinguishes
-in its configurable policy engine, as opposed to hard coded, ability
-to run serverless, better integration with current best aws practices
-and provides remediation and enforcement capabilities.
-
-Open question on config rules, Its unclear if rules execute against
-only on a delta to a resource or against each config snapshot..
-
-For a wider range of coverage and functionality we turn to
-
-Cloud Watch Events
-##################
-
-Cloud watchs events is a general event bus for aws infrastructure, atm
-it covers two major sources of information, real time instance status events
-and cloud trail api calls over a poll period on cloud trail delivery.
-
-Cloud trail provides a much richer data source over the entire range
-of aws services exposed via the audit trail to enable defining
-compliance policy effectively against any aws product.
-
-Additionally for ec2 instances we can provide mandatory policy
-compliance, that effectively means the non compliant resource never
-became available.
-
-Cloud Maid Integration
-######################
-
-Maid provides for policy level execution against any lambda subscribable
-event stream.
-
-We reconstitue current state for the given resource and execute
-the policy against it, matching against the policy filters, and applying
-the policy actions.
-
-Mu is the letter after lambda, lambda is a keyword in python.
-
-Configuration
-#############
-
-
-Examples
-
-.. code-block:: yaml
-
-   policies:
-
-     # Cloud Watch Events over CloudTrail api calls (1-15m trailing)
-     - name: ec2-tag-compliance
-       mode: 
-         type: cloudtrail
-         sources: 
-          - ec2.amazonaws.com
-         events: 
-          - RunInstances
-         # For cloud trail events we need to reference the resources id
-         resources: "detail.responseElements.instancesSet.items[].instanceId"
-       filters:
-         - or:
-           - tag:required1: absent
-           - tag:required2: absent
-       actions:
-         - stop
-
-     # On EC2 Instance state events (real time, seconds)
-     - name: ec2-require-encrypted-volumes
-       mode:
-         type: ec2-instance-state
-         events:
-         - pending
-       filters:
-         - type: ebs
-           key: Encrypted
-           value: False
-       actions:
-         - mark
-         # TODO delete instance volumes that
-         # are not set to delete on terminate
-         # currently we have a poll policy that
-         # handles this.
-         - terminate
-
-     # Periodic Function
-     # Syntax for scheduler per http://goo.gl/x3oMQ4
-     # Supports both rate per unit time and cron expressions
-     - name: s3-bucket-check
-       resource: s3
-       mode:
-         type: periodic
-         schedule: "rate(1 day)"
+docs/lambda.rst
 """
 
 import abc
 import base64
 import inspect
-from cStringIO import StringIO
 import fnmatch
 import hashlib
 import json
 import logging
 import os
-import pprint
 import sys
 import tempfile
 import uuid
@@ -138,133 +20,14 @@ import zipfile
 from boto3.s3.transfer import S3Transfer, TransferConfig
 from botocore.exceptions import ClientError
 
-
 import janitor
 
+# Static event mapping to help simplify cwe rules creation
+from janitor.ctrail import CloudTrailResource
 from janitor.utils import parse_s3
 
-logging.root.setLevel(logging.INFO)
-logging.getLogger('botocore').setLevel(logging.WARNING)
+
 log = logging.getLogger('maid.lambda')
-
-
-__notes__ = """
-Architecture implementation notes
-
-We need to load policies for lambda functions a bit differently so that
-they can create the resources needed.
-
-
-For full lifecycle management we need to be able to determine
-
- - all resources associated to a given policy
- - all resources created by maid
- - diff of current resources to goal state of resources
- - remove previous policy lambdas and their event sources
-   - we need either the previous config file or we need
-     to assume only one maid running lambdas in a given
-     account.
-
- 
-Sample interactions
-
-  $ cloud-maid resources -c config.yml
-
-   lambda:
-     - function: name
-       sources:
-        - source info
-
-
-Given an event that comes in from one of a number of sources,
-per event source we need to be able to extract the rseource
-identities and then query state for them and before processing
-filters and actions.
-
-TODO:
-
-- Resource Manager Abstraction for all policies (or just policy
-  collection).
-
-- Lambda Manager Update Func Configuration
-
--  Cli tools for listing maid provisioned resources
-
-# S3 Uploads
-
- - Zip Files idempotency is a bit hard to define, we can't currently
-   tag the lambda with git revisions, and zip files track mod times.
- - We're actually uploading policy specific lambda functions, as we 
-   bake the policy into the function code. So we need to track two
-   separate versions, the policy version and the maid code version.
- - With s3 for the function code, we can track this information better
-   both via metadata and/or versioning.
-
-Todo
-----
-
-Maid additionally could use lambda execution for resource intensive policy
-actions, using dynamodb for results aggregation, and a periodic result checker,
-alternatively sqs with periodic aggregator, or when lambda is vpc accessible
-elasticache.
-"""
-
-# TODO move me / we should load config options directly from policy config   
-class Config(dict):
-
-    def __getattr__(self, k):
-        try:
-            return self[k]
-        except KeyError:
-            raise AttributeError(k)
-        
-    @classmethod
-    def empty(cls, **kw):
-        d = {}
-        d.update({
-            'region': "us-east-1",
-            'cache': '',
-            'profile': None,
-            'assume_role': None,
-            'log_group': None,
-            'metrics_enabled': False,
-            'output_dir': '/tmp/',
-            'cache_period': 0,
-            'dryrun': False})
-        d.update(kw)
-        return cls(d)
-
-
-def resource_handle(event, lambda_context):
-    """
-    Generic resource handler dispatch
-    """
-    from janitor.policy import load
-    policies = load(Config.empty(), 'config.json', format='json')
-    resources = None
-    for p in policies:
-        p.push(event, lambda_context, resources)
-
-        
-def format_event(evt):
-    io = StringIO()
-    json.dump(evt, io, indent=2)
-    return io.getvalue()
-
-
-def periodic_handle(event, context):
-    log.info("Processing scheduled event\n %s", format_event(event))
-    return resource_handle(event, context)
-
-    
-def ec2_instance_state_handle(event, context):
-    log.info("Processing instance event \n %s", format_event(event))
-    return resource_handle(event, context)
-
-    
-def cloudtrail_handle(event, context):
-    log.info("Processing trail event \n %s", format_event(event))
-    return resource_handle(event, context)
 
 
 class PythonPackageArchive(object):
@@ -393,7 +156,7 @@ def maid_archive(skip=None):
                 if n not in required:
                     dirs.remove(n)
         return dirs, files
-   
+
     return PythonPackageArchive(
         os.path.dirname(inspect.getabsfile(janitor)),
         os.path.abspath(os.path.join(
@@ -443,6 +206,7 @@ class LambdaManager(object):
     def logs(self, func):
         logs = self.session_factory().client('logs')
         group_name = "/aws/lambda/%s" % func.name
+        log.info("Fetching logs from group: %s" % group_name)
         try:
             log_groups = logs.describe_log_groups(
                 logGroupNamePrefix=group_name)
@@ -458,8 +222,10 @@ class LambdaManager(object):
                 yield e
         
     @staticmethod
-    def delta_function(lambda_func, func):
+    def delta_function(lambda_func, func, role):
         conf = func.get_config()
+        # TODO feels a little wierd
+        conf['Role'] = role
         for k in conf:
             if conf[k] != lambda_func['Configuration'][k]:
                 return True
@@ -484,18 +250,18 @@ class LambdaManager(object):
                 params = dict(FunctionName=func.name, Publish=True)
                 params.update(code_ref)
                 result = self.client.update_function_code(**params)
-            #else:
-            #    log.debug("Code unchanged")
             # TODO/Consider also set publish above to false, and publish
             # after configuration change?
-            if self.delta_function(lfunc, func):
+            if self.delta_function(lfunc, func, role):
                 log.debug("Updating function: %s config" % func.name)
-                result = self.client.update_function_configuration(**func.get_config())
+                params = func.get_config()
+                params['Role'] = role
+                result = self.client.update_function_configuration(**params)
             #else:
             #    log.debug("Config unchanged")
         else:
             params = func.get_config()
-            params.update({'Publish': True, 'Code': code_ref})
+            params.update({'Publish': True, 'Code': code_ref, 'Role': role})
             result = self.client.create_function(**params)
 
         return result
@@ -562,7 +328,7 @@ def resource_exists(op, *args, **kw):
     
     
 class LambdaFunction:
-    """Abstract baes class for lambda functions."""
+    """Abstract base class for lambda functions."""
 
     __metaclass__ = abc.ABCMeta
 
@@ -616,16 +382,17 @@ class LambdaFunction:
         
         
 PolicyHandlerTemplate = """\
-from janitor import mu
+from janitor import handler
 
 def run(event, context):
-    return mu.%s_handle(event, context)
+    return handler.dispatch_events(event, context)
 
 """
 
 
 class PolicyLambda(LambdaFunction):
-
+    """Wraps a maid policy to turn it into lambda function.
+    """
     handler = "maid_policy.run"
     runtime = "python2.7"
     timeout = 60
@@ -663,9 +430,7 @@ class PolicyLambda(LambdaFunction):
             zinfo('config.json'),
             json.dumps({'policies': [self.policy.data]}, indent=2))
         self.archive.add_contents(
-            zinfo('maid_policy.py'),
-            PolicyHandlerTemplate % (
-                self.policy.data['mode']['type'].replace('-', '_')))
+            zinfo('maid_policy.py'), PolicyHandlerTemplate)
         self.archive.close()
         return self.archive
 
@@ -693,7 +458,8 @@ def zinfo(fname):
 class CloudWatchEventSource(object):
     """
     Modeled loosely after kappa event source, such that it can be contributed
-    post cloudwatch events ga or public beta.
+    post cloudwatch events ga or public beta [update: waiting on kappa
+    major refactoring to land, https://goo.gl/gPwRV7 ]
 
     Event Pattern for Instance State
 
@@ -755,15 +521,28 @@ class CloudWatchEventSource(object):
             self.data.get('type'),
             ', '.join(self.data.get('sources', [])),
             ', '.join(self.data.get('events', [])))
-    
+
+    def resolve_cloudtrail_payload(self, payload):
+        ids = []
+        sources = self.data.get('sources', [])
+        
+        for e in self.data.get('events'):
+            event_info = CloudTrailResource.get(e)
+            if event_info is None:
+                continue
+            sources.append(event_info['source'])
+                           
+        payload['detail'] = {
+            'eventSource': sources,
+            'eventName': self.data.get('events', [])}
+            
     def render_event_pattern(self):
         event_type = self.data.get('type')
         payload = {}
         if event_type == 'cloudtrail':
             payload['detail-type'] = ['AWS API Call via CloudTrail']
-            payload['detail'] = {
-                'eventSource': self.data.get('sources', []),
-                'eventName': self.data.get('events', [])}
+            self.resolve_cloudtrail_payload(payload)
+
         elif event_type == "ec2-instance-state":
             payload['source'] = ['aws.ec2']
             payload['detail-type'] = [

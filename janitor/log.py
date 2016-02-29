@@ -78,13 +78,14 @@ class CloudWatchLogHandler(logging.Handler):
     
     def emit(self, message):
         """Send logs"""
-        # We're sending messages asynchronously, bubble to caller when we've detected
-        # an error on the message. This isn't great, but options once we've gone async
-        # are limited.
+        # We're sending messages asynchronously, bubble to caller when
+        # we've detected an error on the message. This isn't great,
+        # but options once we've gone async are limited.
         if self.transport and self.transport.error:
             raise self.transport.error
         
-        # Sanity safety, people do like to recurse by attaching to root log :-(
+        # Sanity safety, people do like to recurse by attaching to
+        # root log :-(
         if message.name.startswith('boto'):
             return
 

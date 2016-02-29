@@ -34,8 +34,6 @@ class PolicyLambdaProvision(BaseTest):
             'mode': {
                 'type': 'cloudtrail',
                 'events': ["CreateBucket"],
-                # Would be nice if we could obviate sources
-                'sources': ['s3.amazonaws.com']
             },
             'filters': [
                 {'type': 'missing-policy-statement',
@@ -44,8 +42,17 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev', role="illuminati")
+        result = mgr.publish(pl, 'Dev', role="illumanti")
 
+        events = pl.get_events(session_factory)
+        self.assertEqual(len(events), 1)
+        event = events.pop()
+        self.assertEqual(
+            json.loads(event.render_event_pattern()),
+            {u'detail': {u'eventName': [u'CreateBucket'],
+                         u'eventSource': [u'aws.s3']},
+             u'detail-type': ['AWS API Call via CloudTrail']})
+        
         self.assert_items(
             result,
             {'Description': 'cloud-maid lambda policy',

@@ -6,6 +6,7 @@ from janitor.registry import PluginRegistry
 
 import threading
 
+
 class ExecutorRegistry(PluginRegistry):
 
     def __init__(self, plugin_type):

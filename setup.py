@@ -8,6 +8,6 @@ setup(
     entry_points={
         'console_scripts': [
             'cloud-maid = janitor.cli:main']},
-    requires=["boto", "pyyaml"],
+    requires=["boto3", "pyyaml"],
 )
 

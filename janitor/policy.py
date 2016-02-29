@@ -9,10 +9,10 @@ import yaml
 
 from botocore.client import ClientError
 
+from janitor.ctrail import CloudTrailResource
 from janitor.ctx import ExecutionContext
 from janitor.credentials import SessionFactory
 from janitor.manager import resources
-from janitor.mu import PolicyLambda, LambdaManager
 from janitor import utils
 
 # This import causes our resources to be initialized
@@ -81,11 +81,13 @@ class Policy(object):
             return False
         return True
     
-    def push(self, event, lambda_ctx, resources):
+    def push(self, event, lambda_ctx):
         """Run policy in push mode against given event.
  
         Lambda automatically generates cloud watch logs, and metrics
-        for us.
+        for us, albeit with some deficienies, metrics no longer count
+        against valid resources matches, but against execution. 
+        Fortunately we already have replacements.
 
         TODO: better customization around execution context outputs
         TODO: support centralized lambda exec across accounts.
@@ -103,16 +105,22 @@ class Policy(object):
             raise NotImplementedError("asg-instance-state event not supported")
         elif mode_type != 'cloudtrail':
             raise ValueError("Invalid push event mode %s" % self.data)
-        
-        resource_ids = jmespath.search(mode.get('resources'), event)
-        self.log.info('found resource ids: %s' % resource_ids)
 
+        info = CloudTrailResource.match(event)
+        if info:
+            resource_ids = info['ids'].search(event)
+        else:
+            id_query = mode.get('ids') or mode.get('resources')
+            if not id_query:
+                raise ValueError("No id query configured")
+            resource_ids = jmespath.search(id_query, event)
+                
+        self.log.info('found resource ids: %s' % resource_ids)
         if not resource_ids:
             self.log.warning("Could not find resource ids with %s" % (
                 mode.get('resources')))
             return
         resources = self.resource_manager.get_resources(resource_ids)
-        self.log.info('resources queried: %s' % len(resources))
         resources = self.resource_manager.filter_resources(resources, event)
 
         if not resources:
@@ -125,6 +133,9 @@ class Policy(object):
 
     def provision(self):
         """Provision policy as a lambda function."""
+        # Avoiding runtime lambda dep, premature optimization?
+        from janitor.mu import PolicyLambda, LambdaManager
+
         with self.ctx:
             self.log.info(
                 "Provisioning policy lambda %s", self.name)

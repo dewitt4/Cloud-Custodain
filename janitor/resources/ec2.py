@@ -1,25 +1,23 @@
-from dateutil.tz import tzutc
-from datetime import datetime, timedelta
 import itertools
 import operator
 
+from dateutil.parser import parse as parse_date
 
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import (
-    FilterRegistry, Filter, AgeFilter, OPERATORS, MarkedForOp,
-    ValueFilter
+    FilterRegistry, AgeFilter, ValueFilter
 )
+
 from janitor.manager import ResourceManager, resources
 from janitor.offhours import Time, OffHour, OnHour
-from janitor import utils
+from janitor import tags, utils
 
 
 filters = FilterRegistry('ec2.filters')
 actions = ActionRegistry('ec2.actions')
 
-
 filters.register('time', Time)
-filters.register('marked-for-op', MarkedForOp)
+tags.register_tags(filters, actions, 'InstanceId')
 
 
 @resources.register('ec2')
@@ -63,7 +61,8 @@ class EC2(ResourceManager):
         p = client.get_paginator('describe_instances')
 
         results = p.paginate(Filters=qf)
-        reservations = list(itertools.chain(*[pp['Reservations'] for pp in results]))
+        reservations = list(
+            itertools.chain(*[pp['Reservations'] for pp in results]))
         instances =  list(itertools.chain(
             *[r["Instances"] for r in reservations]))
         self.log.debug("Found %d instances on %d reservations" % (
@@ -166,62 +165,34 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
     def process(self, resources, event=None):
         return super(InstanceOnHour, self).process(
             self.filter_instance_state(resources))
-    
 
-@filters.register('tag-count')
-class TagCountFilter(Filter):
 
-    def __call__(self, i):
-        count = self.data.get('count', 10)
-        op_name = self.data.get('op', 'lt')
-        op = OPERATORS.get(op_name)
-        tag_count = len([
-            t['Key'] for t in i.get('Tags', [])
-            if not t['Key'].startswith('aws:')])
-        return op(tag_count, count)
+@filters.register('instance-uptime')
+class UpTimeFilter(AgeFilter):
+
+    date_attribute = "LaunchTime"
 
     
 @filters.register('instance-age')        
 class InstanceAgeFilter(AgeFilter):
 
-    # TODO use mount point attachment on /dev/sda
     date_attribute = "LaunchTime"
-                
+    ebs_key_func = operator.itemgetter('AttachTime')
 
-@actions.register('tag')    
-@actions.register('mark')        
-class Mark(BaseAction):
-
-    def process(self, instances):
-        if not len(instances):
-            return
-        msg = self.data.get(
-            'msg', 'Instance does not meet ec2 policy guidelines')
-        tag = self.data.get('tag', 'maid_status')
-        self._run_api(
-            self.manager.client.create_tags,
-            Resources=[i['InstanceId'] for i in instances],
-            Tags=[
-                {"Key": tag,
-                 "Value": msg}],
-            DryRun=self.manager.config.dryrun)
-
+    def get_resource_date(self, i):
+        # LaunchTime is basically how long has the instance
+        # been on, use the oldest ebs vol attach time
+        found = False
+        ebs_vols = [
+            block['Ebs'] for block in i['BlockDeviceMappings']
+            if 'Ebs' in block]
+        if not ebs_vols:
+            # Fall back to using age attribute (ephemeral instances)
+            return super(InstanceAgeFilter, self).get_resource_date(i)
+        # Lexographical sort on date
+        ebs_vols = sorted(ebs_vols, key=self.ebs_key_func)
+        return parse_date(ebs_vols[0]['AttachTime'])
         
-@actions.register('untag')
-@actions.register('unmark')
-class Unmark(BaseAction):
-
-    def process(self, instances):
-        if not len(instances):
-            return
-        tag = self.data.get('tag', 'maid_status')
-        self._run_api(
-            self.manager.client.delete_tags,
-            Resources=[i['InstanceId'] for i in instances],
-            Tags=[
-                {"Key": tag}],
-            DryRun=self.manager.config.dryrun)
-
     
 @actions.register('start')        
 class Start(BaseAction, StateTransitionFilter):
@@ -294,39 +265,6 @@ class Terminate(BaseAction, StateTransitionFilter):
         with self.executor_factory(max_workers=2) as w:
             list(w.map(process_instance, instances))
             
-        
-@actions.register('mark-for-op')
-class MarkForOp(BaseAction):
-
-    def process(self, instances):
-        msg_tmpl = self.data.get(
-            'msg',
-            'Instance does not meet ec2 tag policy: {op}@{stop_date}')
-
-        op = self.data.get('op', 'stop')
-        tag = self.data.get('tag', 'maid_status')
-        date = self.data.get('days', 4)
-        
-        n = datetime.now(tz=tzutc())
-        stop_date = n + timedelta(days=date)
-        msg = msg_tmpl.format(
-            op=op, stop_date=stop_date.strftime('%Y/%m/%d'))
-
-        self.log.info("Tagging %d instances for %s on %s" % (
-            len(instances), op, stop_date.strftime('%Y/%m/%d')))
-
-        if not len(instances):
-            return
-        
-        self._run_api(
-            self.manager.client.create_tags,
-            Resources=[i['InstanceId'] for i in instances],
-            Tags=[
-                {"Key": tag,
-                 "Value": msg}],
-            DryRun=self.manager.config.dryrun)
-
-
 
 # Valid EC2 Query Filters
 # http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html

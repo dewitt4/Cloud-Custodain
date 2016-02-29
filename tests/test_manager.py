@@ -1,5 +1,6 @@
 from janitor.ctx import ExecutionContext
-from janitor.resources.ec2 import EC2, Mark
+from janitor.resources.ec2 import EC2
+from janitor.tags import Tag
 from .common import BaseTest, instance, Bag, Config
 
 
@@ -49,7 +50,7 @@ class TestEC2Manager(BaseTest):
         # a simple action by string
         ec2 = self.get_manager({'actions': ['mark']})
         self.assertEqual(len(ec2.actions), 1)
-        self.assertTrue(isinstance(ec2.actions[0], Mark))
+        self.assertTrue(isinstance(ec2.actions[0], Tag))
 
         # a configured action with dict
         ec2 = self.get_manager({
@@ -57,7 +58,7 @@ class TestEC2Manager(BaseTest):
                 {'type': 'mark',
                  'msg': 'Missing proper tags'}]})
         self.assertEqual(len(ec2.actions), 1)
-        self.assertTrue(isinstance(ec2.actions[0], Mark))
+        self.assertTrue(isinstance(ec2.actions[0], Tag))
         self.assertEqual(ec2.actions[0].data,
                          {'msg': 'Missing proper tags', 'type': 'mark'})
         
