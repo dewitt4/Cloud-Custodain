@@ -10,6 +10,87 @@ from janitor.offhours import OffHour, OnHour
 
 class OffHoursFilterTest(BaseTest):
 
+    def test_opt_out_behavior(self):
+        # Some users want to match based on policy filters to
+        # a resource subset with default opt out behavior
+        t = datetime.datetime(
+            year=2015, month=12, day=1, hour=19, minute=5,
+            tzinfo=zoneinfo.gettz('America/New_York'))
+        i = instance(Tags=[])
+        f = OffHour({'opt-out': True})
+
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            self.assertEqual(f(i), True)
+            t = datetime.datetime(
+                year=2015, month=12, day=1, hour=7, minute=5,
+                tzinfo=zoneinfo.gettz('America/New_York'))
+            f = OnHour({})
+            #self.assertEqual(f(i), True)
+
+    def test_opt_in_behavior(self):
+        # Given the addition of opt out behavior, verify if its
+        # not configured that we don't touch an instance that
+        # has no downtime tag
+        t = datetime.datetime(
+            year=2015, month=12, day=1, hour=19, minute=5,
+            tzinfo=zoneinfo.gettz('America/New_York'))
+        i = instance(Tags=[])
+        f = OffHour({})
+
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            self.assertEqual(f(i), False)
+            t = datetime.datetime(
+                year=2015, month=12, day=1, hour=7, minute=5,
+                tzinfo=zoneinfo.gettz('America/New_York'))
+            f = OnHour({})
+            self.assertEqual(f(i), False)
+            
+    def test_time_match_stops_after_skew(self):
+        hour = 7
+        t = datetime.datetime(
+            year=2015, month=12, day=1, hour=hour, minute=5,
+            tzinfo=zoneinfo.gettz('America/New_York'))
+        i = instance(Tags=[
+            {'Key': 'maid_offhours', 'Value': 'tz=est'}])
+        f = OnHour({'skew': 1})
+        results = []
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            for n in range(0, 4):
+                t = t.replace(hour=hour+n)
+                results.append(f(i))
+        self.assertEqual(results, [True, True, False, False])
+
+    def test_onhour_weekend_support(self):
+        start_day = 26
+        t = datetime.datetime(
+            year=2016, day=start_day, month=2, hour=7, minute=20)
+        i = instance(Tags=[{'Key': 'maid_offhours', 'Value': 'tz=est'}])
+        f = OnHour({})
+        results = []
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            for n in range(0, 4):
+                t = t.replace(day=start_day+n)
+                results.append(f(i))
+        self.assertEqual(results, [True, False, False, True])
+        
+    def test_offhour_weekend_support(self):
+        start_day = 26
+        t = datetime.datetime(
+            year=2016, day=start_day, month=2, hour=19, minute=20)
+        i = instance(Tags=[{'Key': 'maid_offhours', 'Value': 'tz=est'}])
+        f = OffHour({})
+        results = []
+        with mock.patch('datetime.datetime') as dt:
+            dt.now.side_effect = lambda tz=None: t
+            for n in range(0, 4):
+                t = t.replace(day=start_day+n)
+                results.append(f(i))
+        self.assertEqual(results, [True, False, False, True])
+                
     def test_current_time_test(self):
         t = datetime.datetime(
             year=2015, month=12, day=1, hour=19, minute=5,
@@ -20,8 +101,8 @@ class OffHoursFilterTest(BaseTest):
                 {'Key': 'maid_offhours', 'Value': 'tz=est'}])
             f = OffHour({})
             p = f.get_tag_parts(i)
-            self.assertEqual(p, ['tz=est'])
-            tz = f.get_local_tz(p)
+            self.assertEqual(p, (['tz=est'], {'maid_offhours': 'tz=est'}))
+            tz = f.get_local_tz(p[0])
             self.assertEqual(str(tz), "tzfile('America/New_York')")
             self.assertEqual(
                 datetime.datetime.now(tz), t)
