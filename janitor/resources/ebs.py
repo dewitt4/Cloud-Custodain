@@ -92,46 +92,56 @@ class CopyInstanceTags(BaseAction):
     def process(self, volumes):
         volumes = [v for v in volumes if v['Attachments']]
         with self.executor_factory(max_workers=10) as w:
-            list(w.map(self.process_volume, volumes))
+            futures = []
+            for volume_set in chunks(reversed(volumes), size=100):
+                futures.append(
+                    w.submit(self.process_volume_set, volume_set))
 
-    def process_volume(self, volume):
+                for f in as_completed(futures):
+                    if f.exception():
+                        self.log.error(
+                            "Exception copying instance tags \n %s" (
+                                f.exception()))
+
+    def process_volume_set(self, volume_set):
         client = local_session(self.manager.session_factory).client('ec2')
-        attachment = volume['Attachments'][0]
-        instance_id = attachment['InstanceId']
-        
-        # Todo: We could bulk fetch these before processing individual
-        # volumes, we might run into request size limits though.
-        result = client.describe_instances(
+        instance_vol_map = {}
+        for v in volume_set:
+            instance_vol_map.setdefault(
+                v['Attachments'][0]['InstanceId'], []).append(v)
+
+        instance_map = {i['InstanceId']: i for i in query_instances(
             Filters=[
-                {'Name': 'instance-id',
-                 'Values': [instance_id]}])
-        found = False
-        for r in result.get('Reservations', []):
-            for i in r['Instances']:
-                if i['InstanceId'] == instance_id:
-                    found = i
-                    break
-        if not found:
-            log.debug("Could not find instance %s for volume %s" % (
-                instance_id, volume['VolumeId']))
-            return
+                {'Name': 'instance-id', 'Values': instance_vol_map.keys()}])}
 
-        copy_tags = self.get_volume_tags(volume, found, attachment)
-
-        # Can't add more tags than the resource supports
-        if len(copy_tags) > 10:
-            log.warning("action:%s volume:%s instance:%s too many tags to copy" % (
-                self.__class__.__name__.lower(),
-                volume['VolumeId'],
-                attachment['InstanceId']))
-            return
-        elif not copy_tags:
-            return
+        for i in instance_vol_map:
+            try:
+                self.process_instance_volumes(
+                    instance_map[i], instance_vol_map[i])
+            except Exception as e:
+                self.log.exception(
+                    "Error copying instance tags to volumes \n %s" % e)
         
-        client.create_tags(
-            Resources=[volume['VolumeId']],
-            Tags=copy_tags,
-            DryRun=self.manager.config.dryrun)
+    def process_instance_volumes(self, instance, volumes):
+        client = local_session(self.manager.session_factory).client('ec2')
+        
+        for v in volumes:
+            copy_tags = self.get_volume_tags(v, instance, v['Attachments'][0])
+            if not copy_tags:
+                continue
+            # Can't add more tags than the resource supports could try
+            # to delete extant ones inline, else trim-tags action.
+            if len(copy_tags) > 10:
+                log.warning(
+                    "action:%s volume:%s instance:%s too many tags to copy" % (
+                        self.__class__.__name__.lower(),
+                        v['VolumeId'], instance['InstanceId']))
+                continue
+        
+            client.create_tags(
+                Resources=[v['VolumeId']],
+                Tags=copy_tags,
+                DryRun=self.manager.config.dryrun)
 
     def get_volume_tags(self, volume, instance, attachment):
         only_tags = self.data.get('tags', [])  # specify which tags to copy
@@ -159,53 +169,6 @@ class CopyInstanceTags(BaseAction):
         copy_tags.append(
             {'Key': 'LastAttachInstance', 'Value': attachment['InstanceId']})
         return copy_tags
-
-
-
-
-@actions.register('mark-for-op')
-class MarkForOp(BaseAction):
-
-    def validate(self):
-        key = self.data.get('op')
-        if not key:
-            raise ValueError(
-                "action:mark-for-op requires op specification")
-        return self
-    
-    def process(self, volumes):
-        msg_tmpl = self.data.get(
-            'msg',
-            'Unused volume will be removed: {op}@{stop_date}')
-        tag = self.data.get('tag', 'maid_status')
-        op = self.data.get('op', 'delete')
-        date = self.data.get('days', 4)
-
-        n = datetime.now(tz=tzutc())
-        stop_date = n + timedelta(days=date)
-        
-        msg = msg_tmpl.format(
-            op=op, stop_date=stop_date.strftime('%Y/%m/%d'))
-        tags = [{'Key': tag, 'Value': msg}]
-
-        with self.executor_factory(max_workers=2) as w:
-            futures = []
-            for vol_set in chunks(volumes, size=100):
-                futures.append(
-                    w.submit(self.process_volume_set, vol_set, tags))
-
-        for f in as_completed(futures):
-            if f.exception():
-                log.error(
-                    "Exception removing tags: %s on volset: %s \n %s" % (
-                        tags, len(vol_set), f.exception()))
-
-    def process_volume_set(self, vol_set, tags):
-        client = local_session(self.manager.session_factory).client('ec2')        
-        client.create_tags(
-            Resources=[v['VolumeId'] for v in vol_set],
-            Tags=tags,
-            DryRun=self.manager.config.dryrun)
 
 
 @actions.register('encrypt-instance-volumes')
