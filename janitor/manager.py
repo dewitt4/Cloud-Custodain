@@ -28,7 +28,7 @@ class ResourceManager(object):
         return []
 
     def get_resources(self, resource_ids):
-        pass
+        return []
     
     def filter_resources(self, resources, event=None):
         original = len(resources)

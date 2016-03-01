@@ -1,8 +1,20 @@
-"""Offhours support
+"""
+Offhours support
 ================
 
-Turn instances off based on typical hours not in use. By default, Off
-hours support is based on tags being defined on applicable resources.
+Turn resources off based on a schedule. There are two usage modes that
+can be configured, opt-in with resources that wish to participate specifying
+a tag value with their configuration for offhours. Additionally opt-out
+where the schedule is set to apply to all resources that match the policy
+filters, resources can specify a tag value then to allow opt-out behavior.
+
+Schedules
+=========
+
+The default off hours and on hours are specified per the policy configuration
+along with the opt-in/opt-out behavior. Resources can specify the timezone
+that they wish to have this scheduled utilized with.
+
 
 Tag Based Configuration
 =======================
@@ -31,14 +43,6 @@ Per http://www.iana.org/time-zones
 If offhours is configured to run in opt-out mode, this tag can be specified
 to disable offhours on a given instance.
 
-Terminate after time period
-
-- maid_offhours: terminate 1w
-
-- maid_offhours: terminate 3d
-
-- maid_offhours: terminate 3h
-
 
 Policy examples
 ===============
@@ -61,6 +65,25 @@ Turn ec2 instances on and off
          - onhours
        actions:
          - start
+
+Here's doing the same with auto scale groups
+
+.. code-block:: yaml
+
+    policies:
+      - name: asg-offhours-stop
+        resource: ec2
+        filters:
+           - offhours
+        actions:
+           - suspend
+      - name: asg-onhours-start
+        resource: ec2
+        filters:
+           - onhours
+        actions:
+           - resume
+     
 
 Options
 =======
@@ -86,6 +109,14 @@ TODO:
 Also support one time use instances for quickly trying something out,
 but wanting to turn terminate it after a length of time (like one
 week, one month, etc).
+
+Terminate after time period
+
+- maid_offhours: terminate 1w
+
+- maid_offhours: terminate 3d
+
+- maid_offhours: terminate 3h
 
 """
 from janitor.filters import Filter
@@ -119,16 +150,28 @@ TIME_ALIASES = {
 
 DEFAULT_OFFHOUR = 19
 DEFAULT_ONHOUR = 7
+DEFAULT_TZ = 'et'
 
 
 class Time(Filter):
 
+    # Allow up to this many hours after sentinel time
+    # to continue to match
+    skew = 0
+
+    def __init__(self, data, manager=None):
+        super(Time, self).__init__(data, manager)
+        self.skew = self.data.get('skew', self.skew)
+        self.weekends = self.data.get('weekends', False)
+        self.opt_out = self.data.get('opt-out', False)
+        
     def __call__(self, i):
-        parts = self.get_tag_parts(i)
+        parts, tag_map = self.get_tag_parts(i)
         if parts is False:
-            return False
-        if 'terminate' in parts:
-            return self.process_terminate(i, parts)
+            if self.opt_out:
+                parts = []
+            else:
+                return False
         if 'off' in parts:
             return False
         return self.process_current_time(i, parts)
@@ -140,26 +183,41 @@ class Time(Filter):
                 pass
         return False
 
-    def process_current_time(self, i, parts):
+    def process_current_time(self, tag_map, parts):
         tz = self.get_local_tz(parts)
         if not tz:
             return False
-        now = datetime.datetime.now(tz)
+        now = datetime.datetime.now(tz).replace(
+            minute=0, second=0, microsecond=0)
+
+        if not self.weekends and now.weekday() in (5, 6):
+            return False
+
         sentinel = self.get_sentinel_time(tz)
-        return sentinel <= now
+
+        if sentinel == now:
+            return True
+        if not self.skew:
+            return False
+        hour = sentinel.hour
+        for i in range(1, self.skew + 1):
+            sentinel = sentinel.replace(hour=hour+i)
+            if sentinel == now:
+                return True
+        return False
 
     def get_tag_parts(self, i):
         # Look for downtime tag, Normalize tag key and tag value
         tag_key = self.data.get('tag', 'maid_offhours').lower()
         tag_map = {t['Key'].lower(): t['Value'] for t in i.get('Tags', [])}
         if tag_key not in tag_map:
-            return False
+            return False, tag_map
         value = tag_map[tag_key].lower()
         # Sigh.. some folks seem to be interpreting the docs quote marks as
         # literal for values.
         value = value.strip("'").strip('"')
         parts = filter(None, value.split())
-        return parts
+        return parts, tag_map
 
     def get_sentinel_time(self, tz):
         t = datetime.datetime.now(tz)
@@ -174,7 +232,9 @@ class Time(Filter):
                 tz_spec = p
                 break
         if tz_spec is None:
-            tz_spec = self.data.get('default_tz', 'et')
+            tz_spec = (
+                self.data.get('default_tz') or
+                self.data.get('default-tz', DEFAULT_TZ))
         else:
             _, tz_spec = tz_spec.split('=')
 
@@ -183,7 +243,9 @@ class Time(Filter):
         tz = zoneinfo.gettz(tz_spec)
         if tz is None:
             self.log.warning(
-                "filter:offhours could not parse tz %s for %s" % (tz_spec, parts))
+                "filter:offhours unknown tz %s for %s" % (
+                    tz_spec, parts))
+                    
             return None
         return tz
     
