@@ -93,9 +93,9 @@ class TagTrim(BaseAction, ResourceTag):
             list(w.map(self.process_resource, resources))
                       
     def process_resource(self, i):
-        # Can't really go in parallel without some heuristics
-        # without some more complex matching wrt to grouping
-        # resources by common tags populations.
+        # Can't really go in batch parallel without some heuristics
+        # without some more complex matching wrt to grouping resources
+        # by common tags populations.
         tag_map = {
             t['Key']:t['Value'] for t in i.get('Tags', [])
             if not t['Key'].startswith('aws:')}
@@ -249,11 +249,11 @@ class Tag(BaseAction, ResourceTag):
                 futures.append(
                     w.submit(self.process_resource_set, resource_set, tags))
 
-        for f in as_completed(futures):
-            if f.exception():
-                self.log.error(
-                    "Exception removing tags: %s on resources:%s \n %s" % (
-                        tags, self.id_key, f.exception()))
+            for f in as_completed(futures):
+                if f.exception():
+                    self.log.error(
+                        "Exception removing tags: %s on resources:%s \n %s" % (
+                            tags, self.id_key, f.exception()))
 
     def process_resource_set(self, resource_set, tags):
         client = utils.local_session(
@@ -281,14 +281,15 @@ class RemoveTag(BaseAction, ResourceTag):
                 futures.append(
                     w.submit(self.process_resource_set, resource_set, tags))
 
-        for f in as_completed(futures):
-            if f.exception():
-                self.log.error(
-                    "Exception removing tags: %s on resources:%s \n %s" % (
-                        tags, self.id_key, f.exception()))
+            for f in as_completed(futures):
+                if f.exception():
+                    self.log.error(
+                        "Exception removing tags: %s on resources:%s \n %s" % (
+                            tags, self.id_key, f.exception()))
 
     def process_resource_set(self, vol_set, tag_keys):
-        client = utils.local_session(self.manager.session_factory).client('ec2')
+        client = utils.local_session(
+            self.manager.session_factory).client('ec2')
         client.delete_tags(
             Resources=[v[self.id_key] for v in vol_set],
             Tags=[{'Key': k for k in tag_keys}],
@@ -343,11 +344,11 @@ class TagDelayedAction(BaseAction, ResourceTag):
                 futures.append(
                     w.submit(self.process_resource_set, resource_set, tags))
 
-        for f in as_completed(futures):
-            if f.exception():
-                self.log.error(
-                    "Exception tagging resource set: %s  \n %s" % (
-                        tags, f.exception()))
+            for f in as_completed(futures):
+                if f.exception():
+                    self.log.error(
+                        "Exception tagging resource set: %s  \n %s" % (
+                            tags, f.exception()))
 
     def process_resource_set(self, resource_set, tags):
         client = utils.local_session(
