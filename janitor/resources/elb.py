@@ -44,7 +44,7 @@ import logging
 import itertools
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import Filter, FilterRegistry
+from janitor.filters import Filter, FilterRegistry, FilterValidationError
 from janitor.manager import ResourceManager, resources
 from janitor.utils import local_session, chunks
 
@@ -97,28 +97,63 @@ class SSLPolicyFilter(Filter):
         - "Protocol-SSLv3"
     """
     
-    def process(self, balancers):
+    def validate(self):
+        if 'blacklist' not in self.data or not isinstance(self.data['blacklist'], list):
+            raise FilterValidationError("blacklist must be a list")
+
+        return self
+
+    def process(self, balancers, event=None):
         balancers = [b for b in balancers if self.is_ssl(b)]
-        balancer_policy_map = {}
-        policy_attr_map = {}
-        
+        active_policy_attribute_tuples = self.create_elb_active_policy_attribute_tuples(balancers)
+        blacklisted_policies = set(self.data['blacklist'])
+
+        invalid_elbs = filter(
+            lambda elb_policy_tuple: len(blacklisted_policies.intersection(set(elb_policy_tuple[1]))) > 0,
+            active_policy_attribute_tuples
+        )
+        return [ invalid_elb[0] for invalid_elb in invalid_elbs ]
+
+
+    def create_elb_active_policy_attribute_tuples(self, elbs):
+        """
+        Returns a list of tuples of active SSL policies attributes for each elb [(elb['Protocol-SSLv1','Protocol-SSLv2',...])]
+        """
+
+        elb_custom_policy_tuples = self.create_elb_custom_policy_tuples(elbs)
+        active_policy_attribute_tuples = self.create_elb_active_attributes_tuples(elb_custom_policy_tuples)
+        return active_policy_attribute_tuples
+
+
+    def create_elb_custom_policy_tuples(self, balancers):
+        """
+        creates a list of tuples (elb,[sslpolicy1,sslpolicy2...]) for all custom policies on the ELB
+        """
+        elb_policy_tuples = []
         for b in balancers:
+            policies = []
             for ld in b['ListenerDescriptions']:
-                if ld['Listener']['Protocol'] != 'HTTPS':
-                    continue
                 for p in ld['PolicyNames']:
                     # Skip precanned
                     if p.startswith('ELBSecurityPolicy'):
                         continue
                     elif p.startswith('ELBSample'):
                         continue
-                    balancer_policy_map.setdefault(
-                        b['LoadBalancerName'], []).apppend(p)
+                    policies.append(p)
+            elb_policy_tuples.append((b,policies))
 
+        return elb_policy_tuples
+
+    def create_elb_active_attributes_tuples(self,elb_policy_tuples):
+        """
+        creates a list of tuples for all attributes that are marked as "true" in the load balancer's polices, e.g.
+        (myelb,['Protocol-SSLv1','Protocol-SSLv2'])
+        """
+        active_policy_attribute_tuples = []
         with self.executor_factory(max_workers=3) as w:
             futures = []
             
-            for elb_policy_set in chunks(balancer_policy_map.items(), 50):
+            for elb_policy_set in chunks(elb_policy_tuples, 50):
                 futures.append(
                     w.submit(self.process_elb_policy_set, elb_policy_set))
 
@@ -129,25 +164,29 @@ class SSLPolicyFilter(Filter):
                                 f.exception()))
                         continue
                 for elb_policies in f.result():
-                    pass
-        
+                    active_policy_attribute_tuples.append(elb_policies)
+
+        return active_policy_attribute_tuples
+
     def process_elb_policy_set(self, elb_policy_set):
         results = []        
         client = local_session(self.manager.session_factory).client('elb')
         
-        for (elb_name, policy_names) in elb_policy_set:
+        for (elb, policy_names) in elb_policy_set:
+            elb_name = elb['LoadBalancerName']
             policies = client.describe_load_balancer_policies(
                 LoadBalancerName=elb_name,
                 PolicyNames=policy_names)['PolicyDescriptions']
-            lb_policies = []
+            active_lb_policies = []
             for p in policies:
-                if p['PolicyTypeName'] != 'SSLNegotiationPolicyType':
-                    lb_policies.append(
-                        {'Name': p['PolicyName'],
-                         'Type': p['PolicyTypeName'],
-                         'Attrs': {a['AttributeName']: a['AttributeValue']
-                                   for a in p['PolicyAttributeDescriptions']}})
-            results.append((elb_name, lb_policies))
+                if p['PolicyTypeName'] == 'SSLNegotiationPolicyType':
+                    active_lb_policies.extend(
+                        [ policy_description['AttributeName']
+                            for policy_description in p['PolicyAttributeDescriptions']
+                            if policy_description['AttributeValue'] == 'true']
+                    )
+            results.append((elb, active_lb_policies))
+
         return results
                 
             

@@ -1,5 +1,6 @@
 from .common import BaseTest
-
+from janitor.filters import FilterValidationError
+from nose.tools import raises
 
 class HealthCheckProtocolMismatchTest(BaseTest):
     
@@ -24,3 +25,45 @@ class HealthCheckProtocolMismatchTest(BaseTest):
                 ['test-elb-no-listeners',
                  'test-elb-protocol-matches',
                  'test-elb-multiple-listeners']))
+
+
+class SSLPolicyTest(BaseTest):
+
+    def test_ssl_ciphers(self):
+        session_factory = self.replay_flight_data(
+            'test_ssl_ciphers')
+        policy = self.load_policy({
+            'name': 'test-ssl-ciphers',
+            'resource': 'elb',
+            'filters': [
+                {'type': 'ssl-policy',
+                 'blacklist': ['Protocol-SSLv2']}
+            ]},
+            session_factory=session_factory)
+
+        resources = policy.run()
+        self.assertEqual(len(resources), 1)
+        self.assertEqual(resources[0]['LoadBalancerName'],'test-elb-invalid-policy')
+
+
+    @raises(FilterValidationError)
+    def test_filter_validation_no_blacklist(self):
+        policy = self.load_policy({
+            'name': 'test-ssl-ciphers',
+            'resource': 'elb',
+            'filters': [
+                {'type': 'ssl-policy' }
+            ]},
+            session_factory=None)
+        self.fail("validtion error should have been thrown")
+
+    @raises(FilterValidationError)
+    def test_filter_validation_blacklist_not_iterable(self):
+        policy = self.load_policy({
+            'name': 'test-ssl-ciphers',
+            'resource': 'elb',
+            'filters': [
+                {'type': 'ssl-policy', 'blacklist': 'single-value'}
+            ]},
+            session_factory=None)
+        self.fail("validtion error should have been thrown")
