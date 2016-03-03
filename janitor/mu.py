@@ -386,7 +386,7 @@ PolicyHandlerTemplate = """\
 from janitor import handler
 
 def run(event, context):
-    return handler.dispatch_events(event, context)
+    return handler.dispatch_event(event, context)
 
 """
 
