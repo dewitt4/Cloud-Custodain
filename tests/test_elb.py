@@ -2,8 +2,9 @@ from .common import BaseTest
 from janitor.filters import FilterValidationError
 from nose.tools import raises
 
+
 class HealthCheckProtocolMismatchTest(BaseTest):
-    
+
     def test_healthcheck_protocol_mismatch(self):
         session_factory = self.replay_flight_data(
             'test_healthcheck_protocol_mismatch')
@@ -14,7 +15,7 @@ class HealthCheckProtocolMismatchTest(BaseTest):
                 {'type': 'healthcheck-protocol-mismatch'}
             ]},
             session_factory=session_factory)
-        
+
         resources = policy.run()
         self.assertEqual(len(resources), 3)
 
@@ -43,23 +44,24 @@ class SSLPolicyTest(BaseTest):
 
         resources = policy.run()
         self.assertEqual(len(resources), 1)
-        self.assertEqual(resources[0]['LoadBalancerName'],'test-elb-invalid-policy')
-
+        self.assertEqual(
+            resources[0]['LoadBalancerName'],
+            'test-elb-invalid-policy')
 
     @raises(FilterValidationError)
     def test_filter_validation_no_blacklist(self):
-        policy = self.load_policy({
+        self.load_policy({
             'name': 'test-ssl-ciphers',
             'resource': 'elb',
             'filters': [
-                {'type': 'ssl-policy' }
+                {'type': 'ssl-policy'}
             ]},
             session_factory=None)
         self.fail("validtion error should have been thrown")
 
     @raises(FilterValidationError)
     def test_filter_validation_blacklist_not_iterable(self):
-        policy = self.load_policy({
+        self.load_policy({
             'name': 'test-ssl-ciphers',
             'resource': 'elb',
             'filters': [
