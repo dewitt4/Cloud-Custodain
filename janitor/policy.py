@@ -114,6 +114,9 @@ class Policy(object):
             if not id_query:
                 raise ValueError("No id query configured")
             resource_ids = jmespath.search(id_query, event)
+
+        if not isinstance(resource_ids, list):
+            resource_ids = [resource_ids]
                 
         self.log.info('found resource ids: %s' % resource_ids)
         if not resource_ids:

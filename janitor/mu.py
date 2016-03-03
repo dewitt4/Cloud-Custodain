@@ -187,6 +187,7 @@ class LambdaManager(object):
         #log.info('Publishing maid policy lambda function %s', func.name)
 
         result = self._create_or_update(func, role, s3_uri, qualifier=alias)
+        func.arn = result['FunctionArn']
         if alias:
             func.alias = self.publish_alias(result, alias)
 
@@ -385,7 +386,7 @@ PolicyHandlerTemplate = """\
 from janitor import handler
 
 def run(event, context):
-    return handler.dispatch_events(event, context)
+    return handler.dispatch_event(event, context)
 
 """
 
@@ -586,20 +587,28 @@ class CloudWatchEventSource(object):
             response = self.client.put_rule(**params)
             
         found = False
+
         response = self.client.list_targets_by_rule(Rule=func.name)
+
+        # cwe seems to be quite picky
+        func_arn = func.arn
+        if func_arn.count(':') > 6:
+            func_arn, version = func_arn.rsplit(':', 1)
+        
         for t in response['Targets']:
-            if func.alias in t['Arn']:
+            if func.arn in t['Arn']:
                 found = True
 
         if found:
             return
 
         log.debug('Creating cwe rule target found for %s' % self)
+        
         self.client.put_targets(
             Rule=func.name,
             Targets=[
                 {"Id": str(uuid.uuid4()),
-                 "Arn": func.alias}]
+                 "Arn": func_arn}]
             )
         return True
         
