@@ -331,7 +331,7 @@ class TagDelayedAction(BaseAction, ResourceTag):
         n = datetime.now(tz=tzutc())
         action_date = n + timedelta(days=date)
         msg = msg_tmpl.format(
-            op=op, stop_date=action_date.strftime('%Y/%m/%d'))
+            op=op, action_date=action_date.strftime('%Y/%m/%d'))
 
         self.log.info("Tagging %d resources for %s on %s" % (
             len(resources), op, action_date.strftime('%Y/%m/%d')))
