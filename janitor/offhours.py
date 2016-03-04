@@ -227,7 +227,11 @@ class Time(Filter):
         t = datetime.datetime.now(tz)
         return t.replace(
             hour=self.data.get('hour', 0),
-            minute=self.data.get('minute', 0))
+            minute=self.data.get('minute', 0),
+            second=0,
+            microsecond=0
+            )
+        
 
     def get_local_tz(self, parts):
         tz_spec = None
