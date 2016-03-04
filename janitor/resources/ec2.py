@@ -191,7 +191,7 @@ class InstanceAgeFilter(AgeFilter):
             return super(InstanceAgeFilter, self).get_resource_date(i)
         # Lexographical sort on date
         ebs_vols = sorted(ebs_vols, key=self.ebs_key_func)
-        return parse_date(ebs_vols[0]['AttachTime'])
+        return ebs_vols[0]['AttachTime']
         
     
 @actions.register('start')        

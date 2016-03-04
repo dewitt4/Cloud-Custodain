@@ -100,7 +100,7 @@ class CopyInstanceTags(BaseAction):
                 for f in as_completed(futures):
                     if f.exception():
                         self.log.error(
-                            "Exception copying instance tags \n %s" (
+                            "Exception copying instance tags \n %s" % (
                                 f.exception()))
 
     def process_volume_set(self, volume_set):

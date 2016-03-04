@@ -98,22 +98,20 @@ class Policy(object):
         if mode_type == 'periodic':
             return self.poll()
         elif mode_type == 'ec2-instance-state':
-            self.resource_manager.queries = self.resource_manager.queries.parse(
-                {'instance-id': event['detail']['instance-id']})
-            return self.poll()
+            resource_ids = filter(None, [event.get('detail', {}).get('instance-id')])
         elif mode_type == 'asg-instance-state':
             raise NotImplementedError("asg-instance-state event not supported")
         elif mode_type != 'cloudtrail':
             raise ValueError("Invalid push event mode %s" % self.data)
-
-        info = CloudTrailResource.match(event)
-        if info:
-            resource_ids = info['ids'].search(event)
         else:
-            id_query = mode.get('ids') or mode.get('resources')
-            if not id_query:
-                raise ValueError("No id query configured")
-            resource_ids = jmespath.search(id_query, event)
+            info = CloudTrailResource.match(event)
+            if info:
+                resource_ids = info['ids'].search(event)
+            else:
+                id_query = mode.get('ids') or mode.get('resources')
+                if not id_query:
+                    raise ValueError("No id query configured")
+                resource_ids = jmespath.search(id_query, event)
 
         if not isinstance(resource_ids, list):
             resource_ids = [resource_ids]
@@ -157,7 +155,6 @@ class Policy(object):
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()
-            # FIXME: rename resources to distinguish from imported janitor.manager resources
             resources = self.resource_manager.resources()
             rt = time.time() - s
             self.log.info(
