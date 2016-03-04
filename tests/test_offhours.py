@@ -92,9 +92,8 @@ class OffHoursFilterTest(BaseTest):
         self.assertEqual(results, [True, False, False, True])
                 
     def test_current_time_test(self):
-        t = datetime.datetime(
-            year=2015, month=12, day=1, hour=19, minute=5,
-            tzinfo=zoneinfo.gettz('America/New_York'))
+        t = datetime.datetime.now(zoneinfo.gettz('America/New_York'))
+        t = t.replace(year=2015, month=12, day=1, hour=19, minute=5)
         with mock.patch('datetime.datetime') as dt:
             dt.now.side_effect = lambda tz=None: t        
             i = instance(Tags=[
@@ -109,8 +108,8 @@ class OffHoursFilterTest(BaseTest):
             self.assertEqual(t.hour, 19)
 
     def test_offhours_real_world_values(self):
-        t = datetime.datetime(year=2015, month=12, day=1, hour=19, minute=5,
-                              tzinfo=zoneinfo.gettz('America/New_York'))
+        t = datetime.datetime.now(zoneinfo.gettz('America/New_York'))
+        t = t.replace(year=2015, month=12, day=1, hour=19, minute=5)
         with mock.patch('datetime.datetime') as dt:
             dt.now.side_effect = lambda tz=None: t
             for i in [
