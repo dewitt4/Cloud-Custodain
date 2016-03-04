@@ -66,7 +66,7 @@ class PythonPackageArchive(object):
         if not self.skip:
             return files
         skip_files = set(fnmatch.filter(files, self.skip))
-        return [f for f in files if not f in skip_files]
+        return [f for f in files if f not in skip_files]
     
     def create(self):
         assert not self._temp_archive_file, "Archive already created"
@@ -83,7 +83,8 @@ class PythonPackageArchive(object):
         elif os.path.isdir(self.src_path):
             # Package Source
             for root, dirs, files in os.walk(self.src_path):
-                arc_prefix = os.path.relpath(root, os.path.dirname(self.src_path))
+                arc_prefix = os.path.relpath(
+                    root, os.path.dirname(self.src_path))
                 if self.src_filter:
                     self.src_filter(root, dirs, files)
                 files = self.filter_files(files)
@@ -115,8 +116,10 @@ class PythonPackageArchive(object):
         # Note underlying tempfile is removed when archive is garbage collected
         self._closed = True
         self._zip_file.close()
-        log.debug("Created maid lambda archive size: %0.2fmb",
-                  (os.path.getsize(self._temp_archive_file.name) / (1024.0 * 1024.0)))
+        log.debug(
+            "Created maid lambda archive size: %0.2fmb",
+            (os.path.getsize(self._temp_archive_file.name) / (
+                1024.0 * 1024.0)))
         return self
 
     def remove(self):

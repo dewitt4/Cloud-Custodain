@@ -112,6 +112,7 @@ class Policy(object):
                 if not id_query:
                     raise ValueError("No id query configured")
                 resource_ids = jmespath.search(id_query, event)
+
         if not isinstance(resource_ids, list):
             resource_ids = [resource_ids]
                 
@@ -154,7 +155,6 @@ class Policy(object):
         with self.ctx:
             self.log.info("Running policy %s" % self.name)
             s = time.time()
-            # FIXME: rename resources to distinguish from imported janitor.manager resources
             resources = self.resource_manager.resources()
             rt = time.time() - s
             self.log.info(
