@@ -195,6 +195,8 @@ class Time(Filter):
 
         sentinel = self.get_sentinel_time(tz)
 
+        self.log.info("offhours compare %s to %s - %s" % (
+            now, sentinel))
         if sentinel == now:
             return True
         if not self.skew:
@@ -216,6 +218,7 @@ class Time(Filter):
         # Sigh.. some folks seem to be interpreting the docs quote marks as
         # literal for values.
         value = value.strip("'").strip('"')
+        self.log.debug('offhours instance %s %s' % (tag_map['name'], value))
         parts = filter(None, value.split())
         return parts, tag_map
 
