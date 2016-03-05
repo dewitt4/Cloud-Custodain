@@ -8,6 +8,9 @@ install:
 coverage:
 	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover tests
 
+lint:
+	flake8 janitor --ignore=W293,W291,W503,W391
+
 test:
 	./bin/nosetests -s -v tests
 

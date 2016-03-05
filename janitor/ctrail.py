@@ -9,8 +9,8 @@ class CloudTrailResource(object):
         # jmespath expression
         'CreateBucket': {
             'ids': 'requestParameters.bucketName',
-            'source': 'aws.s3'
-            },
+            'source': 'aws.s3'},
+        
         'CreateVolume': {
             'ids': 'responseElements.volumeId',
             'source': 'ec2.amazonaws.com'},
@@ -25,8 +25,7 @@ class CloudTrailResource(object):
         
         'RunInstances': {
             'ids': 'responseElements.instancesSet.items[].instanceId',
-            'source': 'ec2.amazonaws.com'},
-        }
+            'source': 'ec2.amazonaws.com'}}
 
     @classmethod
     def get(cls, event_name):
@@ -38,7 +37,6 @@ class CloudTrailResource(object):
 
         That has its information filled out.
         """
-        d = event.get('detail')
         if 'detail' not in event:
             return False
         if 'eventName' not in event['detail']:

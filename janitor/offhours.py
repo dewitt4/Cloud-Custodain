@@ -195,15 +195,13 @@ class Time(Filter):
 
         sentinel = self.get_sentinel_time(tz)
 
-        self.log.info("offhours compare %s to %s" % (
-            now, sentinel))
         if sentinel == now:
             return True
         if not self.skew:
             return False
         hour = sentinel.hour
         for i in range(1, self.skew + 1):
-            sentinel = sentinel.replace(hour=hour+i)
+            sentinel = sentinel.replace(hour=hour + i)
             if sentinel == now:
                 return True
         return False
@@ -218,8 +216,6 @@ class Time(Filter):
         # Sigh.. some folks seem to be interpreting the docs quote marks as
         # literal for values.
         value = value.strip("'").strip('"')
-        self.log.debug('offhours instance %s %s' % (
-            tag_map.get('name', ''), value))
         parts = filter(None, value.split())
         return parts, tag_map
 
@@ -229,9 +225,7 @@ class Time(Filter):
             hour=self.data.get('hour', 0),
             minute=self.data.get('minute', 0),
             second=0,
-            microsecond=0
-            )
-        
+            microsecond=0)
 
     def get_local_tz(self, parts):
         tz_spec = None

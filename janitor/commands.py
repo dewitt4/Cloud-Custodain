@@ -25,7 +25,7 @@ def run(options, policy_collection):
     for policy in policy_collection.policies(options.policies):
         try:
             policy()
-        except Exception as e:
+        except Exception:
             if options.debug:
                 raise
             # Output does an exception log
@@ -34,8 +34,6 @@ def run(options, policy_collection):
     
 
 def report(options, policy_collection):
-    log = logging.getLogger('maid.report')
-
     policies = policy_collection.policies(options.policies)
     assert len(policies) == 1, "Only one policy report at a time"
     policy = policies.pop()
@@ -63,10 +61,10 @@ def logs(options, policy_collection):
     for e in manager.logs(mu.PolicyLambda(policy)):
         print "%s: %s" % (
             time.strftime(
-                "%Y-%m-%d %H:%M:%S", time.localtime(e['timestamp']/1000)),
+                "%Y-%m-%d %H:%M:%S", time.localtime(e['timestamp'] / 1000)),
             e['message'])
-                
-    
+
+
 def resources(options, policy_collection):
     session_factory = SessionFactory(
         options.region, options.profile, options.assume_role)
