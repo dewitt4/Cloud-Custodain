@@ -62,7 +62,8 @@ def setup_parser():
     run.set_defaults(command=commands.run)
     _default_options(run)
     _dryrun_option(run)
-    run.add_argument("-m", "--metrics-enabled",
+    run.add_argument(
+        "-m", "--metrics-enabled",
         default=False, action="store_true",
         help="Emit CloudWatch Metrics (default false)")    
     
@@ -83,17 +84,15 @@ def main():
     config = policy.load(options, options.config)
     try:
         options.command(options, config)
-    except Exception, e:
+    except Exception:
         if not options.debug:
             raise
-        import traceback, pdb, sys
+        import traceback
+        import pdb
+        import sys
         traceback.print_exc()
         pdb.post_mortem(sys.exc_info()[-1])
-        
-
     
 
 if __name__ == '__main__':
     main()
-
-    

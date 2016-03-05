@@ -1,5 +1,4 @@
 import time
-import threading
 
 from janitor.output import FSOutput, MetricsOutput, CloudWatchLogOutput
 

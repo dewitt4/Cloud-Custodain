@@ -31,14 +31,14 @@ SHUTDOWN_MARKER = object()
 
 class Error(object):
     
-    AlreadyExcepted = "DataAlreadyException"
+    AlreadyAccepted = "DataAlreadyAcceptedException"
     InvalidToken = "InvalidSequenceTokenException"
     ResourceExists = "ResourceAlreadyExistsException"
 
     @staticmethod
     def code(e):
         return e.response.get('Error', {}).get('Code')
-    
+
     
 class CloudWatchLogHandler(logging.Handler):
     """Python Log Handler to Send to Cloud Watch Logs
@@ -50,7 +50,8 @@ class CloudWatchLogHandler(logging.Handler):
     batch_interval = 40
     batch_min_buffer = 10
     
-    def __init__(self, log_group=__name__, log_stream=None, session_factory=None):
+    def __init__(self, log_group=__name__, log_stream=None,
+                 session_factory=None):
         super(CloudWatchLogHandler, self).__init__()
         self.log_group = log_group
         self.log_stream = log_stream
@@ -74,7 +75,7 @@ class CloudWatchLogHandler(logging.Handler):
             if Error.code(e) != Error.ResourceExists:
                 raise
         
-    ## Begin logging.Handler API
+    # Begin logging.Handler API
     
     def emit(self, message):
         """Send logs"""
@@ -94,7 +95,7 @@ class CloudWatchLogHandler(logging.Handler):
             self.start_transports()
         self.buf.append(msg)
         self.flush_buffers(
-            (message.created-self.last_seen >= self.batch_interval))
+            (message.created - self.last_seen >= self.batch_interval))
             
         self.last_seen = message.created
     
@@ -116,7 +117,7 @@ class CloudWatchLogHandler(logging.Handler):
             t.join()
         self.threads = []
 
-    ## End logging.Handler API
+    # End logging.Handler API
             
     def format_message(self, msg):
         """format message."""
@@ -163,7 +164,12 @@ class Transport(object):
                 return False
         return True
 
-    def send(self, (k, messages)):
+    def send(self):
+        for k, messages in self.buffers.items():
+            self.send_group(k, messages)
+        self.buffers = {}
+
+    def send_group(self, k, messages):
         group, stream = k.split('=', 1)
         if stream not in self.sequences:
             if not self.create_stream(group, stream):
@@ -177,9 +183,10 @@ class Transport(object):
         try:
             response = self.client.put_log_events(**params)
         except ClientError as e:
-            if Error.code(e) in (Error.AlreadyExcepted, Error.InvalidToken):
-                self.sequences[stream] = e.response['Error']['Message'].rsplit(" ", 1)[-1]
-                return self.send((k, messages))
+            if Error.code(e) in (Error.AlreadyAccepted, Error.InvalidToken):
+                self.sequences[stream] = e.response['Error']['Message'].rsplit(
+                    " ", 1)[-1]
+                return self.send_group(k, messages)
             self.error = e
             return
         self.sequences[stream] = response['nextSequenceToken']
@@ -196,11 +203,10 @@ class Transport(object):
                 datum = None
             if datum is None:
                 # Timeout reached, flush
-                map(self.send, self.buffers.items())
+                self.send()
                 continue
-
-            if datum == FLUSH_MARKER:
-                map(self.send, self.buffers.items())
+            elif datum == FLUSH_MARKER:
+                self.send()
             elif datum == SHUTDOWN_MARKER:
                 self.queue.task_done()
                 return

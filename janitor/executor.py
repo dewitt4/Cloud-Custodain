@@ -20,7 +20,7 @@ class ExecutorRegistry(PluginRegistry):
 def executor(name, **kw):
     factory = executors.get(name)
     # post element refactoring
-    #factory.validate(kw)
+    # factory.validate(kw)
     if factory is None:
         raise ValueError("No Such Executor %s" % name)
     return factory(**kw)
