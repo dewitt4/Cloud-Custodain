@@ -1,5 +1,3 @@
-from dateutil.tz import tzutc
-from datetime import datetime, timedelta
 import itertools
 import logging
 
@@ -38,7 +36,7 @@ class EBS(ResourceManager):
         query = self.resource_query()
         if self._cache.load():
             vols = self._cache.get({'resource': 'ebs', 'q': query})
-            if  vols is not None:
+            if vols is not None:
                 self.log.debug("Using cached ebs: %d" % len(vols))
                 return self.filter_resources(vols)
         self.log.info("Querying ebs volumes")
@@ -104,7 +102,6 @@ class CopyInstanceTags(BaseAction):
                                 f.exception()))
 
     def process_volume_set(self, volume_set):
-        client = local_session(self.manager.session_factory).client('ec2')
         instance_vol_map = {}
         for v in volume_set:
             instance_vol_map.setdefault(
@@ -183,7 +180,8 @@ class EncryptInstanceVolumes(BaseAction):
         key = self.data.get('key')
         if not key:
             raise ValueError(
-                "action:encrypt-instance-volume requires kms keyid/alias specified")
+                "action:encrypt-instance-volume "
+                "requires kms keyid/alias specified")
         self.verbose = self.data.get('verbose', False)
         return self
 
@@ -192,7 +190,8 @@ class EncryptInstanceVolumes(BaseAction):
         volumes = [v for v in volumes
                    if not v['Encrypted'] or not v['Attachments']]
         log.debug(
-            "EncryptVolumes filtered from %d to %d unencrypted attached volumes" % (
+            "EncryptVolumes filtered from %d to %d "
+            " unencrypted attached volumes" % (
                 original_count, len(volumes)))
         
         # Group volumes by instance id
@@ -204,16 +203,18 @@ class EncryptInstanceVolumes(BaseAction):
         with self.executor_factory(max_workers=10) as w:
             futures = {}
             for instance_id, vol_set in instance_vol_map.items():
-                futures[w.submit(self.process_volume, instance_id, vol_set)] = instance_id
+                futures[w.submit(
+                    self.process_volume, instance_id, vol_set)] = instance_id
                 
             for f in as_completed(futures):
                 if f.exception():
                     instance_id = futures[f]
                     log.error(
                         "Exception processing instance:%s volset: %s \n %s" % (
-                            instance_id, instance_vol_map[instance_id], f.exception()))
+                            instance_id, instance_vol_map[instance_id],
+                            f.exception()))
 
-    def process_volume(self, vol_set):
+    def process_volume(self, instance_id, vol_set):
         """Encrypt attached unencrypted ebs volume
 
         vol_set corresponds to all the unencrypted volumes on a given instance.
@@ -235,7 +236,6 @@ class EncryptInstanceVolumes(BaseAction):
           - Delete unencrypted volume
         - Start Instance
         """
-        instance_id = vol_set[0]['Attachments'][0]['InstanceId']
         client = local_session(self.manager.session_factory).client('ec2')
         client.stop_instances(InstanceIds=[instance_id])
         self.wait_on_resource(client, instance_id=instance_id)
@@ -261,7 +261,8 @@ class EncryptInstanceVolumes(BaseAction):
         client.start_instances(InstanceIds=[instance_id])
         
         if self.verbose:
-            self.log.debug("Deleting unencrypted volumes for: %s" % instance_id)
+            self.log.debug(
+                "Deleting unencrypted volumes for: %s" % instance_id)
             
         for v in vol_set:
             client.delete_volume(VolumeId=v['VolumeId'])
@@ -306,7 +307,8 @@ class EncryptInstanceVolumes(BaseAction):
             Tags=[
                 {'Key': 'maid-crypt-remediation', 'Value': instance_id},
                 {'Key': 'maid-origin-volume', 'Value': v['VolumeId']},
-                {'Key': 'maid-instance-device', 'Value': v['Attachments'][0]['Device']}])
+                {'Key': 'maid-instance-device',
+                 'Value': v['Attachments'][0]['Device']}])
         
         # Wait on encrypted volume creation
         self.wait_on_resource(ec2, volume_id=results['VolumeId'])
@@ -340,11 +342,13 @@ class EncryptInstanceVolumes(BaseAction):
             except Exception:
                 return self._wait_on_resource(*args, **kw)
         
-    def _wait_on_resource(self, client, snapshot_id, volume_id, instance_id=None):
+    def _wait_on_resource(
+            self, client, snapshot_id, volume_id, instance_id=None):
         # boto client waiters poll every 15 seconds up to a max 600s (5m)
         if snapshot_id:
             if self.verbose:
-                self.log.debug("Waiting on snapshot completion %s" % snapshot_id)
+                self.log.debug(
+                    "Waiting on snapshot completion %s" % snapshot_id)
             waiter = client.get_waiter('snapshot_completed')
             waiter.wait(SnapshotIds=[snapshot_id])
             if self.verbose:
