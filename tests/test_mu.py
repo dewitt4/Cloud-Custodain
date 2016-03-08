@@ -22,10 +22,12 @@ class PolicyLambdaHandler(BaseTest):
 
 class PolicyLambdaProvision(BaseTest):
 
+    role = "jedi"
+    
     def assert_items(self, result, expected):
         for k, v in expected.items():
             self.assertEqual(v, result[k])
-            
+
     def test_cwe_trail(self):
         session_factory = self.replay_flight_data('test_cwe_trail')
         p = Policy({
@@ -42,7 +44,7 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev', role="illumanti")
+        result = mgr.publish(pl, 'Dev', role=self.role)
 
         events = pl.get_events(session_factory)
         self.assertEqual(len(events), 1)
@@ -73,7 +75,7 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev', role="illuminati")
+        result = mgr.publish(pl, 'Dev', role=self.role)
         self.assert_items(
             result,
             {'Description': 'cloud-maid lambda policy',
@@ -95,7 +97,7 @@ class PolicyLambdaProvision(BaseTest):
             {"source": ["aws.ec2"],
              "detail": {
                  "state": ["pending"]},
-             "detail-type": ["EC2 Instance State-change Notifications"]})
+             "detail-type": ["EC2 Instance State-change Notification"]})
 
     def test_cwe_asg_instance(self):
         session_factory = self.replay_flight_data('test_cwe_asg')
@@ -108,7 +110,7 @@ class PolicyLambdaProvision(BaseTest):
         }, Config.empty())
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev', role="jedi")
+        result = mgr.publish(pl, 'Dev', role=self.role)
         self.assert_items(
             result,
             {'FunctionName': 'maid-asg-spin-detector',
@@ -142,7 +144,7 @@ class PolicyLambdaProvision(BaseTest):
 
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
-        result = mgr.publish(pl, 'Dev', role="jedi")
+        result = mgr.publish(pl, 'Dev', role=self.role)
         self.assert_items(
             result,
             {'FunctionName': 'maid-periodic-ec2-checker',
