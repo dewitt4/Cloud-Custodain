@@ -2,12 +2,14 @@ import json
 import logging
 import os
 import unittest
+import StringIO
 import shutil
 import tempfile
 import yaml
 
 import boto3
 import placebo
+
 
 from janitor import policy
 from janitor.ctx import ExecutionContext
@@ -75,7 +77,27 @@ class BaseTest(unittest.TestCase):
         pill = placebo.attach(session, test_dir)
         pill.playback()
         return lambda x=None: session
-    
+
+    def capture_logging(
+            self, name=None, level=logging.INFO, 
+            formatter=None, log_file=None):
+        if log_file is None:
+            log_file = StringIO.StringIO()
+        log_handler = logging.StreamHandler(log_file)
+        if formatter:
+            log_handler.setFormatter(formatter)
+        logger = logging.getLogger(name)
+        logger.addHandler(log_handler)
+        old_logger_level = logger.level
+        logger.setLevel(level)
+
+        @self.addCleanup
+        def reset_logging():
+            logger.removeHandler(log_handler)
+            logger.setLevel(old_logger_level)
+
+        return log_file
+
     
 def placebo_dir(name):
     return os.path.join(
