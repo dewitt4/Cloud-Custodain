@@ -42,7 +42,6 @@ def generateBucketContents(s3, bucket, contents):
 
 class BaseFTest(BaseTest):
 
-
     def capture_logging(
             self, name="", level=logging.INFO, log_file=None, formatter=None):
         if log_file is None:
@@ -61,7 +60,6 @@ class BaseFTest(BaseTest):
             logger.setLevel(old_logger_level)
 
         return log_file
-
 
     
 class S3Functional(BaseFTest):

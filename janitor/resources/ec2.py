@@ -1,8 +1,6 @@
 import itertools
 import operator
 
-from dateutil.parser import parse as parse_date
-
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import (
     FilterRegistry, AgeFilter, ValueFilter
@@ -133,7 +131,7 @@ class AttachedVolume(ValueFilter):
                 len(instance_set), len(resources)))
             results = ec2.describe_volumes(
                 Filters=[
-                    {'Name':'attachment.instance-id',
+                    {'Name': 'attachment.instance-id',
                      'Values': instance_set}])
             for v in results['Volumes']:
                 volume_map.setdefault(
@@ -146,7 +144,30 @@ class AttachedVolume(ValueFilter):
             return False
         return self.operator(map(self.match, volumes))
 
+    
+@filters.register('image')
+class InstanceImage(ValueFilter):
 
+    def process(self, resources, event=None):
+        self.image_map = self.get_image_mapping(resources)
+
+    def get_image_mapping(self, resources):
+        ec2 = utils.local_session(self.manager.session_factory).client('ec2')
+        image_ids = set([i['ImageId'] for i in resources])
+        results = ec2.describe_images(ImageIds=list(image_ids))
+        return {i['ImageId']: i for i in results['Images']}
+
+    def __call__(self, i):
+        image = self.image_map.get(i['InstanceId'])
+        if not image:
+            self.log.warning(
+                "Could not locate image for instance:%s ami:%s" % (
+                    i['InstanceId'], i["ImageId"]))
+            # Match instead on empty skeleton?
+            return False
+        return self.match(image)
+        
+            
 @filters.register('offhour')
 class InstanceOffHour(OffHour, StateTransitionFilter):
 
@@ -211,18 +232,37 @@ class Start(BaseAction, StateTransitionFilter):
 
 @actions.register('stop')
 class Stop(BaseAction, StateTransitionFilter):
-
+    """Stop instances
+    """
     valid_origin_states = ('running', 'pending')
+
+    def split_on_storage(self, instances):
+        ephemeral = []
+        persistent = []
+        for i in instances:
+            for bd in instances.get('BlockDeviceMappings', []):
+                if bd['DeviceName'] == '/dev/sda1':
+                    if 'Ebs' in bd:
+                        persistent.append(i)
+                    else:
+                        ephemeral.append(i)
+        return ephemeral, persistent
     
     def process(self, instances):
         instances = self.filter_instance_state(instances)
         if not len(instances):
             return
+        ephemeral, persistent = self.split_on_storage(instances)
+        if self.data.get('terminate-ephemeral', False):
+            self._run_api(
+                self.manager.client.terminate_instances,
+                InstanceIds=[i['InstanceId'] for i in ephemeral],
+                DryRun=self.manager.config.dryrun)
         self._run_api(
             self.manager.client.stop_instances,
-            InstanceIds=[i['InstanceId'] for i in instances],
+            InstanceIds=[i['InstanceId'] for i in persistent],
             DryRun=self.manager.config.dryrun)
-
+        
         
 @actions.register('terminate')        
 class Terminate(BaseAction, StateTransitionFilter):
@@ -314,7 +354,8 @@ class QueryFilter(object):
         self.key = self.data.keys()[0]
         self.value = self.data.values()[0]
 
-        if not self.key in EC2_VALID_FILTERS and not self.key.startswith('tag:'):
+        if self.key not in EC2_VALID_FILTERS and not self.key.startswith(
+                'tag:'):
             raise ValueError(
                 "EC2 Query Filter invalid filter name %s" % (self.data))
                 
