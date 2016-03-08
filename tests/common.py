@@ -13,10 +13,16 @@ import placebo
 
 from janitor import policy
 from janitor.ctx import ExecutionContext
+from janitor.utils import CONN_CACHE
 
 logging.getLogger('placebo').setLevel(logging.WARNING)
 logging.getLogger('botocore').setLevel(logging.WARNING)
 
+
+def cleanSession():
+    # Clear out thread local session cache
+    CONN_CACHE.session = None
+    
 
 class BaseTest(unittest.TestCase):
 
@@ -62,8 +68,10 @@ class BaseTest(unittest.TestCase):
         os.makedirs(test_dir)
 
         session = boto3.Session()
-        pill = placebo.attach(session, test_dir)
+        pill = placebo.attach(session, test_dir, debug=True)
         pill.record()
+        self.addCleanup(pill.stop)
+        self.addCleanup(cleanSession)
         # return session factory
         return lambda x=None: session
     
@@ -76,6 +84,8 @@ class BaseTest(unittest.TestCase):
         session = boto3.Session()
         pill = placebo.attach(session, test_dir)
         pill.playback()
+        self.addCleanup(pill.stop)
+        self.addCleanup(cleanSession)
         return lambda x=None: session
 
     def capture_logging(
