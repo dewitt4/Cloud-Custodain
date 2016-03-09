@@ -599,6 +599,7 @@ class CloudWatchEventSource(object):
         response = self.client.list_targets_by_rule(Rule=func.name)
         # CWE seems to be quite picky about function arns (no aliases/versions)
         func_arn = func.arn
+
         if func_arn.count(':') > 6:
             func_arn, version = func_arn.rsplit(':', 1)
         for t in response['Targets']:
@@ -612,8 +613,10 @@ class CloudWatchEventSource(object):
 
         log.debug('Creating cwe rule target found for %s on func:%s' % (
             self, func_arn))
+
         result = self.client.put_targets(
             Rule=func.name, Targets=[{"Id": func.name, "Arn": func_arn}])
+
         return True
         
     def update(self, func):
