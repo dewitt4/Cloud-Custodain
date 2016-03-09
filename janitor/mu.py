@@ -550,7 +550,7 @@ class CloudWatchEventSource(object):
         elif event_type == "ec2-instance-state":
             payload['source'] = ['aws.ec2']
             payload['detail-type'] = [
-                "EC2 Instance State-change Notifications"]
+                "EC2 Instance State-change Notification"]
             # Technically could let empty be all events, but likely misconfig
             payload['detail'] = {"state": self.data.get('events', [])}
         elif event_type == "asg-instance-state":
@@ -595,23 +595,27 @@ class CloudWatchEventSource(object):
 
         # cwe seems to be quite picky
         func_arn = func.arn
+
         if func_arn.count(':') > 6:
             func_arn, version = func_arn.rsplit(':', 1)
 
+        log.debug('Function ARN: %s' % func_arn)
         for t in response['Targets']:
             if func_arn == t['Arn']:
                 found = True
 
         if found:
-            log.debug("Existing cwe rule target found for %s" % self)
+            log.debug("Existing cwe rule target found for %s on func:%s" % (
+                self, func_arn))
             return
 
-        log.debug('Creating cwe rule target found for %s' % self)
+        log.debug('Creating cwe rule target found for %s on func:%s' % (
+            self, func_arn))
         
         self.client.put_targets(
             Rule=func.name,
             Targets=[
-                {"Id": str(uuid.uuid4()),
+                {"Id": func.name,
                  "Arn": func_arn}]
             )
         return True
