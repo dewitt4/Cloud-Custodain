@@ -537,7 +537,7 @@ class CloudWatchEventSource(object):
             sources.append(event_info['source'])
                            
         payload['detail'] = {
-            'eventSource': sources,
+            'eventSource': list(set(sources)),
             'eventName': self.data.get('events', [])}
             
     def render_event_pattern(self):

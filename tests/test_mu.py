@@ -22,7 +22,8 @@ class PolicyLambdaHandler(BaseTest):
 
 class PolicyLambdaProvision(BaseTest):
 
-    role = "jedi"
+
+    role = "arn:aws:iam::119310032964:role/lambda_basic_execution"
     
     def assert_items(self, result, expected):
         for k, v in expected.items():
