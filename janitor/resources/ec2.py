@@ -240,7 +240,7 @@ class Stop(BaseAction, StateTransitionFilter):
         ephemeral = []
         persistent = []
         for i in instances:
-            for bd in instances.get('BlockDeviceMappings', []):
+            for bd in i.get('BlockDeviceMappings', []):
                 if bd['DeviceName'] == '/dev/sda1':
                     if 'Ebs' in bd:
                         persistent.append(i)

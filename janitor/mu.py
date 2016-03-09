@@ -241,7 +241,7 @@ class LambdaManager(object):
         lfunc = self.get(func.name, qualifier)
 
         if s3_uri:
-            # Todo support versioned buckets
+            # TODO: support versioned buckets
             bucket, key = self._upload_func(s3_uri, func, archive)
             code_ref = {'S3Bucket': bucket, 'S3Key': key}
         else:
@@ -259,10 +259,9 @@ class LambdaManager(object):
             if self.delta_function(lfunc, func, role):
                 log.debug("Updating function: %s config" % func.name)
                 params = func.get_config()
+                del params['Runtime']
                 params['Role'] = role
                 result = self.client.update_function_configuration(**params)
-            #else:
-            #    log.debug("Config unchanged")
         else:
             params = func.get_config()
             params.update({'Publish': True, 'Code': code_ref, 'Role': role})
@@ -495,7 +494,8 @@ class CloudWatchEventSource(object):
     
     def __init__(self, data, session_factory, prefix="maid-"):
         self.session_factory = session_factory
-        self.client = self.session_factory().client('events')
+        self.session = session_factory()
+        self.client = self.session.client('events')
         self.data = data
         self.prefix = prefix
         
@@ -550,7 +550,7 @@ class CloudWatchEventSource(object):
         elif event_type == "ec2-instance-state":
             payload['source'] = ['aws.ec2']
             payload['detail-type'] = [
-                "EC2 Instance State-change Notifications"]
+                "EC2 Instance State-change Notification"]
             # Technically could let empty be all events, but likely misconfig
             payload['detail'] = {"state": self.data.get('events', [])}
         elif event_type == "asg-instance-state":
@@ -566,54 +566,57 @@ class CloudWatchEventSource(object):
                 "Unknown lambda event source type: %s" % event_type)
         if not payload:
             return None
-        return json.dumps(payload, indent=2)
+        return json.dumps(payload)
         
     def add(self, func):
         params = dict(
-            Name=func.name,
-            State='ENABLED')
+            Name=func.name, Description=func.description, State='ENABLED')
 
         pattern = self.render_event_pattern()
         if pattern:
             params['EventPattern'] = pattern
-            #log.debug("%s Event Pattern: %s", self, pattern)
         schedule = self.data.get('schedule')        
         if schedule:
             params['ScheduleExpression'] = schedule
-        
+            
         rule = self.get(func.name)
+
         if rule and self.delta(rule, params):
             log.debug("Updating cwe rule for %s" % self)            
             response = self.client.put_rule(**params)
         elif not rule:
-            log.debug("Creating cwe rule for %s" % self)
+            log.debug("Creating cwe rule for %s" % (self))
             response = self.client.put_rule(**params)
-            
+            self.session.client('lambda').add_permission(
+                FunctionName=func.name,
+                StatementId=str(uuid.uuid4()),
+                SourceArn=response['RuleArn'],
+                Action='lambda:InvokeFunction',
+                Principal='events.amazonaws.com')
+
+        # Add Targets
         found = False
-
         response = self.client.list_targets_by_rule(Rule=func.name)
-
-        # cwe seems to be quite picky
+        # CWE seems to be quite picky about function arns (no aliases/versions)
         func_arn = func.arn
+
         if func_arn.count(':') > 6:
             func_arn, version = func_arn.rsplit(':', 1)
-
         for t in response['Targets']:
             if func_arn == t['Arn']:
                 found = True
 
         if found:
-            log.debug("Existing cwe rule target found for %s" % self)
+            log.debug("Existing cwe rule target found for %s on func:%s" % (
+                self, func_arn))
             return
 
-        log.debug('Creating cwe rule target found for %s' % self)
-        
-        self.client.put_targets(
-            Rule=func.name,
-            Targets=[
-                {"Id": str(uuid.uuid4()),
-                 "Arn": func_arn}]
-            )
+        log.debug('Creating cwe rule target found for %s on func:%s' % (
+            self, func_arn))
+
+        result = self.client.put_targets(
+            Rule=func.name, Targets=[{"Id": func.name, "Arn": func_arn}])
+
         return True
         
     def update(self, func):

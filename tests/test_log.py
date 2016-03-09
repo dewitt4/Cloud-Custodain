@@ -13,12 +13,12 @@ class LogTest(BaseTest):
         handler = CloudWatchLogHandler(session_factory=session_factory)
         log = logging.getLogger("maid")
         log.addHandler(handler)
+        self.addCleanup(log.removeHandler, handler)
         log.setLevel(logging.DEBUG)
 
         for i in range(100, 115):
             log.info('hello world %s' % i)
 
-        log.removeHandler(handler)
         handler.flush()
         handler.close()
 
@@ -29,6 +29,7 @@ class LogTest(BaseTest):
             "test-maid-4", "alpha", session_factory=session_factory)
         handler.batch_interval = 1
         log.addHandler(handler)
+        self.addCleanup(log.removeHandler, handler)
         log.setLevel(logging.DEBUG)
 
         for i in range(100, 105):
@@ -46,6 +47,7 @@ class LogTest(BaseTest):
             "test-maid-4", "alpha", session_factory=session_factory)
         handler.batch_size = 5
         log.addHandler(handler)
+        self.addCleanup(log.removeHandler, handler)
         log.setLevel(logging.DEBUG)
 
         for i in range(10):
