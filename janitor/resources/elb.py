@@ -73,6 +73,11 @@ class ELB(ResourceManager):
             *[rp['LoadBalancerDescriptions'] for rp in results]))
         return self.filter_resources(elbs)
 
+    def get_resources(self, resource_ids):
+        c = local_session(self.session_factory).client('elb')
+        return c.describe_load_balancers(
+            LoadBalancerNames=resource_ids)
+    
 
 @actions.register
 class Delete(BaseAction):
@@ -86,37 +91,66 @@ class Delete(BaseAction):
         client.delete_load_balancer(LoadBalancerName=elb['LoadBalancerName'])
 
 
+def is_ssl(b):
+    for ld in b['ListenerDescriptions']:
+        if ld['Listener']['Protocol'] != 'HTTPS':
+            continue
+        return True
+    return False
+
+
+@filters.register('is-ssl')
+class IsSSLFilter(Filter):
+
+    def process(self, balancers, event=None):
+        return [b for b in balancers if is_ssl(b)]
+
+    
 @filters.register('ssl-policy')
 class SSLPolicyFilter(Filter):
     """Filter ELBs on the properties of SSLNegotation policies.
     TODO: Only works on custom policies at the moment.
+
     filters:
       - type: ssl-policy
+        whitelist: []
         blacklist:
         - "Protocol-SSLv2"
         - "Protocol-SSLv3"
     """
 
     def validate(self):
-        if ('blacklist' not in self.data or
+        if 'whitelist' in self.data and 'blacklist' in self.data:
+            raise FilterValidationError(
+                "cannot specify whitelist and black list")
+
+        if 'whitelist' not in self.data and 'blacklist' not in self.data:
+            raise FilterValidationError(
+                "must specify either policy blacklist or whitelist")
+        if ('blacklist' in self.data and
                 not isinstance(self.data['blacklist'], list)):
             raise FilterValidationError("blacklist must be a list")
-
+        
         return self
 
     def process(self, balancers, event=None):
-        balancers = [b for b in balancers if self.is_ssl(b)]
+        balancers = [b for b in balancers if is_ssl(b)]
         active_policy_attribute_tuples = (
             self.create_elb_active_policy_attribute_tuples(balancers))
-        blacklisted_policies = set(self.data['blacklist'])
+        whitelist = set(self.data.get('whitelist', []))
+        blacklist = set(self.data.get('blacklist', []))
 
-        invalid_elbs = filter(
-            lambda elb_policy_tuple: (
-                len(blacklisted_policies.intersection(
-                    set(elb_policy_tuple[1]))) > 0),
-            active_policy_attribute_tuples
-        )
-        return [invalid_elb[0] for invalid_elb in invalid_elbs]
+        if blacklist:
+            invalid_elbs = [
+                elb for elb, active_policies in
+                active_policy_attribute_tuples
+                if len(blacklist.intersection(active_policies))]
+        elif whitelist:
+            invalid_elbs = [
+                elb for elb, active_policies in
+                active_policy_attribute_tuples
+                if len(set(active_policies).difference(whitelist))]
+        return invalid_elbs
 
     def create_elb_active_policy_attribute_tuples(self, elbs):
         """
@@ -141,11 +175,6 @@ class SSLPolicyFilter(Filter):
             policies = []
             for ld in b['ListenerDescriptions']:
                 for p in ld['PolicyNames']:
-                    # Skip precanned
-                    if p.startswith('ELBSecurityPolicy'):
-                        continue
-                    elif p.startswith('ELBSample'):
-                        continue
                     policies.append(p)
             elb_policy_tuples.append((b, policies))
 
@@ -186,25 +215,18 @@ class SSLPolicyFilter(Filter):
                 PolicyNames=policy_names)['PolicyDescriptions']
             active_lb_policies = []
             for p in policies:
-                if p['PolicyTypeName'] == 'SSLNegotiationPolicyType':
-                    active_lb_policies.extend(
-                        [policy_description['AttributeName']
-                            for policy_description in
-                            p['PolicyAttributeDescriptions']
-                            if policy_description['AttributeValue'] == 'true']
-                    )
+                if p['PolicyTypeName'] != 'SSLNegotiationPolicyType':
+                    continue
+                active_lb_policies.extend(
+                    [policy_description['AttributeName']
+                     for policy_description in
+                     p['PolicyAttributeDescriptions']
+                     if policy_description['AttributeValue'] == 'true']
+                )
             results.append((elb, active_lb_policies))
 
         return results
-
-    @staticmethod
-    def is_ssl(b):
-        for ld in b['ListenerDescriptions']:
-            if ld['Listener']['Protocol'] != 'HTTPS':
-                continue
-            return True
-        return False
-
+        
 
 @filters.register('healthcheck-protocol-mismatch')
 class HealthCheckProtocolMismatch(Filter):
