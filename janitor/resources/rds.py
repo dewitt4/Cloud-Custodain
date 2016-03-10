@@ -89,7 +89,29 @@ class RDS(ResourceManager):
         self._cache.save({'resource': 'rds', 'q': query}, dbs)
         return self.filter_resources(dbs)
 
-
+    def get_resources(self, resource_ids):
+        c = local_session(self.session_factory).client('rds')
+        results = []
+        for db_id in resource_ids:
+            results.append(
+                c.describe_db_instances(
+                    DBInstanceidentifier=db_id)['DBInstances'])
+        return results
 
     
+@actions.register('delete')
+class Delete(BaseAction):
+
+    def process(self, resources):
+        self.skip = self.data.get('skip-snapshot', False)
+        
+        # Concurrency feels like over kill here.
+        client = local_session(self.manager.session_factory).client('rds')
+        for rdb in resources:
+            client.delete_db_instance(
+                DBInstanceIdentifier=rdb['DBInstanceIdentifier'],
+                SkipFinalSnapshot=self.skip)
+
+        
+        
         

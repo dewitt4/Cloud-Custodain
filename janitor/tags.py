@@ -228,7 +228,10 @@ class Tag(BaseAction, ResourceTag):
     def process(self, resources):
         # Legacy
         msg = self.data.get('msg')
+        msg = self.data.get('value') or msg
+        
         tag = self.data.get('tag', 'maid_status')
+        tag = self.data.get('key') or tag
 
         # Support setting multiple tags in a single go with a mapping
         tags = self.data.get('tags')

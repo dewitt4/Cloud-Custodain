@@ -41,7 +41,6 @@ class SSLPolicyTest(BaseTest):
                  'blacklist': ['Protocol-SSLv2']}
             ]},
             session_factory=session_factory)
-
         resources = policy.run()
         self.assertEqual(len(resources), 1)
         self.assertEqual(
