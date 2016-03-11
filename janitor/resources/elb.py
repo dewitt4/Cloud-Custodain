@@ -66,11 +66,19 @@ class ELB(ResourceManager):
             self.data.get('actions', []), self)
 
     def resources(self):
+        if self._cache.load():
+            elbs = self._cache.get({'resource': 'elb'})
+            if elbs is not None:
+                self.log.debug("Using cached rds: %d" % (
+                    len(elbs)))
+                return self.filter_resources(elbs)
+            
         c = self.session_factory().client('elb')
         p = c.get_paginator('describe_load_balancers')
         results = p.paginate()
         elbs = list(itertools.chain(
             *[rp['LoadBalancerDescriptions'] for rp in results]))
+        self._cache.save({'resource': 'elbs'}, elbs)
         return self.filter_resources(elbs)
 
     def get_resources(self, resource_ids):
@@ -79,7 +87,7 @@ class ELB(ResourceManager):
             LoadBalancerNames=resource_ids)
     
 
-@actions.register
+@actions.register('delete')
 class Delete(BaseAction):
 
     def process(self, load_balancers):
