@@ -68,7 +68,7 @@ class Tag(BaseAction):
         session = local_session(self.manager.session_factory)
         client = session.client('autoscaling')
         tag = self.data.get('tag', 'maid_status')
-        propagate = self.data.get('propagate_launch', False)
+        propagate = self.data.get('propagate_launch', True)
         
         if msg is None:
             msg = self.data.get(
@@ -126,7 +126,9 @@ class PropagateTags(Tag):
                    and not t['Key'].startswith('aws:')}
 
         if self.data.get('tags'):
-            tag_map = {k:v for k,v in tag_map.items() if k in self.data['tags']}
+            tag_map = {
+                k: v for k, v in tag_map.items()
+                if k in self.data['tags']}
             
         tag_set = set(tag_map)
         if self.data.get('trim', False):
