@@ -14,6 +14,11 @@ class CloudTrailResource(object):
         'CreateVolume': {
             'ids': 'responseElements.volumeId',
             'source': 'ec2.amazonaws.com'},
+
+        'CreateLoadBalancer': {
+            'ids': 'requestParameters.loadBalancerName',
+            'source': 'elb.amazonaws.com',
+            },
         
         'CreateLoadBalancerPolicy': {
             'ids': 'requestParameters.loadBalancerName',
