@@ -222,7 +222,7 @@ class Tag(BaseAction, ResourceTag):
     """Tag an ec2 resource.
     """
 
-    batch_sie = 150
+    batch_size = 150
     concurrency = 2
     
     def process(self, resources):
