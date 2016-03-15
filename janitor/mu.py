@@ -215,10 +215,17 @@ class LambdaManager(object):
             log_groups = logs.describe_log_groups(
                 logGroupNamePrefix=group_name)
         except ClientError as e:
-            return
-        log_streams = logs.describe_log_streams(
-            logGroupName=group_name,
-            orderBy="LastEventTime", limit=3, descending=True)
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                return
+            raise
+        try:
+            log_streams = logs.describe_log_streams(
+                logGroupName=group_name,
+                orderBy="LastEventTime", limit=3, descending=True)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                return
+            raise
         for s in reversed(log_streams['logStreams']):
             result = logs.get_log_events(
                 logGroupName=group_name, logStreamName=s['logStreamName'])
@@ -624,13 +631,13 @@ class CloudWatchEventSource(object):
 
     def pause(self, func):
         try:
-            self.client.disable_rule(Rule=func.name)
+            self.client.disable_rule(Name=func.name)
         except ClientError as e:
             pass
 
     def resume(self, func):
         try:
-            self.client.enable_rule(Rule=func.name)
+            self.client.enable_rule(Name=func.name)
         except ClientError as e:
             pass
         
