@@ -17,12 +17,12 @@ class CloudTrailResource(object):
 
         'CreateLoadBalancer': {
             'ids': 'requestParameters.loadBalancerName',
-            'source': 'elb.amazonaws.com',
+            'source': 'elasticloadbalancing.amazonaws.com',
             },
         
         'CreateLoadBalancerPolicy': {
             'ids': 'requestParameters.loadBalancerName',
-            'source': 'elb.amazonaws.com'},
+            'source': 'elasticloadbalancing.amazonaws.com'},
 
         'CreateDBInstance': {
             'ids': 'requestParameters.dbInstanceIdentifier',
