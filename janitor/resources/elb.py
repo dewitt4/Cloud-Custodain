@@ -79,12 +79,14 @@ class ELB(ResourceManager):
         elbs = list(itertools.chain(
             *[rp['LoadBalancerDescriptions'] for rp in results]))
         self._cache.save({'resource': 'elbs'}, elbs)
+        
         return self.filter_resources(elbs)
 
     def get_resources(self, resource_ids):
         c = local_session(self.session_factory).client('elb')
         return c.describe_load_balancers(
-            LoadBalancerNames=resource_ids)
+            LoadBalancerNames=resource_ids).get(
+                'LoadBalancerDescriptions', ())
     
 
 @actions.register('delete')
