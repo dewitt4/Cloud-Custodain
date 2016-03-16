@@ -46,7 +46,7 @@ import itertools
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import Filter, FilterRegistry, FilterValidationError
 from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session, chunks
+from janitor.utils import local_session, chunks, format_event
 
 log = logging.getLogger('maid.elb')
 
@@ -103,9 +103,8 @@ class Delete(BaseAction):
 
 def is_ssl(b):
     for ld in b['ListenerDescriptions']:
-        if ld['Listener']['Protocol'] != 'HTTPS':
-            continue
-        return True
+        if ld['Listener']['Protocol'] in ('HTTPS', 'SSL'):
+            return True
     return False
 
 
@@ -147,6 +146,7 @@ class SSLPolicyFilter(Filter):
         balancers = [b for b in balancers if is_ssl(b)]
         active_policy_attribute_tuples = (
             self.create_elb_active_policy_attribute_tuples(balancers))
+
         whitelist = set(self.data.get('whitelist', []))
         blacklist = set(self.data.get('blacklist', []))
 
