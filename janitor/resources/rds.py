@@ -95,7 +95,7 @@ class RDS(ResourceManager):
         for db_id in resource_ids:
             results.append(
                 c.describe_db_instances(
-                    DBInstanceidentifier=db_id)['DBInstances'])
+                    DBInstanceIdentifier=db_id)['DBInstances'])
         return results
 
     
