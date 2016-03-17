@@ -25,7 +25,7 @@ class CloudTrailResource(object):
             'source': 'elasticloadbalancing.amazonaws.com'},
 
         'CreateDBInstance': {
-            'ids': 'requestParameters.dbInstanceIdentifier',
+            'ids': 'requestParameters.dBInstanceIdentifier',
             'source': 'rds.amazonaws.com'},
 
         'SetLoadBalancerPoliciesOfListener': {
