@@ -93,6 +93,7 @@ class ELB(ResourceManager):
         except ClientError as e:
             if e.response['Error']['Code'] == "LoadBalancerNotFound":
                 return []
+            raise
 
 
 @actions.register('delete')
