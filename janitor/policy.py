@@ -123,13 +123,20 @@ class Policy(object):
             return
 
         resources = self.resource_manager.get_resources(resource_ids)
+        if 'debug' in event:
+            self.log.info("Resources %s", resources)
         resources = self.resource_manager.filter_resources(resources, event)
 
+        if 'debug' in event:
+            self.log.info("Filtered resources %d" % len(resources))
+        
         if not resources:
             self.log.info("policy: %s resources: %s no resources matched" % (
                 self.name, self.resource_type))
             return
-        
+
+        if 'debug' in event:
+            self.log.info("Invoking actions %s", self.resource_manager.actions)
         for action in self.resource_manager.actions:
             self.log.info(
                 "policy: %s invoking action: %s resources: %d",

@@ -618,7 +618,7 @@ class CloudWatchEventSource(object):
                 self, func_arn))
             return
 
-        log.debug('Creating cwe rule target found for %s on func:%s' % (
+        log.debug('Creating cwe rule target for %s on func:%s' % (
             self, func_arn))
 
         result = self.client.put_targets(
