@@ -49,6 +49,8 @@ Todo/Notes
 import logging
 import itertools
 
+from botocore.exceptions import ClientError
+
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import FilterRegistry
 from janitor.manager import ResourceManager, resources
@@ -93,7 +95,7 @@ class RDS(ResourceManager):
         c = local_session(self.session_factory).client('rds')
         results = []
         for db_id in resource_ids:
-            results.append(
+            results.extend(
                 c.describe_db_instances(
                     DBInstanceIdentifier=db_id)['DBInstances'])
         return results
@@ -107,10 +109,23 @@ class Delete(BaseAction):
         
         # Concurrency feels like over kill here.
         client = local_session(self.manager.session_factory).client('rds')
+
+        
         for rdb in resources:
-            client.delete_db_instance(
-                DBInstanceIdentifier=rdb['DBInstanceIdentifier'],
-                SkipFinalSnapshot=self.skip)
+            params = dict(
+                DBInstanceIdentifier=rdb['DBInstanceIdentifier'])
+
+            if self.skip:
+                params['SkipFinalSnapshot'] = True
+            else:
+                params[
+                    'FinalDBSnapshotIdentifier'] = rdb['DBInstanceIdentifier']
+            try:
+                client.delete_db_instance(**params)
+            except ClientError as e:
+                if e.response['Error']['Code'] == "InvalidDBInstanceState":
+                    continue
+                raise
 
         
         

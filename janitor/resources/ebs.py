@@ -31,6 +31,11 @@ class EBS(ResourceManager):
         self.actions = actions.parse(
             self.data.get('actions', []), self) 
 
+    def get_resources(self, resource_ids):
+        c = local_session(self.session_factory).client('ec2')
+        results = c.describe_volumes(VolumeIds=resource_ids)
+        return results['Volumes']
+        
     def resources(self):
         c = self.session_factory().client('ec2')
         query = self.resource_query()
