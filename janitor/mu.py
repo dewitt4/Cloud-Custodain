@@ -154,6 +154,11 @@ def maid_archive(skip=None):
     required = ["concurrent", "yaml", "pkg_resources"]
     
     def lib_filter(root, dirs, files):
+        for f in list(files):
+            # Don't bother with shared libs across platforms
+            if f.endswith('.so') and os.uname()[0] != 'Linux':
+                files.remove(f)
+                
         if os.path.basename(root) == 'site-packages':
             for n in tuple(dirs):
                 if n not in required:
