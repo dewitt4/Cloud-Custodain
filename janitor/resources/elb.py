@@ -43,6 +43,8 @@ from concurrent.futures import as_completed
 import logging
 import itertools
 
+from botocore.exceptions import ClientError
+
 from janitor.actions import ActionRegistry, BaseAction
 from janitor.filters import Filter, FilterRegistry, FilterValidationError
 from janitor.manager import ResourceManager, resources
@@ -84,16 +86,20 @@ class ELB(ResourceManager):
 
     def get_resources(self, resource_ids):
         c = local_session(self.session_factory).client('elb')
-        return c.describe_load_balancers(
-            LoadBalancerNames=resource_ids).get(
-                'LoadBalancerDescriptions', ())
-    
+        try:
+            return c.describe_load_balancers(
+                LoadBalancerNames=resource_ids).get(
+                    'LoadBalancerDescriptions', ())
+        except ClientError as e:
+            if e.response['Error']['Code'] == "LoadBalancerNotFound":
+                return []
+
 
 @actions.register('delete')
 class Delete(BaseAction):
 
     def process(self, load_balancers):
-        with self.executor_factory(max_workers=10) as w:
+        with self.executor_factory(max_workers=3) as w:
             list(w.map(self.process_elb, load_balancers))
 
     def process_elb(self, elb):

@@ -13,7 +13,7 @@ import json
 from janitor.policy import load
 from janitor.utils import format_event
 
-logging.root.setLevel(logging.INFO)
+logging.root.setLevel(logging.DEBUG)
 logging.getLogger('botocore').setLevel(logging.WARNING)
 log = logging.getLogger('maid.lambda')
 
@@ -46,6 +46,7 @@ class Config(dict):
 
 def dispatch_event(event, context):
     log.info("Processing event\n %s", format_event(event))
+    event['debug'] = True
     policies = load(Config.empty(), 'config.json', format='json')
     for p in policies:
         p.push(event, context)
