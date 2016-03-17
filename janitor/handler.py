@@ -11,7 +11,8 @@ import logging
 import json
 
 from janitor.policy import load
-    
+from janitor.utils import format_event
+
 logging.root.setLevel(logging.INFO)
 logging.getLogger('botocore').setLevel(logging.WARNING)
 log = logging.getLogger('maid.lambda')
@@ -41,12 +42,6 @@ class Config(dict):
             'dryrun': False})
         d.update(kw)
         return cls(d)
-
-    
-def format_event(evt):
-    io = StringIO()
-    json.dump(evt, io, indent=2)
-    return io.getvalue()
 
 
 def dispatch_event(event, context):

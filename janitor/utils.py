@@ -5,6 +5,8 @@ import itertools
 import threading
 import time
 
+from StringIO import StringIO
+
 
 def loads(body):
     return json.loads(body)
@@ -15,6 +17,12 @@ def dumps(data, fh=None, indent=0):
         return json.dump(data, fh, cls=DateTimeEncoder, indent=indent)
     else:
         return json.dumps(data, cls=DateTimeEncoder, indent=indent)
+
+
+def format_event(evt):
+    io = StringIO()
+    json.dump(evt, io, indent=2)
+    return io.getvalue()
 
 
 class DateTimeEncoder(json.JSONEncoder):

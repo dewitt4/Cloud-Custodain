@@ -121,6 +121,7 @@ class Policy(object):
             self.log.warning("Could not find resource ids with %s" % (
                 mode.get('resources')))
             return
+
         resources = self.resource_manager.get_resources(resource_ids)
         resources = self.resource_manager.filter_resources(resources, event)
 
@@ -130,6 +131,9 @@ class Policy(object):
             return
         
         for action in self.resource_manager.actions:
+            self.log.info(
+                "policy: %s invoking action: %s resources: %d",
+                self.name, action.name, len(resources))
             action.process(resources)
 
     def provision(self):
