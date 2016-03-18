@@ -1,11 +1,9 @@
 import fnmatch
-import json
 import logging
 import os
 import time
 
 import jmespath
-import yaml
 
 from botocore.client import ClientError
 
@@ -25,9 +23,9 @@ def load(options, path, format='yaml'):
     
     with open(path) as fh:
         if format == 'yaml':
-            data = yaml.load(fh, Loader=yaml.SafeLoader)
+            data = utils.yaml_load(fh.read())
         elif format == 'json':
-            data = json.load(fh)
+            data = utils.loads(fh)
     return PolicyCollection(data, options)
 
 

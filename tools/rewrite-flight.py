@@ -26,6 +26,7 @@ event_change = [
 sentinels = [
     ]
 
+
 def rewrite_event(content):
     data = json.loads(content)
     modified = False

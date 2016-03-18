@@ -131,7 +131,7 @@ class And(Filter):
     def __init__(self, data, registry, manager):
         super(And, self).__init__(data)
         self.registry = registry
-        self.filters = registry.parse(self.data.values()[0], self.manager)
+        self.filters = registry.parse(self.data.values()[0], manager)
 
     def __call__(self, i):
         for f in self.filters:

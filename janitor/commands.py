@@ -3,7 +3,6 @@ from datetime import timedelta, datetime
 import logging
 import sys
 import time
-import yaml
 
 from janitor.credentials import SessionFactory
 from janitor.report import report as do_report
@@ -66,12 +65,12 @@ def logs(options, policy_collection):
 
 
 def resources(options, policy_collection):
+    import yaml
     session_factory = SessionFactory(
         options.region, options.profile, options.assume_role)
-
     manager = mu.LambdaManager(session_factory)
     funcs = manager.list_functions('maid-')
-
+    
     if options.all:
         print(yaml.dump(funcs, dumper=yaml.SafeDumper))
 
