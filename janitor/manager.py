@@ -36,6 +36,8 @@ class ResourceManager(object):
             if event and event['debug']:
                 self.log.info("applying filter %s", f)
             resources = f.process(resources, event)
+            if not resources:
+                break
         self.log.info("Filtered from %d to %d %s" % (
             original, len(resources), self.__class__.__name__.lower()))
         return resources

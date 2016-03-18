@@ -52,7 +52,7 @@ import itertools
 from botocore.exceptions import ClientError
 
 from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry
+from janitor.filters import FilterRegistry, Filter
 from janitor.manager import ResourceManager, resources
 from janitor.utils import local_session
 
@@ -100,6 +100,35 @@ class RDS(ResourceManager):
                     DBInstanceIdentifier=db_id)['DBInstances'])
         return results
 
+
+@filters.register('default-vpc')
+class DefaultVpc(Filter):
+    """ Matches if an rds database is in the default vpc
+    """
+
+    vpcs = None
+    default_vpc = None
+
+    def __call__(self, rdb):
+        vpc_id = rdb['DBSubnetGroup']['VpcId']
+        if self.vpcs is None:
+            self.vpcs = set((vpc_id,))
+            query_vpc = vpc_id
+        else:
+            query_vpc = vpc_id not in self.vpcs and vpc_id or None
+
+        if query_vpc:
+            client = local_session(self.manager.session_factory).client('ec2')
+            self.log.debug("querying vpc %s" % vpc_id)
+            vpcs = [v['VpcId'] for v
+                    in client.describe_vpcs(VpcIds=[vpc_id])['Vpcs']
+                    if v['IsDefault']]
+            self.vpcs.add(vpc_id)
+            if not vpcs:
+                return []
+            self.default_vpc = vpcs.pop()
+        return vpc_id == self.default_vpc and True or False
+
     
 @actions.register('delete')
 class Delete(BaseAction):
@@ -109,12 +138,10 @@ class Delete(BaseAction):
         
         # Concurrency feels like over kill here.
         client = local_session(self.manager.session_factory).client('rds')
-
         
         for rdb in resources:
             params = dict(
                 DBInstanceIdentifier=rdb['DBInstanceIdentifier'])
-
             if self.skip:
                 params['SkipFinalSnapshot'] = True
             else:
@@ -127,6 +154,6 @@ class Delete(BaseAction):
                     continue
                 raise
 
-        
+            self.log.info("Deleted rds: %s" % rdb['DBInstanceIdentifier'])
         
         

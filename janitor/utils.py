@@ -5,7 +5,32 @@ import itertools
 import threading
 import time
 
+
+
+# Try to place nice in lambda exec environment
+# where we don't require lambda
+try:
+    import yaml
+except ImportError:
+    yaml = None
+else:
+    try:
+        from yaml import CSafeLoader
+        SafeLoader = CSafeLoader
+    except ImportError:
+        try:
+            from yaml import SafeLoader
+        except ImportError:
+            SafeLoader = None
+
+
 from StringIO import StringIO
+
+
+def yaml_load(value):
+    if yaml is None:
+        raise RuntimeError("Yaml not available")
+    return yaml.load(value, Loader=SafeLoader)
 
 
 def loads(body):
@@ -17,7 +42,6 @@ def dumps(data, fh=None, indent=0):
         return json.dump(data, fh, cls=DateTimeEncoder, indent=indent)
     else:
         return json.dumps(data, cls=DateTimeEncoder, indent=indent)
-
 
 def format_event(evt):
     io = StringIO()
