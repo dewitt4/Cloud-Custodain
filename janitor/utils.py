@@ -8,7 +8,7 @@ import time
 
 
 # Try to place nice in lambda exec environment
-# where we don't require lambda
+# where we don't require yaml
 try:
     import yaml
 except ImportError:
