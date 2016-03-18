@@ -178,6 +178,9 @@ class Policy(object):
             self._write_file(
                 'resources.json', utils.dumps(resources, indent=2))
 
+            if not resources:
+                return resources
+
             at = time.time()            
             for a in self.resource_manager.actions:
                 s = time.time()

@@ -115,8 +115,10 @@ class Or(Filter):
     def __init__(self, data, registry, manager):
         super(Or, self).__init__(data)
         self.registry = registry
-        self.filters = registry.parse(self.data.values()[0], self.manager)
+        self.filters = registry.parse(self.data.values()[0], manager)
 
+    # TODO support resource set processing with or (will need identity
+    # metadata per resource type), ala tags set_id or query metamodel branch
     def __call__(self, i):
         for f in self.filters:
             if f(i):

@@ -1,5 +1,3 @@
-from pkg_resources import iter_entry_points
-
 
 class PluginRegistry(object):
     """A plugin registry
@@ -63,6 +61,7 @@ class PluginRegistry(object):
         Maid is intended to interact with internal and external systems
         that are not suitable for embedding into the maid code base.
         """
+        from pkg_resources import iter_entry_points
         for ep in iter_entry_points(group="maid.%s" % self.plugin_type):
             f = ep.load()
             f()

@@ -40,6 +40,7 @@ class PythonPackageArchive(object):
     def __init__(self,
                  src_path, virtualenv_dir=None, skip=None,
                  lib_filter=None, src_filter=None):
+
         self.src_path = src_path
         if virtualenv_dir is None:
             virtualenv_dir = os.path.abspath(
@@ -151,12 +152,13 @@ def maid_archive(skip=None):
     """Create a lambda code archive for running maid."""
 
     # Some aggressive shrinking
-    required = ["concurrent", "yaml", "pkg_resources"]
+    required = ["concurrent"]
+    host_platform = os.uname()[0]
     
     def lib_filter(root, dirs, files):
         for f in list(files):
             # Don't bother with shared libs across platforms
-            if f.endswith('.so') and os.uname()[0] != 'Linux':
+            if f.endswith('.so') and host_platform != 'Linux':
                 files.remove(f)
                 
         if os.path.basename(root) == 'site-packages':
