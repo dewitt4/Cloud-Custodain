@@ -25,7 +25,7 @@ def load(options, path, format='yaml'):
         if format == 'yaml':
             data = utils.yaml_load(fh.read())
         elif format == 'json':
-            data = utils.loads(fh)
+            data = utils.loads(fh.read())
     return PolicyCollection(data, options)
 
 
