@@ -152,7 +152,7 @@ def maid_archive(skip=None):
     """Create a lambda code archive for running maid."""
 
     # Some aggressive shrinking
-    required = ["concurrent"]
+    required = ["concurrent", "yaml", "pkg_resources"]
     host_platform = os.uname()[0]
     
     def lib_filter(root, dirs, files):
