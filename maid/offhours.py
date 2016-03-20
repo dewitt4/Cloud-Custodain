@@ -132,7 +132,7 @@ Terminate after time period
 - maid_offhours: terminate 3h
 
 """
-from janitor.filters import Filter
+from maid.filters import Filter
 
 import datetime
 

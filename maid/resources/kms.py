@@ -14,11 +14,11 @@
 import itertools
 import logging
 
-from janitor.actions import ActionRegistry
-from janitor.filters import FilterRegistry, Filter
+from maid.actions import ActionRegistry
+from maid.filters import FilterRegistry, Filter
 
-from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session
+from maid.manager import ResourceManager, resources
+from maid.utils import local_session
 
 log = logging.getLogger('maid.kms')
 

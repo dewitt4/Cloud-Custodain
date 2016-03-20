@@ -15,7 +15,7 @@ import unittest
 
 from dateutil.parser import parse as date_parse
 
-from janitor.report import RECORD_TYPE_FORMATTERS
+from maid.report import RECORD_TYPE_FORMATTERS
 from .common import load_data
 
 

@@ -58,10 +58,10 @@ import itertools
 
 from botocore.exceptions import ClientError
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import Filter, FilterRegistry, FilterValidationError
-from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session, chunks, format_event
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import Filter, FilterRegistry, FilterValidationError
+from maid.manager import ResourceManager, resources
+from maid.utils import local_session, chunks
 
 log = logging.getLogger('maid.elb')
 

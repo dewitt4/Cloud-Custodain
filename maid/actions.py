@@ -18,8 +18,8 @@ Actions to take on resources
 import logging
 from botocore.exceptions import ClientError
 
-from janitor.registry import PluginRegistry
-from janitor.executor import ThreadPoolExecutor
+from maid.registry import PluginRegistry
+from maid.executor import ThreadPoolExecutor
 
 
 class ActionRegistry(PluginRegistry):

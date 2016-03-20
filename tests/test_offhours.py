@@ -18,7 +18,7 @@ from mock import mock
 
 from .common import BaseTest, instance
 
-from janitor.offhours import OffHour, OnHour
+from maid.offhours import OffHour, OnHour
 
 
 class OffHoursFilterTest(BaseTest):

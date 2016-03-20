@@ -23,8 +23,8 @@ from cStringIO import StringIO
 import logging
 import json
 
-from janitor.policy import load
-from janitor.utils import format_event
+from maid.policy import load
+from maid.utils import format_event
 
 logging.root.setLevel(logging.DEBUG)
 logging.getLogger('botocore').setLevel(logging.WARNING)

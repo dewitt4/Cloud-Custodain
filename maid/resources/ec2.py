@@ -14,14 +14,14 @@
 import itertools
 import operator
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import (
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import (
     FilterRegistry, AgeFilter, ValueFilter
 )
 
-from janitor.manager import ResourceManager, resources
-from janitor.offhours import Time, OffHour, OnHour
-from janitor import tags, utils
+from maid.manager import ResourceManager, resources
+from maid.offhours import Time, OffHour, OnHour
+from maid import tags, utils
 
 
 filters = FilterRegistry('ec2.filters')

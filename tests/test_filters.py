@@ -16,9 +16,9 @@ from dateutil import tz
 from datetime import datetime, timedelta
 import unittest
 
-from janitor import filters as base_filters
-from janitor.resources.ec2 import filters
-from janitor.utils import annotation
+from maid import filters as base_filters
+from maid.resources.ec2 import filters
+from maid.utils import annotation
 from .common import instance, event_data
 
 

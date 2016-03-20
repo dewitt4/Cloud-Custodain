@@ -14,7 +14,7 @@
 import unittest
 
 
-from janitor.mailer import MessageDB
+from maid.mailer import MessageDB
 
 
 class MessageDBTest(unittest.TestCase):

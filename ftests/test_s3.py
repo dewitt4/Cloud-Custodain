@@ -11,9 +11,9 @@ import tempfile
 import unittest
 
 
-from janitor.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
+from maid.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
 
-from janitor.tests.common import BaseTest, Config, Bag
+from maid.tests.common import BaseTest, Config, Bag
 
 
 TEST_S3_BUCKET = os.environ.get('TEST_BUCKET', "cloud-maid-ftest")

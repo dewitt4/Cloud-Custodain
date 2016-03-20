@@ -14,11 +14,11 @@
 import itertools
 import logging
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import FilterRegistry
 
-from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session
+from maid.manager import ResourceManager, resources
+from maid.utils import local_session
 
 
 log = logging.getLogger('maid.cfn')

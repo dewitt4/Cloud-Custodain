@@ -9,8 +9,8 @@ import unittest
 
 from concurrent.futures import as_completed
 
-from janitor.sqsexec import SQSExecutor, MessageIterator
-from janitor import utils
+from maid.sqsexec import SQSExecutor, MessageIterator
+from maid import utils
 
 TEST_SQS_PREFIX = os.environ.get("TEST_SQS_PREFIX", "cloud-maid-ftest")
 

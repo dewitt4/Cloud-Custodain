@@ -16,7 +16,7 @@ import argparse
 import logging
 
 # policy initializes a lot of stuff on load
-from janitor import policy, commands
+from maid import policy, commands
 
 
 def _default_options(p):
@@ -38,7 +38,7 @@ def _default_options(p):
                    help="Dev Debug")
     p.add_argument("-s", "--output-dir", required=True,
                    help="Directory or S3 URL For Policy Output")
-    p.add_argument("-f", "--cache", default="~/.cache/cloud-janitor.cache")
+    p.add_argument("-f", "--cache", default="~/.cache/cloud-maid.cache")
     p.add_argument("--cache-period", default=60, type=int,
                    help="Cache validity in seconds (Default 60)")
 

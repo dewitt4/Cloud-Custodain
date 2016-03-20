@@ -47,11 +47,11 @@ import logging
 import os
 import time
 
-from janitor import executor
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter
-from janitor.manager import ResourceManager, resources
-from janitor.utils import chunks, local_session, set_annotation
+from maid import executor
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import FilterRegistry, Filter
+from maid.manager import ResourceManager, resources
+from maid.utils import chunks, local_session, set_annotation
 
 """
 TODO:

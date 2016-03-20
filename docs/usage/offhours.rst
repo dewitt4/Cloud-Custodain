@@ -1,3 +1,3 @@
 
 
-.. automodule:: janitor.offhours
+.. automodule:: maid.offhours
