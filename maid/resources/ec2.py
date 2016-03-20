@@ -16,7 +16,7 @@ import operator
 
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import (
-    FilterRegistry, AgeFilter, ValueFilter
+    FilterRegistry, AgeFilter, ValueFilter, Filter
 )
 
 from maid.manager import ResourceManager, resources
@@ -201,6 +201,22 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
             self.filter_instance_state(resources))
 
 
+@filters.register('ephemeral')
+class EphemeralInstanceFilter(Filter):
+
+    def __call__(self, i):
+        return self.is_ephemeral(i)
+    
+    @staticmethod
+    def is_ephemeral(self, i):
+        for bd in i.get('BlockDeviceMappings', []):
+            if bd['DeviceName'] in ('/dev/sda1', '/dev/xvda'):
+                if 'Ebs' in bd:
+                    return False
+                return True
+        return True
+    
+
 @filters.register('instance-uptime')
 class UpTimeFilter(AgeFilter):
 
@@ -253,12 +269,10 @@ class Stop(BaseAction, StateTransitionFilter):
         ephemeral = []
         persistent = []
         for i in instances:
-            for bd in i.get('BlockDeviceMappings', []):
-                if bd['DeviceName'] == '/dev/sda1':
-                    if 'Ebs' in bd:
-                        persistent.append(i)
-                    else:
-                        ephemeral.append(i)
+            if EphemeralInstanceFilter.is_ephemeral(i):
+                ephemeral.append(i)
+            else:
+                persistent.append(i)
         return ephemeral, persistent
     
     def process(self, instances):
