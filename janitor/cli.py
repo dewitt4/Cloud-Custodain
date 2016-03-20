@@ -92,7 +92,7 @@ def main():
         level=level,
         format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
     logging.getLogger('botocore').setLevel(logging.ERROR)
-    logging.getLogger('placebo').setLevel(logging.INFO)    
+
     
     config = policy.load(options, options.config)
     try:
