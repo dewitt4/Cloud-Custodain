@@ -54,6 +54,14 @@ You should have the cloud-maid command available now.
 .. code-block:: bash
 
    $ cloud-maid -h
+ 
+Alternatively, you can just run the commands below 
+
+.. code-block:: bash
+
+   $ cd cloud-maid
+   $ make install
+   $ bin/cloud-maid -h
 
 Running tests
 -------------
@@ -63,9 +71,7 @@ There are several additional dependencies for running unit tests.
 .. code-block:: bash
 
    $ cd cloud-maid
-   $ source bin/activate
-   $ pip install nosetests
-   $ pip install mock
+   $ make install
 
 And then unit tests can be run with
 
@@ -86,4 +92,3 @@ Coverage reports can be generated and viewed with the following.
 
    # on gnomeish linux
    $ gnome-open coverage/index.html
-
