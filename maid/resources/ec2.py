@@ -265,16 +265,18 @@ class Stop(BaseAction, StateTransitionFilter):
         instances = self.filter_instance_state(instances)
         if not len(instances):
             return
+        # Ephemeral instance can't be stopped.
         ephemeral, persistent = self.split_on_storage(instances)
-        if self.data.get('terminate-ephemeral', False):
+        if self.data.get('terminate-ephemeral', False) and ephemeral:
             self._run_api(
                 self.manager.client.terminate_instances,
                 InstanceIds=[i['InstanceId'] for i in ephemeral],
                 DryRun=self.manager.config.dryrun)
-        self._run_api(
-            self.manager.client.stop_instances,
-            InstanceIds=[i['InstanceId'] for i in persistent],
-            DryRun=self.manager.config.dryrun)
+        if persistent:
+            self._run_api(
+                self.manager.client.stop_instances,
+                InstanceIds=[i['InstanceId'] for i in persistent],
+                DryRun=self.manager.config.dryrun)
         
         
 @actions.register('terminate')        
