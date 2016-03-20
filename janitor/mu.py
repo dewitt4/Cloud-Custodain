@@ -27,7 +27,6 @@ import logging
 import os
 import sys
 import tempfile
-import uuid
 import zipfile
 
 from boto3.s3.transfer import S3Transfer, TransferConfig
@@ -122,6 +121,8 @@ class PythonPackageArchive(object):
                     os.path.join(arc_prefix, f))
 
     def add_contents(self, dest, contents):
+        if not isinstance(dest, zipfile.ZipInfo):
+            dest = zinfo(dest)
         # see zinfo function for some caveats
         assert not self._closed, "Archive closed"
         self._zip_file.writestr(dest, contents)
@@ -185,8 +186,7 @@ def maid_archive(skip=None):
         os.path.abspath(os.path.join(
             os.path.dirname(sys.executable), '..')),
         skip=skip,
-        lib_filter=lib_filter
-    )
+        lib_filter=lib_filter)
     
         
 class LambdaManager(object):
@@ -225,7 +225,11 @@ class LambdaManager(object):
         log.info("Removing maid policy lambda function %s", func.name)
         for e in func.get_events(self.session_factory):
             e.remove(func)
-        self.client.delete_function(FunctionName=func.name)
+        try:
+            self.client.delete_function(FunctionName=func.name)
+        except ClientError as e:
+            if e.response['Error']['Code'] != 'ResourceNotFoundException':
+                raise
 
     def logs(self, func):
         logs = self.session_factory().client('logs')
@@ -331,7 +335,6 @@ class LambdaManager(object):
         else:
             if (exists['FunctionVersion'] == func_version and
                 exists['Name'] == alias):
-                #log.debug("Alias unchanged")
                 return exists['AliasArn']
             log.debug('Updating maid lambda alias %s', alias)
             alias_result = self.client.update_alias(
@@ -357,9 +360,9 @@ def resource_exists(op, *args, **kw):
         raise
     
     
-class LambdaFunction:
+class AbstractLambdaFunction:
     """Abstract base class for lambda functions."""
-
+    
     __metaclass__ = abc.ABCMeta
 
     alias = None
@@ -410,7 +413,55 @@ class LambdaFunction:
             'Handler': self.handler,
             'Timeout': self.timeout}
         
-        
+
+class LambdaFunction(AbstractLambdaFunction):
+
+    def __init__(self, func_data, archive):
+        self.func_data = func_data
+        required = set((
+            'name', 'handler', 'memory_size',
+            'timeout', 'role', 'runtime',
+            'description', 'events'))
+        missing = required.difference(func_data)
+        if missing:
+            raise ValueError("Missing required keys %s" % " ".join(missing))
+        self.archive = archive
+
+    @property
+    def name(self):
+        return self.func_data['name']
+    
+    @property
+    def description(self):
+        return self.func_data['description']
+    
+    @property
+    def handler(self):
+        return self.func_data['handler']
+
+    @property
+    def memory_size(self):
+        return self.func_data['memory_size']
+
+    @property
+    def timeout(self):
+        return self.func_data['timeout']
+
+    @property
+    def runtime(self):
+        return self.func_data['runtime']
+    
+    @property
+    def role(self):
+        return self.func_data['role']
+
+    def get_events(self, session_factory):
+        return self.func_data['events']
+
+    def get_archive(self):
+        return self.archive
+
+    
 PolicyHandlerTemplate = """\
 from janitor import handler
 
@@ -420,7 +471,7 @@ def run(event, context):
 """
 
 
-class PolicyLambda(LambdaFunction):
+class PolicyLambda(AbstractLambdaFunction):
     """Wraps a maid policy to turn it into lambda function.
     """
     handler = "maid_policy.run"
@@ -457,10 +508,9 @@ class PolicyLambda(LambdaFunction):
     def get_archive(self):
         self.archive.create()
         self.archive.add_contents(
-            zinfo('config.json'),
-            json.dumps({'policies': [self.policy.data]}, indent=2))
-        self.archive.add_contents(
-            zinfo('maid_policy.py'), PolicyHandlerTemplate)
+            'config.json', json.dumps(
+                {'policies': [self.policy.data]}, indent=2))
+        self.archive.add_contents('maid_policy.py', PolicyHandlerTemplate)
         self.archive.close()
         return self.archive
 
@@ -469,11 +519,11 @@ def zinfo(fname):
     """Amazon lambda exec environment setup can break itself
     if zip files aren't constructed a particular way.
 
-    ie. It respects file perm attributes including
+    ie. It respects file perm attributes from the zip including
     those that prevent lambda from working. Namely lambda
     extracts code as one user, and executes code as a different
     user without permissions for the executing user to read
-    the file the lambda function is defacto broken. 
+    the file the lambda function is broken.
 
     Python's default zipfile.writestr does a 0600 perm which
     we modify here as a workaround.
@@ -486,10 +536,12 @@ def zinfo(fname):
 
 
 class CloudWatchEventSource(object):
-    """
-    Modeled loosely after kappa event source, such that it can be contributed
-    post cloudwatch events ga or public beta [update: waiting on kappa
-    major refactoring to land, https://goo.gl/gPwRV7 ]
+    """Subscribe a lambda to cloud watch events.
+
+    Cloud watch events supports a number of different event
+    sources, from periodic timers with cron syntax, to
+    real time instance state notifications, cloud trail
+    events, and realtime asg membership changes.
 
     Event Pattern for Instance State
 
@@ -614,12 +666,20 @@ class CloudWatchEventSource(object):
         elif not rule:
             log.debug("Creating cwe rule for %s" % (self))
             response = self.client.put_rule(**params)
+        else:
+            response = {'RuleArn': rule['Arn']}
+            
+        try:
             self.session.client('lambda').add_permission(
                 FunctionName=func.name,
-                StatementId=str(uuid.uuid4()),
+                StatementId=func.name,
                 SourceArn=response['RuleArn'],
                 Action='lambda:InvokeFunction',
                 Principal='events.amazonaws.com')
+            log.debug('Added lambda invoke cwe rule permission')
+        except ClientError as e:
+            if e.response['Error']['Code'] != 'ResourceConflictException':
+                raise            
 
         # Add Targets
         found = False
@@ -663,7 +723,72 @@ class CloudWatchEventSource(object):
         
     def remove(self, func):
         if self.get(func.name):
-            self.client.delete_rule(
-                Name=func.name,
-            )
+            try:
+                targets = self.client.list_targets_by_rule(
+                    Rule=func.name)['Targets']
+                self.client.remove_targets(
+                    Rule=func.name,
+                    Ids=[t['Id'] for t in targets])
+            except ClientError as e:
+                log.warning(
+                    "Could not remove targets for rule %s error: %s",
+                    func.name, e)
+            self.client.delete_rule(Name=func.name)
     
+
+class CloudWatchLogSubscription(object):
+    """ Subscribe a lambda to a log group[s]
+    """
+
+    def __init__(self, session_factory, log_groups, filter_pattern):
+        self.log_groups = log_groups
+        self.filter_pattern = filter_pattern
+        self.session_factory = session_factory
+        self.session = session_factory()
+        self.client = self.session.client('logs')
+
+    def add(self, func):
+        lambda_client = self.session.client('lambda')
+        for group in self.log_groups:
+            log.info(
+                "Creating subscription filter for %s" % group['logGroupName'])
+            region = group['arn'].split(':', 4)[3]
+            try:
+                lambda_client.add_permission(
+                    FunctionName=func.name,
+                    StatementId=group['logGroupName'].replace('/', '-'),
+                    SourceArn=group['arn'],
+                    Action='lambda:InvokeFunction',
+                    Principal='logs.%s.amazonaws.com' % region)
+                log.debug("Added lambda invoke log group permission")
+            except ClientError as e:
+                if e.response['Error']['Code'] != 'ResourceConflictException':
+                    raise
+            # Consistent put semantics / ie no op if extant
+            response = self.client.put_subscription_filter(
+                logGroupName=group['logGroupName'],
+                filterName=func.name,
+                filterPattern=self.filter_pattern,
+                destinationArn=func.alias or func.arn)
+            
+    def remove(self, func):
+        lambda_client = self.session.client('lambda')
+        for group in self.log_groups:
+            try:
+                response = lambda_client.remove_permission(
+                    FunctionName=func.name,
+                    StatementId=group['logGroupName'].replace('/', '-'))
+                log.debug("Removed lambda permission result: %s" % response)
+            except ClientError as e:
+                if e.response['Error']['Code'] != 'ResourceNotFoundException':
+                    raise
+
+            try:
+                response = self.client.delete_subscription_filter(
+                    logGroupName=group['logGroupName'], filterName=func.name)
+                log.debug("Removed subscription filter from: %s",
+                          group['logGroupName'])
+            except ClientError as e:
+                if e.response['Error']['Code'] != 'ResourceNotFoundException':
+                    raise
+            

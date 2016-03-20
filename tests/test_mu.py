@@ -21,20 +21,7 @@ from janitor.policy import Policy
 from .common import BaseTest, Config
 
 
-class PolicyLambdaHandler(BaseTest):
-
-    def xtest_ec2_state_event(self):
-        pass
-    
-    def xtest_periodic_event(self):
-        pass
-
-    def xtest_cloudtrail_event(self):
-        pass
-
-
 class PolicyLambdaProvision(BaseTest):
-
 
     role = "arn:aws:iam::119310032964:role/lambda_basic_execution"
     
