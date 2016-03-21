@@ -208,7 +208,7 @@ class EphemeralInstanceFilter(Filter):
         return self.is_ephemeral(i)
     
     @staticmethod
-    def is_ephemeral(self, i):
+    def is_ephemeral(i):
         for bd in i.get('BlockDeviceMappings', []):
             if bd['DeviceName'] in ('/dev/sda1', '/dev/xvda'):
                 if 'Ebs' in bd:
