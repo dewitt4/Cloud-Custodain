@@ -59,6 +59,12 @@ class Config(dict):
 
 def dispatch_event(event, context):
     log.info("Processing event\n %s", format_event(event))
+
+    error = event.get('detail', {}).get('errorCode')
+    if error:
+        log.debug("Skipping failed operation: %s" % error)
+        return
+
     event['debug'] = True
     policies = load(Config.empty(), 'config.json', format='json')
     for p in policies:

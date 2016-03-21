@@ -136,8 +136,8 @@ class Policy(object):
         resources = self.resource_manager.get_resources(resource_ids)
         if 'debug' in event:
             self.log.info("Resources %s", resources)
-        resources = self.resource_manager.filter_resources(resources, event)
 
+        resources = self.resource_manager.filter_resources(resources, event)
         if 'debug' in event:
             self.log.info("Filtered resources %d" % len(resources))
         
