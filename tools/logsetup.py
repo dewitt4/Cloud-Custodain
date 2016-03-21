@@ -16,14 +16,15 @@
 import argparse
 import json
 import inspect
+import itertools
 import logging
 import os
 import sys
 
-import janitor
+import maid
 
-from janitor.credentials import SessionFactory
-from janitor.mu import (
+from maid.credentials import SessionFactory
+from maid.mu import (
     CloudWatchLogSubscription,
     LambdaFunction,
     LambdaManager,
@@ -61,11 +62,13 @@ def get_groups(session_factory, options):
     params = {}
     if options.prefix:
         params['logGroupNamePrefix'] = options.prefix
-    groups = [
-        group for group in logs.describe_log_groups(
-            **params)['logGroups']]
+
+    results = logs.get_paginator('describe_log_groups').paginate(**params)
+    groups = list(itertools.chain(*[rp['logGroups'] for rp in results]))
+    
     if options.group:
         groups = [g for g in groups if g['logGroupName'] in options.group]
+
     return groups
 
 
@@ -85,7 +88,7 @@ def get_function(session_factory, options, groups):
     # This dance, feels a bit akward for a library usage.
     archive = PythonPackageArchive(
         os.path.join(
-            os.path.dirname(inspect.getabsfile(janitor)), 'logsub.py'),
+            os.path.dirname(inspect.getabsfile(maid)), 'logsub.py'),
         lib_filter=lambda x, y, z: ([], []))
     archive.create()
     archive.add_contents(

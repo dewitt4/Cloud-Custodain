@@ -17,7 +17,7 @@ import fnmatch
 import os
 import inspect
 
-import janitor
+import maid
 
 header = """\
 # Copyright 2016 Capital One Services, LLC
@@ -58,7 +58,7 @@ def update_headers(src_tree):
                     '%s%s%s' % (header, suffix, contents))
 
 def main():
-    srctree = os.path.dirname(inspect.getabsfile(janitor))
+    srctree = os.path.dirname(inspect.getabsfile(maid))
     update_headers(srctree)
     update_headers(os.path.abspath('tests'))
  
