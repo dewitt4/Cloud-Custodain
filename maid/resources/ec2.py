@@ -14,14 +14,14 @@
 import itertools
 import operator
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import (
-    FilterRegistry, AgeFilter, ValueFilter
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import (
+    FilterRegistry, AgeFilter, ValueFilter, Filter
 )
 
-from janitor.manager import ResourceManager, resources
-from janitor.offhours import Time, OffHour, OnHour
-from janitor import tags, utils
+from maid.manager import ResourceManager, resources
+from maid.offhours import Time, OffHour, OnHour
+from maid import tags, utils
 
 
 filters = FilterRegistry('ec2.filters')
@@ -201,6 +201,22 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
             self.filter_instance_state(resources))
 
 
+@filters.register('ephemeral')
+class EphemeralInstanceFilter(Filter):
+
+    def __call__(self, i):
+        return self.is_ephemeral(i)
+    
+    @staticmethod
+    def is_ephemeral(self, i):
+        for bd in i.get('BlockDeviceMappings', []):
+            if bd['DeviceName'] in ('/dev/sda1', '/dev/xvda'):
+                if 'Ebs' in bd:
+                    return False
+                return True
+        return True
+    
+
 @filters.register('instance-uptime')
 class UpTimeFilter(AgeFilter):
 
@@ -253,28 +269,28 @@ class Stop(BaseAction, StateTransitionFilter):
         ephemeral = []
         persistent = []
         for i in instances:
-            for bd in i.get('BlockDeviceMappings', []):
-                if bd['DeviceName'] == '/dev/sda1':
-                    if 'Ebs' in bd:
-                        persistent.append(i)
-                    else:
-                        ephemeral.append(i)
+            if EphemeralInstanceFilter.is_ephemeral(i):
+                ephemeral.append(i)
+            else:
+                persistent.append(i)
         return ephemeral, persistent
     
     def process(self, instances):
         instances = self.filter_instance_state(instances)
         if not len(instances):
             return
+        # Ephemeral instance can't be stopped.
         ephemeral, persistent = self.split_on_storage(instances)
-        if self.data.get('terminate-ephemeral', False):
+        if self.data.get('terminate-ephemeral', False) and ephemeral:
             self._run_api(
                 self.manager.client.terminate_instances,
                 InstanceIds=[i['InstanceId'] for i in ephemeral],
                 DryRun=self.manager.config.dryrun)
-        self._run_api(
-            self.manager.client.stop_instances,
-            InstanceIds=[i['InstanceId'] for i in persistent],
-            DryRun=self.manager.config.dryrun)
+        if persistent:
+            self._run_api(
+                self.manager.client.stop_instances,
+                InstanceIds=[i['InstanceId'] for i in persistent],
+                DryRun=self.manager.config.dryrun)
         
         
 @actions.register('terminate')        

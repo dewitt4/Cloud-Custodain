@@ -14,7 +14,7 @@
 
 import unittest
 
-from janitor.utils import chunks
+from maid.utils import chunks
 
 
 class UtilTest(unittest.TestCase):

@@ -13,7 +13,7 @@
 # limitations under the License.
 import time
 
-from janitor.output import FSOutput, MetricsOutput, CloudWatchLogOutput
+from maid.output import FSOutput, MetricsOutput, CloudWatchLogOutput
 
 
 class ExecutionContext(object):

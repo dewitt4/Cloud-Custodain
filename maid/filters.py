@@ -23,9 +23,9 @@ import jmespath
 import logging
 import operator
 
-from janitor.executor import ThreadPoolExecutor
-from janitor.registry import PluginRegistry
-from janitor.utils import set_annotation
+from maid.executor import ThreadPoolExecutor
+from maid.registry import PluginRegistry
+from maid.utils import set_annotation
 
 
 class FilterValidationError(Exception): pass

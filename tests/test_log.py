@@ -15,7 +15,7 @@ import time
 import unittest
 import logging
 
-from janitor.log import CloudWatchLogHandler
+from maid.log import CloudWatchLogHandler
 from .common import BaseTest
 
 

@@ -57,8 +57,8 @@ import os
 
 from dateutil.parser import parse as date_parse
 
-from janitor.executor import ThreadPoolExecutor
-from janitor.utils import local_session, dumps
+from maid.executor import ThreadPoolExecutor
+from maid.utils import local_session, dumps
 
 
 log = logging.getLogger('maid.reports')

@@ -28,8 +28,8 @@ import tempfile
 import os
 
 from boto3.s3.transfer import S3Transfer
-from janitor.utils import local_session, parse_s3
-from janitor.log import CloudWatchLogHandler
+from maid.utils import local_session, parse_s3
+from maid.log import CloudWatchLogHandler
 
 
 log = logging.getLogger('maid.output')

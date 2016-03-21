@@ -13,9 +13,9 @@
 # limitations under the License.
 import logging
 
-from janitor import cache
-from janitor.registry import PluginRegistry
-from janitor.utils import dumps
+from maid import cache
+from maid.registry import PluginRegistry
+from maid.utils import dumps
 
 
 resources = PluginRegistry('resources')

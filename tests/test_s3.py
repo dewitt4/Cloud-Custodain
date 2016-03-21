@@ -19,7 +19,7 @@ import tempfile
 
 from unittest import TestCase
 
-from janitor.resources.s3 import (
+from maid.resources.s3 import (
 #    EncryptedPrefix,
 #    NoGlobalGrants,
 #    EncryptionRequiredPolicy,
@@ -28,7 +28,7 @@ from janitor.resources.s3 import (
     restore_complete
 )
 
-from janitor.resources import s3 as s3_resource
+from maid.resources import s3 as s3_resource
 
 
 class RestoreCompletionTest(TestCase):
@@ -67,7 +67,7 @@ class BucketAction(TestCase):
     def setUp(self):
         self.client = mock.Mock()
         self.client_factory = mock.patch(
-            'janitor.resources.s3.bucket_client',
+            'maid.resources.s3.bucket_client',
             return_value=self.client)
         self.client_factory.start()
         

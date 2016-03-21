@@ -24,9 +24,9 @@ import boto3
 import placebo
 
 
-from janitor import policy
-from janitor.ctx import ExecutionContext
-from janitor.utils import CONN_CACHE
+from maid import policy
+from maid.ctx import ExecutionContext
+from maid.utils import CONN_CACHE
 
 logging.getLogger('placebo').setLevel(logging.WARNING)
 logging.getLogger('botocore').setLevel(logging.WARNING)

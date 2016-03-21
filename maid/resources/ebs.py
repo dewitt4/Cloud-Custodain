@@ -16,13 +16,13 @@ import logging
 
 from concurrent.futures import as_completed
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import (
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import (
     FilterRegistry, ValueFilter, ANNOTATION_KEY)
 
-from janitor.manager import ResourceManager, resources
-from janitor import tags
-from janitor.utils import (
+from maid.manager import ResourceManager, resources
+from maid import tags
+from maid.utils import (
     local_session, set_annotation, query_instances, chunks)
 
 

@@ -56,6 +56,7 @@ def dumps(data, fh=None, indent=0):
     else:
         return json.dumps(data, cls=DateTimeEncoder, indent=indent)
 
+
 def format_event(evt):
     io = StringIO()
     json.dump(evt, io, indent=2)

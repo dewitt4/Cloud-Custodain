@@ -32,11 +32,11 @@ import zipfile
 from boto3.s3.transfer import S3Transfer, TransferConfig
 from botocore.exceptions import ClientError
 
-import janitor
+import maid
 
 # Static event mapping to help simplify cwe rules creation
-from janitor.ctrail import CloudTrailResource
-from janitor.utils import parse_s3
+from maid.ctrail import CloudTrailResource
+from maid.utils import parse_s3
 
 
 log = logging.getLogger('maid.lambda')
@@ -182,7 +182,7 @@ def maid_archive(skip=None):
         return dirs, files
 
     return PythonPackageArchive(
-        os.path.dirname(inspect.getabsfile(janitor)),
+        os.path.dirname(inspect.getabsfile(maid)),
         os.path.abspath(os.path.join(
             os.path.dirname(sys.executable), '..')),
         skip=skip,
@@ -463,7 +463,7 @@ class LambdaFunction(AbstractLambdaFunction):
 
     
 PolicyHandlerTemplate = """\
-from janitor import handler
+from maid import handler
 
 def run(event, context):
     return handler.dispatch_event(event, context)

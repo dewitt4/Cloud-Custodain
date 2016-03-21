@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from janitor.ctx import ExecutionContext
-from janitor.resources.ec2 import EC2
-from janitor.tags import Tag
+from maid.ctx import ExecutionContext
+from maid.resources.ec2 import EC2
+from maid.tags import Tag
 from .common import BaseTest, instance, Bag, Config
 
 

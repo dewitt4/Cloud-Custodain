@@ -13,9 +13,9 @@
 # limitations under the License.
 import unittest
 
-from janitor.resources import ec2
-from janitor.resources.ec2 import actions, QueryFilter
-from janitor import tags
+from maid.resources import ec2
+from maid.resources.ec2 import actions, QueryFilter
+from maid import tags
 
 from .common import BaseTest
 

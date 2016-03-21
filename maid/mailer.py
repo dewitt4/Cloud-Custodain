@@ -107,8 +107,8 @@ import json
 import gzip
 import sqlite3
 
-from janitor import utils
-from janitor.sqsexec import MessageIterator
+from maid import utils
+from maid.sqsexec import MessageIterator
 
 
 DATA_MESSAGE = "datamsg/1.0"

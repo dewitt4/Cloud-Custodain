@@ -20,14 +20,14 @@ import jmespath
 
 from botocore.client import ClientError
 
-from janitor.ctrail import CloudTrailResource
-from janitor.ctx import ExecutionContext
-from janitor.credentials import SessionFactory
-from janitor.manager import resources
-from janitor import utils
+from maid.ctrail import CloudTrailResource
+from maid.ctx import ExecutionContext
+from maid.credentials import SessionFactory
+from maid.manager import resources
+from maid import utils
 
 # This import causes our resources to be initialized
-import janitor.resources
+import maid.resources
 
 
 def load(options, path, format='yaml'):
@@ -136,8 +136,8 @@ class Policy(object):
         resources = self.resource_manager.get_resources(resource_ids)
         if 'debug' in event:
             self.log.info("Resources %s", resources)
-        resources = self.resource_manager.filter_resources(resources, event)
 
+        resources = self.resource_manager.filter_resources(resources, event)
         if 'debug' in event:
             self.log.info("Filtered resources %d" % len(resources))
         
@@ -157,7 +157,7 @@ class Policy(object):
     def provision(self):
         """Provision policy as a lambda function."""
         # Avoiding runtime lambda dep, premature optimization?
-        from janitor.mu import PolicyLambda, LambdaManager
+        from maid.mu import PolicyLambda, LambdaManager
 
         with self.ctx:
             self.log.info(

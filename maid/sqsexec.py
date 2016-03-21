@@ -24,11 +24,11 @@ import random
 import logging
 import inspect
 
-from janitor import utils
+from maid import utils
 
 from concurrent.futures import Executor, Future
 
-log = logging.getLogger('janitor.sqsexec')
+log = logging.getLogger('maid.sqsexec')
 
 
 def named(o):

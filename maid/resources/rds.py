@@ -64,10 +64,10 @@ import itertools
 
 from botocore.exceptions import ClientError
 
-from janitor.actions import ActionRegistry, BaseAction
-from janitor.filters import FilterRegistry, Filter
-from janitor.manager import ResourceManager, resources
-from janitor.utils import local_session
+from maid.actions import ActionRegistry, BaseAction
+from maid.filters import FilterRegistry, Filter
+from maid.manager import ResourceManager, resources
+from maid.utils import local_session
 
 log = logging.getLogger('maid.rds')
 

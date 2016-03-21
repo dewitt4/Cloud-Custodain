@@ -25,9 +25,9 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse
 from dateutil.tz import tzutc
 
-from janitor.actions import BaseAction
-from janitor.filters import Filter, OPERATORS
-from janitor import utils
+from maid.actions import BaseAction
+from maid.filters import Filter, OPERATORS
+from maid import utils
 
 
 def register_tags(filters, actions, id_key):

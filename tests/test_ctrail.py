@@ -16,7 +16,7 @@ from unittest import TestCase
 
 from .common import event_data
 
-from janitor.ctrail import CloudTrailResource
+from maid.ctrail import CloudTrailResource
 
 
 class CloudTrailResourceTest(TestCase):

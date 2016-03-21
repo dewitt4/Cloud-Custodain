@@ -14,7 +14,7 @@
 
 
 from unittest import TestCase
-from janitor import cache
+from maid import cache
 
 
 class CacheTest(TestCase):

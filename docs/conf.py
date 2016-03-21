@@ -50,7 +50,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Cloud Maid'
-copyright = u'2015, Kapil Thangavelu'
+copyright = u'2015, Capital One Services, LLC'
 author = u'Kapil Thangavelu'
 
 # The version info for the project you're documenting, acts as replacement for

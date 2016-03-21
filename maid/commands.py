@@ -17,9 +17,9 @@ import logging
 import sys
 import time
 
-from janitor.credentials import SessionFactory
-from janitor.report import report as do_report
-from janitor import mu
+from maid.credentials import SessionFactory
+from maid.report import report as do_report
+from maid import mu
 
 
 log = logging.getLogger('maid.commands')

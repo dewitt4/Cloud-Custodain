@@ -15,7 +15,7 @@
 from concurrent.futures import (
     ProcessPoolExecutor, ThreadPoolExecutor)
 
-from janitor.registry import PluginRegistry
+from maid.registry import PluginRegistry
 
 import threading
 

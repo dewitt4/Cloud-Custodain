@@ -14,12 +14,13 @@
 import logging
 
 from .common import BaseTest
-from janitor.resources.ebs import (
+from maid.resources.ebs import (
     CopyInstanceTags, EncryptInstanceVolumes)
-from janitor.executor import MainThreadExecutor
+from maid.executor import MainThreadExecutor
 
 
 logging.basicConfig(level=logging.DEBUG)
+
 
 class CopyInstanceTagsTest(BaseTest):
 

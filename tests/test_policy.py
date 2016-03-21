@@ -14,8 +14,8 @@
 import shutil
 import tempfile
 
-from janitor import policy, manager
-from janitor.resources.ec2 import EC2
+from maid import policy, manager
+from maid.resources.ec2 import EC2
 
 from .common import BaseTest, Config
 

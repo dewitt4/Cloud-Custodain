@@ -19,8 +19,8 @@ import unittest
 import shutil
 import os
 
-from janitor.ctx import ExecutionContext
-from janitor.output import MetricsOutput, S3Output
+from maid.ctx import ExecutionContext
+from maid.output import MetricsOutput, S3Output
 
 from .common import Config, Bag
 

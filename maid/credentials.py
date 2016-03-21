@@ -18,7 +18,7 @@ from botocore.credentials import RefreshableCredentials
 from botocore.session import get_session
 from boto3 import Session
 
-from janitor.version import version
+from maid.version import version
 
 
 class SessionFactory(object):
