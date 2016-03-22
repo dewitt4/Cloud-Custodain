@@ -171,11 +171,11 @@ class TestInstanceValue(BaseFilterTest):
             tags.append({'Key': str(i), 'Value': str(i)})
         i = instance(Tags=tags)
         self.assertFilter(
-            {'type': 'tag-count'}, i, False)
+            {'type': 'tag-count', 'op': 'lt'}, i, False)
         tags.pop(0)
         i = instance(Tags=tags)
         self.assertFilter(
-            {'type': 'tag-count'}, i, True)
+            {'type': 'tag-count', 'op': 'gte', 'count': 9}, i, True)
 
     def test_filter_tag(self):
         i = instance(Tags=[
