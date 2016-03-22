@@ -37,7 +37,23 @@ class TestVolumeFilter(BaseTest):
         resources = policy.run()
         self.assertEqual(len(resources), 7)
 
-        
+    def test_ec2_attached_volume_skip_block(self):
+        session_factory = self.replay_flight_data(
+            'test_ec2_attached_ebs_filter')
+        policy = self.load_policy({
+            'name': 'ec2-unencrypted-vol',
+            'resource': 'ec2',
+            'filters': [
+                {'State.Name': 'running'},
+                {'type': 'ebs',
+                 'skip-devices': ['/dev/sda1', '/dev/xvda', '/dev/sdb1'],
+                 'key': 'Encrypted',
+                 'value': False}]},
+            session_factory=session_factory)
+        resources = policy.run()
+        self.assertEqual(len(resources), 3)
+
+
 class TestEC2QueryFilter(unittest.TestCase):
 
     def test_parse(self):
