@@ -14,6 +14,7 @@
 import itertools
 import logging
 
+from botocore.exceptions import ClientError
 from concurrent.futures import as_completed
 
 from maid.actions import ActionRegistry, BaseAction
@@ -154,11 +155,16 @@ class CopyInstanceTags(BaseAction):
                         self.__class__.__name__.lower(),
                         v['VolumeId'], instance['InstanceId']))
                 continue
-        
-            client.create_tags(
-                Resources=[v['VolumeId']],
-                Tags=copy_tags,
-                DryRun=self.manager.config.dryrun)
+
+            try:
+                client.create_tags(
+                    Resources=[v['VolumeId']],
+                    Tags=copy_tags,
+                    DryRun=self.manager.config.dryrun)
+            except ClientError as e:
+                if e.response['Error']['Code'] == "InvalidVolume.NotFound":
+                    continue
+                raise
 
     def get_volume_tags(self, volume, instance, attachment):
         only_tags = self.data.get('tags', [])  # specify which tags to copy
