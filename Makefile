@@ -2,7 +2,11 @@
 install:
 	virtualenv .
 	source bin/activate && pip install -r requirements.txt
-	source bin/activate && pip install -r tools/dev-requirements.txt
+	source bin/activate && python setup.py develop
+
+develop:
+	virtualenv .
+	source bin/activate && pip install -r requirements-dev.txt
 	source bin/activate && python setup.py develop
 
 coverage:
