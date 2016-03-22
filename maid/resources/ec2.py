@@ -131,6 +131,7 @@ class AttachedVolume(ValueFilter):
 
     def process(self, resources, event=None):
         self.volume_map = self.get_volume_mapping(resources)
+        self.skip = self.data.get('skip-devices', [])
         self.operator = self.data.get(
             'operator', 'or') == 'or' and any or all
         return filter(self, resources)
@@ -140,7 +141,7 @@ class AttachedVolume(ValueFilter):
         ec2 = utils.local_session(self.manager.session_factory).client('ec2')
         for instance_set in utils.chunks(
                 [i['InstanceId'] for i in resources], 200):
-            self.log.debug("Processsing %d instance of %d" % (
+            self.log.debug("Processing %d instance of %d" % (
                 len(instance_set), len(resources)))
             results = ec2.describe_volumes(
                 Filters=[
@@ -155,6 +156,11 @@ class AttachedVolume(ValueFilter):
         volumes = self.volume_map.get(i['InstanceId'])
         if not volumes:
             return False
+        if self.skip:
+            for v in list(volumes):
+                for a in v.get('Attachments', []):
+                    if a['Device'] in self.skip:
+                        volumes.remove(v)
         return self.operator(map(self.match, volumes))
 
     
