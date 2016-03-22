@@ -35,7 +35,7 @@ class TestVolumeFilter(BaseTest):
                  'value': False}]},
             session_factory=session_factory)
         resources = policy.run()
-        self.assertEqual(len(resources), 5)
+        self.assertEqual(len(resources), 7)
 
         
 class TestEC2QueryFilter(unittest.TestCase):

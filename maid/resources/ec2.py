@@ -132,7 +132,7 @@ class AttachedVolume(ValueFilter):
     def process(self, resources, event=None):
         self.volume_map = self.get_volume_mapping(resources)
         self.operator = self.data.get(
-            'operator', 'and') == 'and' and all or any
+            'operator', 'or') == 'or' and any or all
         return filter(self, resources)
 
     def get_volume_mapping(self, resources):
