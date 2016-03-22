@@ -135,8 +135,10 @@ Terminate after time period
 from maid.filters import Filter
 
 import datetime
+import logging
 
 from dateutil import zoneinfo
+
 
 
 TZ_ALIASES = {
@@ -166,6 +168,16 @@ DEFAULT_ONHOUR = 7
 DEFAULT_TZ = 'et'
 
 
+log = logging.getLogger('maid.offhours')
+
+
+def resource_id(i):
+    if 'InstanceId' in i:
+        return "instance:%s" % i['InstanceId']
+    if 'AutoScalingGroupName' in i:
+        return "asg:%s" % i['AutoScalingGroupName']
+    
+            
 class Time(Filter):
 
     # Allow up to this many hours after sentinel time
@@ -186,28 +198,28 @@ class Time(Filter):
             else:
                 return False
         if 'off' in parts:
+            log.debug('offhours disabled on %s' % resource_id(i))
             return False
         return self.process_current_time(i, parts)
 
-    def process_terminate(self, i, parts):
-        parts.pop('terminate')
-        for p in parts:
-            for t in TIME_ALIASES:
-                pass
-        return False
-
-    def process_current_time(self, tag_map, parts):
+    def process_current_time(self, i, parts):
         tz = self.get_local_tz(parts)
         if not tz:
             return False
+        
         now = datetime.datetime.now(tz).replace(
             minute=0, second=0, microsecond=0)
 
         if not self.weekends and now.weekday() in (5, 6):
+            log.debug("skipping weekends")
             return False
 
         sentinel = self.get_sentinel_time(tz)
 
+        log.debug(
+            "resource: %s comparing sentinel: %s to current: %s" % (
+                resource_id(i), sentinel, now))
+                  
         if sentinel == now:
             return True
         if not self.skew:
@@ -230,6 +242,8 @@ class Time(Filter):
         # literal for values.
         value = value.strip("'").strip('"')
         parts = filter(None, value.split())
+        log.debug('resource: %s specifies downtime with value: %s' % (
+            resource_id(i), value))
         return parts, tag_map
 
     def get_sentinel_time(self, tz):

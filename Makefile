@@ -6,7 +6,7 @@ install:
 	source bin/activate && python setup.py develop
 
 coverage:
-	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=janitor --cover-html-dir=cover tests
+	./bin/nosetests -s -v --with-coverage --cover-html --cover-package=maid --cover-html-dir=cover tests
 
 lint:
 	flake8 janitor --ignore=W293,W291,W503,W391
