@@ -329,8 +329,13 @@ class Suspend(BaseAction):
         asg_client.suspend_processes(
             AutoScalingGroupName=asg['AutoScalingGroupName'])
         ec2_client = session.client('ec2')
-        ec2_client.stop_instances(
-            InstanceIds=[i['InstanceId'] for i in asg['Instances']])
+        try:
+            ec2_client.stop_instances(
+                InstanceIds=[i['InstanceId'] for i in asg['Instances']])
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidInstanceID.NotFound':
+                return
+            raise
         
 
 @actions.register('resume')
