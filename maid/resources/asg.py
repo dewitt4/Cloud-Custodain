@@ -334,7 +334,7 @@ class Suspend(BaseAction):
                 InstanceIds=[i['InstanceId'] for i in asg['Instances']])
         except ClientError as e:
             if e.response['Error']['Code'] == 'InvalidInstanceID.NotFound':
-                continue
+                return
             raise
         
 
