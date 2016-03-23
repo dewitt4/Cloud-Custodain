@@ -70,6 +70,15 @@ def setup_parser():
     logs = subs.add_parser('logs')
     logs.set_defaults(command=commands.logs)
     _default_options(logs)
+
+    validate = subs.add_parser('validate')
+    validate.set_defaults(command=commands.validate)
+    validate.add_argument("-c", "--config", required=True,
+                          help="Policy Configuration File")
+    validate.add_argument("-v", "--verbose", action="store_true",
+                          help="Verbose Logging")
+    validate.add_argument("--debug", action="store_true",
+                          help="Dev Debug")
     
     run = subs.add_parser("run")
     run.set_defaults(command=commands.run)
@@ -93,7 +102,6 @@ def main():
         format="%(asctime)s: %(name)s:%(levelname)s %(message)s")
     logging.getLogger('botocore').setLevel(logging.ERROR)
 
-    
     config = policy.load(options, options.config)
     try:
         options.command(options, config)

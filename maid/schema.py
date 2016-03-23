@@ -1,0 +1,252 @@
+"""
+Jsonschema validation of cloudmaid config.
+
+We start with a walkthrough of the various class registries
+of resource types and assemble and generate the schema.
+
+We do some specialization to reduce overall schema size
+via reference usage.
+
+All filters and actions are annotated with schema typically using
+the utils.type_schema function.
+
+Implemenation Notes / todo
+
+[x] Resource Policy (inherit base property)
+  
+[x] Or and And - special treatment, ref each other
+
+[x] Value filter - 'str': 'str' / operator
+
+[x] Handling aliases - match same class under multiple names
+  
+[ ] Better handling of inheritance than builtin spec support.
+
+"""
+from jsonschema import Draft4Validator as Validator
+from jsonschema.exceptions import best_match
+
+from maid.manager import resources
+from maid.filters import ValueFilter, EventFilter, AgeFilter
+from maid.offhours import Time as TimeFilter
+
+
+def validate(data):
+    schema = generate()
+    Validator.check_schema(schema)
+    validator = Validator(schema)
+
+    errors = list(validator.iter_errors(data))
+    return errors
+    return filter(None, [best_match(validator.iter_errors(data))])
+
+
+def specific_error(error):
+    if error.validator not in ('anyOf', 'oneOf'):
+        return error
+        
+    r = t = None
+    if isinstance(error.instance, dict):
+        t = error.instance.get('type')
+        r = error.instance.get('resource')
+
+    if r is not None:
+        found = None
+        for idx, v in enumerate(error.validator_value):
+            if r in v['$ref']:
+                found = idx
+        if found is not None:
+            return specific_error(error.context[idx])
+
+    if t is not None:
+        found = None
+        for idx, v in enumerate(error.validator_value):
+            if '$ref' in v and t in v['$ref']:
+                found = idx
+        if found is not None:
+            return error.context[idx]
+
+    return error
+
+
+def generate(resource_types=()):
+    resource_defs = {}
+    definitions = {
+        'resources': resource_defs,
+        'filters': {
+            'value': ValueFilter.schema,
+            'event': EventFilter.schema,
+            'time': TimeFilter.schema,
+            'age': AgeFilter.schema,
+            # Shortcut form of value filter as k=v
+            'valuekv': {
+                'type': 'object',
+                'minProperties': 1,
+                'maxProperties': 1},
+        },
+
+        'policy': {
+            'type': 'object',
+            'required': ['name', 'resource'],
+            'additionalProperties': False,
+            'properties': {
+                'name': {'type': 'string'},
+                'resource': {'type': 'string'},
+                'comment': {'type': 'string'},
+                'comments': {'type': 'string'},                
+                'description': {'type': 'string'},
+                'mode': {'$ref': '#/definitions/policy-mode'},
+                'actions': {
+                    'type': 'array',
+                },
+                'filters': {
+                    'type': 'array'
+                },
+                #
+                # unclear if this should be allowed, it kills resource
+                # cache coherency between policies, and we need to
+                # generalize server side query mechanisms, currently
+                # this only for ec2 instance queries. limitations
+                # in json schema inheritance prevent us from doing this
+                # on a type specific basis http://goo.gl/8UyRvQ
+                'query': {
+                    'type': 'array', 'items': {
+                        'type': 'object',
+                        'minProperties': 1,
+                        'maxProperties': 1}}
+            },
+        },            
+        'policy-mode': {
+            'type': 'object',
+            'required': ['type', 'events'],
+            'properties': {
+                'type': {
+                    'enum': [
+                        'cloudtrail',
+                        'ec2-instance-state',
+                        'asg-instance-state',
+                        'periodic'
+                    ]},
+                'events': {'type': 'array', 'items': {'type': 'string'}},
+                'sources': {'type': 'array', 'items': {'type': 'string'}},
+                'ids': {'type': 'string'}
+            },
+        },    
+    }
+
+    resource_refs = []
+    for type_name, resource_type in resources.items():
+        if resource_types and type_name not in resource_types:
+            continue
+        resource_refs.append(process_resource(type_name, resource_type, resource_defs))
+        
+    schema = {
+        '$schema': 'http://json-schema.org/schema#',        
+        'id': 'http://schema.cloudmaid.io/v0/maid.json',
+        'definitions': definitions,
+        'type': 'object',
+        'required': ['policies'],
+        'additionalProperties': False,
+        'properties': {
+            'policies': {
+                'type': 'array',
+                'additionalItems': False,
+                'items': {'anyOf': resource_refs}
+                }
+            }
+    }
+    
+    return schema
+
+
+def process_resource(type_name, resource_type, resource_defs):
+    r = resource_defs.setdefault(type_name, {'actions': {}, 'filters': {}})
+    
+    seen_actions = set()  # Aliases get processed once
+    action_refs = []
+    for action_name, a in resource_type.action_registry.items():
+        if a in seen_actions:
+            continue
+        else:
+            seen_actions.add(a)
+        r['actions'][action_name] = a.schema
+        action_refs.append(
+            {'$ref': '#/definitions/resources/%s/actions/%s' % (
+                type_name, action_name)})
+        
+    # one word action shortcuts
+    action_refs.append(
+        {'enum': resource_type.action_registry.keys()})
+    
+    nested_filter_refs = []
+    filters_seen = set()
+    for k, v in sorted(resource_type.filter_registry.items()):
+        if v in filters_seen:
+            continue
+        else:
+            filters_seen.add(v)
+        nested_filter_refs.append(
+            {'$ref': '#/definitions/resources/%s/filters/%s' % (
+                type_name, k)})
+    nested_filter_refs.append(
+        {'$ref': '#/definitions/filters/valuekv'})
+
+    filter_refs = []
+    filters_seen = set() # for aliases
+    for filter_name, f in sorted(resource_type.filter_registry.items()):
+        if f in filters_seen:
+            continue
+        else:
+            filters_seen.add(f)
+                
+        if filter_name in ('or', 'and'):
+            continue
+        elif filter_name == 'value':
+            r['filters'][filter_name] = {
+                '$ref': '#/definitions/filters/value'}
+            r['filters']['valuekv'] = {
+                '$ref': '#/definitions/filters/valuekv'}
+        elif filter_name == 'event':
+            r['filters'][filter_name] = {
+                '$ref': '#/definitions/filters/event'}
+        elif filter_name == 'or':
+            r['filters'][filter_name] = {
+                'type': 'array',
+                'items': {'anyOf': nested_filter_refs}}
+        elif filter_name == 'and':
+            r['filters'][filter_name] = {
+                'type': 'array',
+                'items': {'anyOf': nested_filter_refs}}
+        else:
+            r['filters'][filter_name] = f.schema
+        filter_refs.append(
+            {'$ref': '#/definitions/resources/%s/filters/%s' % (
+                type_name, filter_name)})
+    filter_refs.append(
+        {'$ref': '#/definitions/filters/valuekv'})
+
+    # one word filter shortcuts
+    filter_refs.append(
+        {'enum': resource_type.filter_registry.keys()})
+    
+    resource_policy = {
+        'allOf': [
+            {'$ref': '#/definitions/policy'},
+            {'properties': {
+                'resource': {'enum': [type_name]},
+                'filters': {
+                    'type': 'array',
+                    'items': {'anyOf': filter_refs}},
+                'actions': {
+                    'type': 'array',
+                    'items': {'anyOf': action_refs}}}},
+            ]
+    }
+
+
+    if type_name == 'ec2':
+        resource_policy['allOf'][1]['properties']['query'] = {}
+    
+    r['policy'] = resource_policy
+    return {'$ref': '#/definitions/resources/%s/policy' % type_name}
+

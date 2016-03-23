@@ -26,12 +26,6 @@ class TestEC2Manager(BaseTest):
             config or Config.empty())
         return EC2(ctx, data)
 
-    def test_manager_invalid_data_type(self):
-        self.assertRaises(
-            ValueError,
-            self.get_manager,
-            [])
-        
     def test_manager(self):
         ec2_mgr = self.get_manager(
             {'query': [

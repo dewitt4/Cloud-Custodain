@@ -23,6 +23,9 @@ resources = PluginRegistry('resources')
 
 class ResourceManager(object):
 
+    filter_registry = None
+    action_registry = None
+    
     def __init__(self, ctx, data):
         self.ctx = ctx
         self.session_factory = ctx.session_factory
@@ -33,6 +36,13 @@ class ResourceManager(object):
         self.log = logging.getLogger('maid.resources.%s' % (
             self.__class__.__name__.lower()))
 
+        if self.filter_registry:
+            self.filters = self.filter_registry.parse(
+                self.data.get('filters', []), self)
+        if self.action_registry:
+            self.actions = self.action_registry.parse(
+                self.data.get('actions', []), self)
+                
     def format_json(self, resources, fh):
         return dumps(resources, fh, indent=2)
 

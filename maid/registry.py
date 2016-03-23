@@ -68,6 +68,9 @@ class PluginRegistry(object):
 
     def keys(self):
         return self._factories.keys()
+
+    def items(self):
+        return self._factories.items()
     
     def load_plugins(self):
         """ Load external plugins.

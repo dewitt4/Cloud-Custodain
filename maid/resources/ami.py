@@ -17,7 +17,7 @@ from maid.actions import ActionRegistry, BaseAction
 from maid.filters import FilterRegistry, AgeFilter
 
 from maid.manager import ResourceManager, resources
-from maid.utils import local_session
+from maid.utils import local_session, type_schema
 
 
 log = logging.getLogger('maid.ami')
@@ -30,14 +30,8 @@ actions = ActionRegistry('ami.actions')
 @resources.register('ami')
 class AMI(ResourceManager):
 
-    # FIXME: Rename all 'data' variables to something meaningful
-    def __init__(self, ctx, data):
-        super(AMI, self).__init__(ctx, data)
-        # FIXME: Move these to ResourceManager.__init__?
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self) 
+    filter_registry = filters
+    action_registry = actions
 
     def resources(self):
         c = self.session_factory().client('ec2')
@@ -49,6 +43,8 @@ class AMI(ResourceManager):
 
 @actions.register('deregister')
 class Deregister(BaseAction):
+
+    schema = type_schema('deregister')
 
     def process(self, images):
         with self.executor_factory(max_workers=10) as w:
@@ -63,3 +59,5 @@ class Deregister(BaseAction):
 class ImageAgeFilter(AgeFilter):
 
     date_attribute = "CreationDate"
+    schema = type_schema(
+        'image-age', days={'type': 'integer', 'minimum': 0})

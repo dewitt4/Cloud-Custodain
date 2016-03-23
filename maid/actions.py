@@ -57,6 +57,8 @@ class BaseAction(object):
 
     executor_factory = ThreadPoolExecutor
 
+    schema = {'type': 'object'}
+
     def __init__(self, data=None, manager=None, log_dir=None):
         self.data = data or {}
         self.manager = manager

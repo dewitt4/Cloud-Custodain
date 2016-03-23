@@ -67,7 +67,7 @@ from botocore.exceptions import ClientError
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import FilterRegistry, Filter
 from maid.manager import ResourceManager, resources
-from maid.utils import local_session
+from maid.utils import local_session, type_schema
 
 log = logging.getLogger('maid.rds')
 
@@ -79,12 +79,8 @@ actions = ActionRegistry('rds.actions')
 @resources.register('rds')
 class RDS(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(RDS, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self)
+    filter_registry = filters
+    action_registry = actions
 
     def resources(self):
         c = self.session_factory().client('rds')
@@ -119,6 +115,8 @@ class DefaultVpc(Filter):
     """ Matches if an rds database is in the default vpc
     """
 
+    schema = type_schema('default-vpc')
+
     vpcs = None
     default_vpc = None
 
@@ -145,6 +143,14 @@ class DefaultVpc(Filter):
     
 @actions.register('delete')
 class Delete(BaseAction):
+
+    schema = {
+        'type': 'object',
+        'properties': {
+            'type': {'enum': ['delete'],
+            'skip-snapshot': {'type': 'boolean'}}
+            }
+        }
 
     def process(self, resources):
         self.skip = self.data.get('skip-snapshot', False)

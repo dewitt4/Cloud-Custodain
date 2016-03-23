@@ -25,7 +25,7 @@ import operator
 
 from maid.executor import ThreadPoolExecutor
 from maid.registry import PluginRegistry
-from maid.utils import set_annotation
+from maid.utils import set_annotation, type_schema
 
 
 class FilterValidationError(Exception): pass
@@ -100,6 +100,8 @@ class Filter(object):
     executor_factory = ThreadPoolExecutor
 
     log = logging.getLogger('maid.filters')
+
+    schema = {'type': 'object'}
     
     def __init__(self, data, manager=None):
         self.data = data
@@ -159,6 +161,20 @@ class ValueFilter(Filter):
     expr = None
     op = v = None
 
+    schema = {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['type'],
+        'properties': {
+            'type': {'enum': ['value']},
+            'key': {'type': 'string'},
+            'value': {'oneOf': [
+                {'type': 'array'},
+                {'type': 'string'},
+                {'type': 'boolean'},
+                {'type': 'number'}]},
+            'op': {'enum': OPERATORS.keys()}}}
+            
     def validate(self):
         if len(self.data) == 1:
             return self
@@ -225,6 +241,8 @@ class AgeFilter(Filter):
     # The name of attribute to compare to threshold; must override in subclass
     date_attribute = None
 
+    schema = None
+    
     def validate(self):
         if not self.date_attribute:
             raise NotImplementedError(
@@ -248,6 +266,9 @@ class AgeFilter(Filter):
     
 class EventFilter(ValueFilter):
     """Filter against a cloudwatch event associated to a resource type."""
+
+    schema = type_schema(
+        'event', inherits=('#/definitions/filters/value',))
 
     def process(self, resources, event=None):
         if event is None:
