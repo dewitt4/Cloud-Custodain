@@ -30,7 +30,7 @@ from maid import utils
 import maid.resources
 
 
-def load(options, path, format='yaml'):
+def load(options, path, format='yaml', validate=True):
     if not os.path.exists(path):
         raise ValueError("Invalid path for config %r" % path)
     
@@ -39,6 +39,11 @@ def load(options, path, format='yaml'):
             data = utils.yaml_load(fh.read())
         elif format == 'json':
             data = utils.loads(fh.read())
+    if validate:
+        from maid.schema import validate
+        errors = validate(data)
+        if errors:
+            raise errors[0]
     return PolicyCollection(data, options)
 
 

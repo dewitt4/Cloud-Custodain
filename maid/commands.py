@@ -19,7 +19,7 @@ import time
 
 from maid.credentials import SessionFactory
 from maid.report import report as do_report
-from maid import mu
+from maid import mu, schema
 
 
 log = logging.getLogger('maid.commands')
@@ -32,7 +32,19 @@ def identify(options, policy_collection):
         resources = manager.resources()
         manager.format_json(resources, fh)        
 
-        
+
+def validate(options, policy_collection):
+    errors = schema.validate(policy_collection.data)
+    if not errors:
+        log.info("Config valid")
+        return
+
+    log.error("Invalid configuration")
+    for e in errors:
+        log.error(" %s" % e)
+    sys.exit(1)
+
+
 def run(options, policy_collection):
     for policy in policy_collection.policies(options.policies):
         try:

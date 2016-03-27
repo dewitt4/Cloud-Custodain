@@ -51,7 +51,7 @@ from maid import executor
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import FilterRegistry, Filter
 from maid.manager import ResourceManager, resources
-from maid.utils import chunks, local_session, set_annotation
+from maid.utils import chunks, local_session, set_annotation, type_schema
 
 """
 TODO:
@@ -69,14 +69,13 @@ actions = ActionRegistry('s3.actions')
 class S3(ResourceManager):
 
     executor_factory = executor.ThreadPoolExecutor
-
+    filter_registry = filters
+    action_registry = actions
+    
     def __init__(self, ctx, data):
         super(S3, self).__init__(ctx, data)
         self.log_dir = ctx.log_dir
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self)
+
 
     def get_resources(self, resource_ids):
         with self.executor_factory(
@@ -178,6 +177,8 @@ def bucket_client(session, b, kms=False):
 @filters.register('global-grants')        
 class NoGlobalGrants(Filter):
 
+    schema = type_schema('global-grants')
+
     GLOBAL_ALL = "http://acs.amazonaws.com/groups/global/AllUsers"
     AUTH_ALL = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
     
@@ -260,7 +261,11 @@ class EncryptedPrefix(BucketActionBase):
 @filters.register('missing-policy-statement')
 class MissingPolicyStatementFilter(Filter):
     """Find buckets missing a set of named policy statements."""
-    
+
+    schema = type_schema(
+        'missing-policy-statement',
+        statement_ids={'type': 'array', 'items': {'type': 'string'}})
+
     def process(self, buckets, event=None):
         with self.executor_factory(max_workers=5) as w:
             results = w.map(self.process_bucket, buckets)
@@ -287,6 +292,8 @@ class MissingPolicyStatementFilter(Filter):
     
 @actions.register('no-op')
 class NoOp(BucketActionBase):
+
+    schema = type_schema('no-op')
     
     def process(self, buckets):
         return None
@@ -296,7 +303,9 @@ class NoOp(BucketActionBase):
 class EncryptionRequiredPolicy(BucketActionBase):
 
     permissions = ("s3:GetBucketPolicy", "s3:PutBucketPolicy")
-                           
+
+    schema = type_schema('encryption-policy')
+
     def __init__(self, data=None, manager=None):
         self.data = data or {}
         self.manager = manager
@@ -505,6 +514,15 @@ class EncryptExtantKeys(ScanBucket):
         "s3:DeleteObjectVersion",
         "s3:RestoreObject",
     ) + ScanBucket.permissions
+
+    schema = {
+        'type': 'object',
+        'additonalProperties': False,
+        'properties': {
+            'report-only': {'type': 'boolean'},
+            'crypto': {'enum': ['AES256', 'aws:kms']}
+            }
+        }
 
     def process(self, buckets):
         t = time.time()

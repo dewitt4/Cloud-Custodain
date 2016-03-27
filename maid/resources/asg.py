@@ -28,7 +28,7 @@ from maid.filters import FilterRegistry
 from maid.manager import ResourceManager, resources
 from maid.offhours import Time, OffHour, OnHour
 from maid.tags import TagActionFilter
-from maid.utils import local_session, query_instances
+from maid.utils import local_session, query_instances, type_schema
 
 log = logging.getLogger('maid.asg')
 
@@ -45,13 +45,9 @@ filters.register('marked-for-op', TagActionFilter)
 @resources.register('asg')
 class ASG(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(ASG, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self)
-
+    filter_registry = filters
+    action_registry = actions
+    
     def resources(self):
         c = self.session_factory().client('autoscaling')
         query = self.resource_query()
@@ -72,6 +68,9 @@ class ASG(ResourceManager):
 @actions.register('tag')            
 @actions.register('mark')
 class Tag(BaseAction):
+
+    schema = type_schema(
+        'tag', tag={'type': 'string'}, propagate_launch={'type': 'boolean'})
 
     def process(self, asgs):
         with self.executor_factory(max_workers=10) as w:
@@ -118,6 +117,12 @@ class PropagateTags(Tag):
     This action exists to do that, and can also trim older tags
     not present on the asg anymore that are present on instances.
     """
+
+    schema = type_schema(
+        'propagate-tags',
+        tags={'type': 'array', 'items': {'type': 'string'}},
+        trim={'type': 'boolean'})
+
     def validate(self):
         if not isinstance(self.data.get('tags', []), []):
             raise ValueError("No tags specified")
@@ -206,6 +211,12 @@ class RenameTag(Tag):
     """Rename a tag on an AutoScaleGroup.
     """
 
+    schema = type_schema(
+        'rename-tag', required=['source', 'dest'],
+        propagate={'type': 'boolean'},
+        source={'type': 'string'},
+        dest={'type': 'string'})
+
     def process(self, asgs):
         source = self.data.get('source')
         dest = self.data.get('dest')
@@ -273,6 +284,12 @@ class RenameTag(Tag):
 @actions.register('mark-for-op')
 class MarkForOp(Tag):
 
+    schema = type_schema(
+        'mark-for-op',
+        op={'enum': ['suspend', 'resume', 'delete']},
+        tag={'type': 'string'},
+        days={'type': 'number', 'minimum': 0})
+
     def process(self, asgs):
         msg_tmpl = self.data.get(
             'msg',
@@ -306,7 +323,7 @@ class MarkForOp(Tag):
 @actions.register('suspend')
 class Suspend(BaseAction):
 
-    LoadBalancerTagKey = 'AsgLoadBalancer'
+    schema = type_schema('suspend')
     
     def process(self, asgs):
         original_count = len(asgs)
@@ -343,8 +360,8 @@ class Resume(BaseAction):
     """
     Todo.. Attach Tag to the ELB so it can be differentiated from unused.
     """
-    LoadBalancerTagKey = 'AsgLoadBalancer'
-    
+    schema = type_schema('resume')
+
     def process(self, asgs):
         original_count = len(asgs)
         asgs = [a for a in asgs if a['SuspendedProcesses']]
@@ -378,6 +395,8 @@ class Resume(BaseAction):
 
 @actions.register('delete')
 class Delete(BaseAction):
+
+    schema = type_schema('delete')
 
     def process(self, asgs):
         with self.executor_factory(max_workers=10) as w:

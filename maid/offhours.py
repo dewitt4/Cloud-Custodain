@@ -180,6 +180,17 @@ def resource_id(i):
             
 class Time(Filter):
 
+    schema = {
+        'type': 'object',
+        'properties': {
+            'tag': {'type': 'string'},
+            'default_tz': {'type': 'string'},
+            'skew': {'type': 'integer'},
+            'weekends': {'type': 'boolean'},
+            'opt-out': {'type': 'boolean'},
+            }
+        }
+    
     # Allow up to this many hours after sentinel time
     # to continue to match
     skew = 0

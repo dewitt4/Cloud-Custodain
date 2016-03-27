@@ -61,7 +61,7 @@ from botocore.exceptions import ClientError
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import Filter, FilterRegistry, FilterValidationError
 from maid.manager import ResourceManager, resources
-from maid.utils import local_session, chunks
+from maid.utils import local_session, chunks, type_schema
 
 log = logging.getLogger('maid.elb')
 
@@ -73,12 +73,8 @@ actions = ActionRegistry('elb.actions')
 @resources.register('elb')
 class ELB(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(ELB, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self)
+    filter_registry = filters
+    action_registry = actions
 
     def resources(self):
         if self._cache.load():
@@ -112,6 +108,8 @@ class ELB(ResourceManager):
 @actions.register('delete')
 class Delete(BaseAction):
 
+    schema = type_schema('delete')
+
     def process(self, load_balancers):
         with self.executor_factory(max_workers=3) as w:
             list(w.map(self.process_elb, load_balancers))
@@ -131,6 +129,8 @@ def is_ssl(b):
 @filters.register('is-ssl')
 class IsSSLFilter(Filter):
 
+    schema = type_schema('is-ssl')
+
     def process(self, balancers, event=None):
         return [b for b in balancers if is_ssl(b)]
 
@@ -147,6 +147,15 @@ class SSLPolicyFilter(Filter):
         - "Protocol-SSLv2"
         - "Protocol-SSLv3"
     """
+
+    schema = type_schema(
+        'ssl-policy',
+        required={
+            'oneOf': [
+                ('type', 'whitelist'),
+                ('type', 'blacklist')]},
+        whitelist={'type': 'array', 'items': {'type': 'string'}},
+        blacklist={'type': 'array', 'items': {'type': 'string'}})
 
     def validate(self):
         if 'whitelist' in self.data and 'blacklist' in self.data:
@@ -262,6 +271,9 @@ class SSLPolicyFilter(Filter):
 class HealthCheckProtocolMismatch(Filter):
     """
     """
+
+    schema = type_schema('healthcheck-protocol-mismatch')
+    
     def __call__(self, load_balancer):
         health_check_protocol = (
             load_balancer['HealthCheck']['Target'].split(':')[0])

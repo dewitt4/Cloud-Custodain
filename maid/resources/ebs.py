@@ -24,7 +24,7 @@ from maid.filters import (
 from maid.manager import ResourceManager, resources
 from maid import tags
 from maid.utils import (
-    local_session, set_annotation, query_instances, chunks)
+    local_session, set_annotation, query_instances, chunks, type_schema)
 
 
 log = logging.getLogger('maid.ebs')
@@ -38,12 +38,8 @@ tags.register_tags(filters, actions, 'VolumeId')
 @resources.register('ebs')
 class EBS(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(EBS, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self) 
+    filter_registry = filters
+    action_registry = actions
 
     def get_resources(self, resource_ids):
         c = local_session(self.session_factory).client('ec2')
@@ -69,6 +65,8 @@ class EBS(ResourceManager):
 @filters.register('instance')
 class AttachedInstanceFilter(ValueFilter):
     """Filter volumes based on filtering on their attached instance"""
+
+    schema = type_schema('instance')
 
     def process(self, resources, event=None):
         original_count = len(resources)
@@ -108,6 +106,11 @@ class CopyInstanceTags(BaseAction):
     their useful, as well letting us know the last time the volume
     was actually used.
     """
+
+    schema = type_schema(
+        'copy-instance-tags',
+        tags={'type': 'array', 'items': {'type': 'string'}})
+
     def process(self, volumes):
         volumes = [v for v in volumes if v['Attachments']]
         with self.executor_factory(max_workers=10) as w:
@@ -220,6 +223,12 @@ class EncryptInstanceVolumes(BaseAction):
     - Start Instance (if originally running)
 
     """
+
+    schema = type_schema(
+        'encrypt-instance-volumes',
+        required=['key'],
+        key={'type': 'string'},
+        verbose={'type': 'boolean'})
 
     def validate(self):
         key = self.data.get('key')
@@ -421,6 +430,8 @@ class EncryptInstanceVolumes(BaseAction):
     
 @actions.register('delete')
 class Delete(BaseAction):
+
+    schema = type_schema('delete')
 
     def process(self, volumes):
         with self.executor_factory(max_workers=10) as w:

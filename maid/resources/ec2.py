@@ -20,30 +20,26 @@ from maid.filters import (
 )
 
 from maid.manager import ResourceManager, resources
-from maid.offhours import Time, OffHour, OnHour
+from maid.offhours import OffHour, OnHour
 from maid import tags, utils
+from maid.utils import type_schema
 
 
 filters = FilterRegistry('ec2.filters')
 actions = ActionRegistry('ec2.actions')
 
-filters.register('time', Time)
 tags.register_tags(filters, actions, 'InstanceId')
 
 
 @resources.register('ec2')
 class EC2(ResourceManager):
 
+    filter_registry = filters
+    action_registry = actions
+    
     def __init__(self, ctx, data):
         super(EC2, self).__init__(ctx, data)
-        # FIXME: should we be doing this check in every ResourceManager?
-        if not isinstance(self.data, dict):
-            raise ValueError(
-                "Invalid format, expecting dictionary found %s" % (
-                    type(self.data)))
         self.queries = QueryFilter.parse(self.data.get('query', []))
-        self.filters = filters.parse(self.data.get('filters', []), self)
-        self.actions = actions.parse(self.data.get('actions', []), self)
 
     @property
     def client(self):
@@ -129,6 +125,24 @@ class StateTransitionFilter(object):
 @filters.register('ebs')
 class AttachedVolume(ValueFilter):
 
+    schema = {
+        'allOf': [
+            {'$ref': '#/definitions/filters/value'},
+            {
+                'title': 'Filter attached instance volumes',
+                'properties': {
+                    'type': {'enum': ['ebs']},
+                    'operator': {
+                        'enum': ['or', 'and']},
+                    'skip-devices': {
+                        'type': 'array',
+                        'items': {'type': 'string'}
+                    }
+                }
+            }
+        ]
+    }
+
     def process(self, resources, event=None):
         self.volume_map = self.get_volume_mapping(resources)
         self.skip = self.data.get('skip-devices', [])
@@ -167,6 +181,14 @@ class AttachedVolume(ValueFilter):
 @filters.register('image')
 class InstanceImage(ValueFilter):
 
+    schema = {
+        'allOf': [
+            {'$ref': '#/definitions/filters/value'},
+            {'properties': {
+                'type': {'enum': ['image']}}}
+            ]
+    }
+
     def process(self, resources, event=None):
         self.image_map = self.get_image_mapping(resources)
 
@@ -191,6 +213,8 @@ class InstanceImage(ValueFilter):
 class InstanceOffHour(OffHour, StateTransitionFilter):
 
     valid_origin_states = ('running',)
+    schema = type_schema(
+        'offhour', inherits=['#/definitions/filters/time'])
 
     def process(self, resources, event=None):
         return super(InstanceOffHour, self).process(
@@ -202,6 +226,9 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
     
     valid_origin_states = ('stopped',)
 
+    schema = type_schema(
+        'onhour', inherits=['#/definitions/filters/time'])
+
     def process(self, resources, event=None):
         return super(InstanceOnHour, self).process(
             self.filter_instance_state(resources))
@@ -209,6 +236,8 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
 
 @filters.register('ephemeral')
 class EphemeralInstanceFilter(Filter):
+
+    schema = type_schema('ephemeral')
 
     def __call__(self, i):
         return self.is_ephemeral(i)
@@ -228,6 +257,9 @@ class UpTimeFilter(AgeFilter):
 
     date_attribute = "LaunchTime"
 
+    schema = type_schema(
+        'instance-uptime', days={'type': 'number'})
+    
     
 @filters.register('instance-age')        
 class InstanceAgeFilter(AgeFilter):
@@ -235,6 +267,9 @@ class InstanceAgeFilter(AgeFilter):
     date_attribute = "LaunchTime"
     ebs_key_func = operator.itemgetter('AttachTime')
 
+    schema = type_schema(
+        'instance-age', days={'type': 'number'})
+    
     def get_resource_date(self, i):
         # LaunchTime is basically how long has the instance
         # been on, use the oldest ebs vol attach time
@@ -255,6 +290,8 @@ class Start(BaseAction, StateTransitionFilter):
 
     valid_origin_states = ('stopped',)
 
+    schema = utils.type_schema('start')
+
     def process(self, instances):
         instances = self.filter_instance_state(instances)
         if not len(instances):
@@ -270,6 +307,15 @@ class Stop(BaseAction, StateTransitionFilter):
     """Stop instances
     """
     valid_origin_states = ('running', 'pending')
+
+    schema = {
+        'type': 'object',
+        'required': ['type'],
+        'properties': {
+            'type': {'enum': ['stop']},
+            'terminate-ephemeral': {'type': 'boolean'}
+            }
+        }
 
     def split_on_storage(self, instances):
         ephemeral = []
@@ -311,7 +357,9 @@ class Terminate(BaseAction, StateTransitionFilter):
     """
 
     valid_origin_states = ('running', 'stopped', 'pending', 'stopping')
-    
+
+    schema = utils.type_schema('terminate', force={'type': 'boolean'})
+
     def process(self, instances):
         instances = self.filter_instance_state(instances)
         if not len(instances):

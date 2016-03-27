@@ -14,19 +14,28 @@
 
 import unittest
 
-from maid.utils import chunks
+from maid import utils
 
 
 class UtilTest(unittest.TestCase):
 
     def test_chunks(self):
         self.assertEqual(
-            list(chunks(range(100), size=50)),
+            list(utils.chunks(range(100), size=50)),
             [range(50), range(50, 100, 1)])
         self.assertEqual(
-            list(chunks(range(1), size=50)),
+            list(utils.chunks(range(1), size=50)),
             [range(1)])
         self.assertEqual(
-            list(chunks(range(60), size=50)),
+            list(utils.chunks(range(60), size=50)),
             [range(50), range(50, 60, 1)])
+        
+    def test_type_schema(self):
+        self.assertEqual(
+            utils.type_schema('tester'),
+            {'type': 'object',
+             'additionalProperties': False,
+             'required': ['type'],
+             'properties': {
+                 'type': {'enum': ['tester']}}})
         

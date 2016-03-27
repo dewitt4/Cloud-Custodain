@@ -63,6 +63,42 @@ def format_event(evt):
     return io.getvalue()
 
 
+def type_schema(
+        type_name, inherits=None, aliases=None, required=None, **props):
+    """jsonschema generation helper"""
+
+    if aliases:
+        type_names = [type_name]
+        type_names.extend(aliases)
+    else:
+        type_names = [type_name]
+        
+    s = {
+        'type': 'object',
+        'properties': {
+            'type': {'enum': type_names}}}
+
+    # Ref based inheritance and additional properties don't mix well.
+    # http://goo.gl/8UyRvQ
+    if not inherits:
+        s['additionalProperties'] = False
+
+    s['properties'].update(props)
+    if not required:
+        required = []
+    if isinstance(required, list):
+        if aliases:
+            required.extend(aliases)
+        required.append('type')
+    s['required'] = required
+    
+    if inherits:
+        extended = s
+        s = {'allOf': [{'$ref': i} for i in inherits]}
+        s['allOf'].append(extended)
+    return s
+        
+
 class DateTimeEncoder(json.JSONEncoder):
 
     def default(self, obj):

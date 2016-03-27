@@ -18,7 +18,7 @@ from maid.actions import ActionRegistry, BaseAction
 from maid.filters import FilterRegistry
 
 from maid.manager import ResourceManager, resources
-from maid.utils import local_session
+from maid.utils import local_session, type_schema
 
 
 log = logging.getLogger('maid.cfn')
@@ -30,12 +30,8 @@ actions = ActionRegistry('cfn.actions')
 @resources.register('cfn')
 class CloudFormation(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(CloudFormation, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self) 
+    action_registry = actions
+    filter_registry = filters
 
     def resources(self):
         c = self.session_factory().client('cloudformation')
@@ -48,6 +44,8 @@ class CloudFormation(ResourceManager):
 
 @actions.register('delete')
 class Delete(BaseAction):
+
+    schema = type_schema('delete')
 
     def process(self, stacks):
         with self.executor_factory(max_workers=10) as w:

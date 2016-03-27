@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 import logging
 
 from maid.actions import ActionRegistry
 from maid.filters import FilterRegistry, Filter
 
 from maid.manager import ResourceManager, resources
-from maid.utils import local_session
+from maid.utils import local_session, type_schema
 
 log = logging.getLogger('maid.kms')
 
@@ -29,12 +28,8 @@ actions = ActionRegistry('kms.actions')
 @resources.register('kms')
 class KMS(ResourceManager):
 
-    def __init__(self, ctx, data):
-        super(KMS, self).__init__(ctx, data)
-        self.filters = filters.parse(
-            self.data.get('filters', []), self)
-        self.actions = actions.parse(
-            self.data.get('actions', []), self) 
+    filter_registry = filters
+    action_registry = actions
 
     def resources(self):
         c = self.session_factory().client('kms')
@@ -51,6 +46,9 @@ class KMS(ResourceManager):
 
 @filters.register('grant-count')
 class GrantCount(Filter):
+
+    schema = type_schema(
+        'grant-count', min={'type': 'integer', 'minimum': 0})
 
     def process(self, keys, event=None):
         with self.executor_factory(max_workers=10) as w:

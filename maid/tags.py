@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse
 from dateutil.tz import tzutc
 
-from maid.actions import BaseAction
+from maid.actions import BaseAction as Action
 from maid.filters import Filter, OPERATORS
 from maid import utils
 
@@ -45,7 +45,10 @@ def register_tags(filters, actions, id_key):
     actions.register('untag', remove_tag)
     actions.register('remove-tag', remove_tag)
     
-
+ACTIONS = [
+    'suspend', 'resume', 'terminate', 'stop', 'start',
+    'delete', 'deletion']
+    
 class ResourceTag(object):
 
     @property
@@ -57,7 +60,7 @@ class ResourceTag(object):
         return type(cls.__name__, (cls,), {'id_key': key})
                     
     
-class TagTrim(BaseAction, ResourceTag):
+class TagTrim(Action, ResourceTag):
     """Automatically remove tags from an ec2 resource.
 
     EC2 Resources have a limit of 10 tags, in order to make
@@ -94,10 +97,10 @@ class TagTrim(BaseAction, ResourceTag):
     """
     max_tag_count = 10
 
-    @property
-    def id_key(self):
-        raise NotImplementedError()
-    
+    schema = utils.type_schema(
+        'tag-trim',
+        preserve={'type': 'array', 'items': {'type': 'string'}})
+
     def process(self, resources):
         self.preserve = set(self.data.get('preserve'))
         self.seen = set()
@@ -167,6 +170,11 @@ class TagActionFilter(Filter):
             - stop
 
     """
+    schema = utils.type_schema(
+        'marked-for-op',
+        tag={'type': 'string'},
+        skew={'type': 'number', 'minimum': 0},
+        op={'enum': ACTIONS})
     
     current_date = None
 
@@ -221,7 +229,11 @@ class TagCountFilter(Filter):
            - type: tag-count
              value: 8
     """
-    
+    schema = utils.type_schema(
+        'tag-count',
+        count={'type': 'integer', 'minimum': 0},
+        op={'enum': OPERATORS.keys()})
+
     def __call__(self, i):
         count = self.data.get('count', 10)
         op_name = self.data.get('op', 'gte')
@@ -232,13 +244,19 @@ class TagCountFilter(Filter):
         return op(tag_count, count)    
 
 
-class Tag(BaseAction, ResourceTag):
+class Tag(Action, ResourceTag):
     """Tag an ec2 resource.
     """
 
     batch_size = 150
     concurrency = 2
-    
+
+    schema = utils.type_schema(
+        'tag', aliases=('mark',),
+        key={'type': 'string'},
+        value={'type': 'string'},
+        )
+
     def process(self, resources):
         # Legacy
         msg = self.data.get('msg')
@@ -281,13 +299,17 @@ class Tag(BaseAction, ResourceTag):
             DryRun=self.manager.config.dryrun)
 
 
-class RemoveTag(BaseAction, ResourceTag):
+class RemoveTag(Action, ResourceTag):
     """Remove tags from ec2 resources.
     """
     
     batch_size = 100
     concurrency = 2
-    
+
+    schema = utils.type_schema(
+        'untag', aliases=('unmark', 'remove-tag'),
+        tags={'type': 'array', 'items': {'type': 'string'}})
+
     def process(self, resources):
         tags = self.data.get('tags', ['maid_status'])
         batch_size = self.data.get('batch_size', self.batch_size)
@@ -313,7 +335,7 @@ class RemoveTag(BaseAction, ResourceTag):
             DryRun=self.manager.config.dryrun)
         
 
-class TagDelayedAction(BaseAction, ResourceTag):
+class TagDelayedAction(Action, ResourceTag):
     """Tag resources for future action.
 
     .. code-block :: yaml
@@ -331,6 +353,13 @@ class TagDelayedAction(BaseAction, ResourceTag):
           actions:
             - stop
     """
+
+    schema = utils.type_schema(
+        'mark-for-op',
+        days={'type': 'number', 'minimum': 0, 'exclusiveMinimum': True},
+        op={'enum': ACTIONS},
+        batch_size={'type': 'integer', 'minimum': 1})
+    
     def process(self, resources):
         
         # Move this to policy? / no resources bypasses actions?
