@@ -109,7 +109,7 @@ class Formatter(object):
         return self._headers
 
     def extract_csv(self, record):
-        tag_map = {t['Key']: t['Value'] for t in record['Tags']}
+        tag_map = {t['Key']: t['Value'] for t in record.get('Tags', ())}
         return self.csv_fields(record, tag_map)
 
     def uniq_by_id(self, records):
