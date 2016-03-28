@@ -76,7 +76,6 @@ class S3(ResourceManager):
         super(S3, self).__init__(ctx, data)
         self.log_dir = ctx.log_dir
 
-
     def get_resources(self, resource_ids):
         with self.executor_factory(
                 max_workers=min((5, len(resource_ids)))) as w:
@@ -148,7 +147,7 @@ def assemble_bucket(item):
                     b['Name'], m, e.response['Error']['Message']))
                 return None
         # As soon as we learn location (which generally works)
-        if k == 'Location':
+        if k == 'Location' and v is not None:
             b_location = v.get('LocationConstraint')
             if v and v != c_location:
                 c = s.client('s3', region_name=b_location)
