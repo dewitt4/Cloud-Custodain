@@ -210,7 +210,7 @@ class Worker(object):
                     result = self.smtp.sendmail(
                         self.config.from_addr,
                         [m['MessageAttributes']['recipient']],
-                        )
+                        m['Body'])
 
                     if result:
                         log.warning("Couldn't send email %s" % (result,))
@@ -235,19 +235,26 @@ def setup_parser():
     
 # FTesting
 
-def send_data_message(queue_url, recipient, message):
+def send_data_message(queue_url, recipient, message, format=None):
+    attrs = {
+        'mtype': {
+            'DataType': 'String',
+            'StringValue': DATA_MESSAGE},
+        'recipient': {
+            'StringValue': recipient,
+            'DataType': 'String'}}
+
+    if format:
+        attrs['format'] = {
+            'DataType': 'String',
+            'StringValue': format}
+        
     client = boto3.Session().client('sqs')
     client.send_message(
         QueueUrl=queue_url,
         MessageBody=utils.dumps(message),
-        MessageAttributes={
-            'mtype': {
-                'DataType': 'String',
-                'StringValue': DATA_MESSAGE},
-            'recipient': {
-                'StringValue': recipient,
-                'DataType': 'String'}})
-
+        MessageAttributes=attrs)
+    
     
 def send_email_message(client, queue_url, message):
     client.send_message(
