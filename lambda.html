@@ -25,7 +25,6 @@
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="top" title="Cloud Maid 1.0 documentation" href="index.html" />
-    <link rel="next" title="Offhours support" href="offhours.html" />
     <link rel="prev" title="Comparisons" href="comparisons.html" /> 
   </head>
   <body role="document">
@@ -36,8 +35,6 @@
         <div class="rel" role="navigation" aria-label="related navigation">
           <a href="comparisons.html" title="Comparisons"
              accesskey="P">previous</a> |
-          <a href="offhours.html" title="Offhours support"
-             accesskey="N">next</a> |
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |
           <a href="genindex.html" title="General Index"
@@ -54,57 +51,35 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <span class="target" id="module-janitor.mu"></span><div class="section" id="lambda-support">
+  <div class="section" id="lambda-support">
 <h1>Lambda Support<a class="headerlink" href="#lambda-support" title="Permalink to this headline">¶</a></h1>
-<p>Lambda provides for powerful realtime and near realtime compliance
-execution when integrated in with a number of different amazon
-services as event sources.</p>
-<div class="section" id="aws-cloud-config">
-<h2>AWS Cloud Config<a class="headerlink" href="#aws-cloud-config" title="Permalink to this headline">¶</a></h2>
-<p>One event source is using AWS Cloud Config, which provides versioned
-json representation of objects into s3 with rules execution against
-them.  Config Rules allow for lambda execution against these resource
-states to determine compliance along with a nice dashboard targeted
-towards visualizing compliance information over time. At the moment
-config rules execute after the resource is already active, based on the
-underlying resource poll and config snapshot delivery.</p>
-<p>Underlying the hood aws config and config rules, appear to be just
-productizing a poll of some resources into json files in s3 with
-lambda and versioned metrics reports. At the moment config rules
-only support items managed under the ec2 api (ec2, ebs, network) which
-means they have significant coverage gap when looking at the totality
-of aws services since they only cover a single api. As a result atm,
-they are best suited to orgs that are using a small subset of aws that
-requires audit (ie. just ec2) and prefer a pre-configured dashboard on
-that subset. Of course overtime the config service will evolve.</p>
-<p>However for capabilities and reporting around compliance Netflix
-security monkey would be a better choice atm imo. Maid distinguishes
-in its configurable policy engine, as opposed to hard coded, ability
-to run serverless, better integration with current best aws practices
-and provides remediation and enforcement capabilities.</p>
-<p>Open question on config rules, Its unclear if rules execute against
-only on a delta to a resource or against each config snapshot..</p>
-<p>For a wider range of coverage and functionality we turn to</p>
-</div>
+<p>Lambda provides for powerful realtime event based code execution in
+response to infrastructure and application behavior. A number of
+different amazon services can be used as event sources.</p>
 <div class="section" id="cloud-watch-events">
 <h2>Cloud Watch Events<a class="headerlink" href="#cloud-watch-events" title="Permalink to this headline">¶</a></h2>
 <p>Cloud watchs events is a general event bus for aws infrastructure, atm
-it covers two major sources of information, real time instance status events
-and cloud trail api calls over a poll period on cloud trail delivery.</p>
-<p>Cloud trail provides a much richer data source over the entire range
-of aws services exposed via the audit trail to enable defining
-compliance policy effectively against any aws product.</p>
+it covers several major sources of information, cloud trail api calls
+over a poll period on cloud trail delivery, real time instance status
+events, autoscale group notifications, and scheduled/periodic events.</p>
+<p>Cloud trail provides a very rich data source over the entire range
+of aws services exposed via the audit trail that allows maid to define
+realtime policies effectively against any aws product.</p>
 <p>Additionally for ec2 instances we can provide mandatory policy
 compliance, that effectively means the non compliant resource never
 became available.</p>
 </div>
 <div class="section" id="cloud-maid-integration">
 <h2>Cloud Maid Integration<a class="headerlink" href="#cloud-maid-integration" title="Permalink to this headline">¶</a></h2>
-<p>Maid provides for policy level execution against any lambda subscribable
-event stream.</p>
-<p>We reconstitue current state for the given resource and execute
-the policy against it, matching against the policy filters, and applying
-the policy actions.</p>
+<p>Maid provides for policy level execution against any cwe event
+stream. Each maid policy can be deployed as an independent lambda
+function. The only difference between a maid policy that runs in
+lambda a event/reactive push mode and one that runs directly from the
+cli in poll mode is the specification of the events to subscribe to
+in the mode config block of the policy.</p>
+<p>Internally maid will reconstitue current state for all the resources
+in the event and execute the policy against them, matching against the
+policy filters, and applying the policy actions to matching resources.</p>
 <p>Mu is the letter after lambda, lambda is a keyword in python.</p>
 </div>
 <div class="section" id="configuration">
@@ -114,14 +89,33 @@ the policy actions.</p>
 
   <span class="c1"># Cloud Watch Events over CloudTrail api calls (1-15m trailing)</span>
   <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-tag-compliance</span>
-    <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span> 
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+
+    <span class="c1"># The mode block is the only difference between a maid policy that</span>
+    <span class="c1"># runs in reactive/push mode via lambda and one that runs in poll mode.</span>
+    <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
       <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">cloudtrail</span>
-      <span class="l l-Scalar l-Scalar-Plain">sources</span><span class="p p-Indicator">:</span> 
-       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">ec2.amazonaws.com</span>
-      <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span> 
+      <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span>
        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">RunInstances</span>
-      <span class="c1"># For cloud trail events we need to reference the resources id</span>
-      <span class="l l-Scalar l-Scalar-Plain">resources</span><span class="p p-Indicator">:</span> <span class="s">&quot;detail.responseElements.instancesSet.items[].instanceId&quot;</span>
+
+      <span class="c1"># Note because the total aws api surface area is so large</span>
+      <span class="c1"># most cloud trail api event subscription needs two additional</span>
+      <span class="c1"># fields.</span>
+      <span class="c1">#</span>
+      <span class="c1"># For cloud trail events we need to reference the source api call</span>
+      <span class="c1"># sources:</span>
+      <span class="c1">#  - ec2.amazonaws.com</span>
+      <span class="c1">#</span>
+      <span class="c1"># To work transparently with existing resource policies, we also</span>
+      <span class="c1"># need to specify how to extract the resource ids from the event</span>
+      <span class="c1"># via jmespath so that the resources can be queried.</span>
+      <span class="c1"># ids: &quot;detail.responseElements.instancesSet.items[].instanceId&quot;</span>
+      <span class="c1">#</span>
+      <span class="c1"># For very common api calls for policies, some shortchuts have</span>
+      <span class="c1"># been defined to allow for easier policy writing as for the</span>
+      <span class="c1"># RunInstances api call above.</span>
+      <span class="c1">#</span>
+
     <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span>
         <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">tag:required1</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
@@ -131,6 +125,7 @@ the policy actions.</p>
 
   <span class="c1"># On EC2 Instance state events (real time, seconds)</span>
   <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-require-encrypted-volumes</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
     <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
       <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-instance-state</span>
       <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span>
@@ -172,21 +167,15 @@ the policy actions.</p>
 <li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="developer.html">Developer Install</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Roadmap</a></li>
-<li class="toctree-l1"><a class="reference internal" href="filter-values.html">Value Filters</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ec2.html">EC2 Policy Definition</a></li>
 <li class="toctree-l1"><a class="reference internal" href="s3.html">S3 Policies</a></li>
 <li class="toctree-l1"><a class="reference internal" href="comparisons.html">Comparisons</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">Lambda Support</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#aws-cloud-config">AWS Cloud Config</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#cloud-watch-events">Cloud Watch Events</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#cloud-maid-integration">Cloud Maid Integration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="offhours.html">Offhours support</a></li>
-<li class="toctree-l1"><a class="reference internal" href="offhours.html#tag-based-configuration">Tag Based Configuration</a></li>
-<li class="toctree-l1"><a class="reference internal" href="offhours.html#policy-examples">Policy examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="offhours.html#options">Options</a></li>
 </ul>
 
           <div role="search">
@@ -212,8 +201,6 @@ the policy actions.</p>
           <div role="navigation" aria-label="related navigaton">
             <a href="comparisons.html" title="Comparisons"
               >previous</a> |
-            <a href="offhours.html" title="Offhours support"
-              >next</a> |
             <a href="py-modindex.html" title="Python Module Index"
               >modules</a> |
             <a href="genindex.html" title="General Index"
@@ -229,7 +216,7 @@ the policy actions.</p>
         <div class="right">
           
     <div class="footer" role="contentinfo">
-        &copy; Copyright 2015, Kapil Thangavelu.
+        &copy; Copyright 2015, Capital One Services, LLC.
       Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.3.
     </div>
         </div>
