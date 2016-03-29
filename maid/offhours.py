@@ -68,14 +68,14 @@ Turn ec2 instances on and off
      - name: offhours-stop
        resource: ec2
        filters:
-          - offhours
+          - type: offhour
        actions:
          - stop
    
      - name: offhours-start
        resource: ec2
        filters:
-         - onhours
+         - type: onhour
        actions:
          - start
 
@@ -87,13 +87,13 @@ Here's doing the same with auto scale groups
       - name: asg-offhours-stop
         resource: ec2
         filters:
-           - offhours
+           - type: offhour
         actions:
            - suspend
       - name: asg-onhours-start
         resource: ec2
         filters:
-           - onhours
+           - type: onhour
         actions:
            - resume
      
@@ -112,7 +112,7 @@ Options
      - name: offhours-stop
        resource: ec2
        filters:
-         - type: offhours
+         - type: offhour
            tag: downtime
            onhour: 8
            offhour: 20
