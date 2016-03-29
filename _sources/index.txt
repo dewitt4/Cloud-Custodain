@@ -20,7 +20,7 @@ Contents:
    s3
    comparisons
    lambda
-   offhours
+   usage/offhours
 
 Indices and tables
 ==================
