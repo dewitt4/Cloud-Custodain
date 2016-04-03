@@ -11,27 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import unittest
+#
 
+from maid.actions import BaseAction
+from maid import utils
 
-from maid.mailer import MessageDB
-
-
-class MessageDBTest(unittest.TestCase):
-
-    def xtest_add_batch_flush(self):
-        db = MessageDB(":memory:")
-        db.add('serious@example.com', 'abc')
-        db.add('serious@example.com', 'def')
-        db.add('someone@example.com', 'def')
-
-        self.assertEqual([
-            ['serious@example.com', ['abc', 'def']],
-            ['someone@example.com', ['def']]
-            ],
-            db.batches())
-
-        
-
-
-    

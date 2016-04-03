@@ -109,6 +109,19 @@ Options
   with opt-out: true, the tag doesn't need to be present.
 
 
+.. code-block:: yaml
+
+   policies:
+     - name: offhours-stop
+       resource: ec2
+       filters:
+         - type: offhour
+           tag: downtime
+           onhour: 8
+           offhour: 20
+"""
+
+"""
 TODO:
  
 Also support one time use instances for quickly trying something out,
