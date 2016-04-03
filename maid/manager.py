@@ -25,6 +25,8 @@ class ResourceManager(object):
 
     filter_registry = None
     action_registry = None
+
+    supports_dry_run = False
     
     def __init__(self, ctx, data):
         self.ctx = ctx
