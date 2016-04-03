@@ -13,17 +13,28 @@
 # limitations under the License.
 #
 """
+Implementation Notes / not docs
+
+Flexible notifications require quite a bit of implementation support
+on pluggable transports, templates, address resolution, variable
+extraction, batch periods, etc.
+
+For expedience and flexibility then, we instead send the data to
+an sqs queue, for processing. ie. actual communications is diy.
+
 policies:
   - name: 
   
     actions:
       - type: notify
-        to: event-user
-        format: 
+        # want fallback
+        to: event-user | resource-creator | email@address | sns-topic
+        # which template for the email should we use
+        template: policy-template
         transport: 
            type: sqs
            region: us-east-1
--           queue: xyz
+           queue: xyz
 """
 from maid.actions import BaseAction
 from maid.mailer import send_data_message
@@ -33,11 +44,11 @@ class Notify(BaseAction):
 
     schema = {
         'type': 'object',
-        'required': ['type', 'transport'],
+        'required': ['type', 'transport', 'template'],
         'properties': {
             'type': {'enum': ['notify']},
-            'recipient': {'enum': ['event-owner', 'resource-owner']},
-            'format': {'type': 'string'},
+            'recipient': {'enum': ['event-user', 'resource-owner']},
+            'template': {'type': 'string'},
             'transport': {
                 'type': 'object',
                 'required': ['type', 'queue'],
@@ -49,19 +60,11 @@ class Notify(BaseAction):
     }
         
     def process(self, resources, event=None):
-        recipient = self.data.get('recipient', 'event-owner')
-        if recipient == 'event-owner':
-            recipient = self.resolve_recipient_from_event(event)
-        if not recipient:
-            self.log.info("No recipient found")
-            return
-
-        # for sqs transport only        
         queue = self.data['transport']['queue']
         message = {'resources': resources,
-                   'format': self.data['format'],
+                   'event': event,
                    'policy': self.manager.data}
-        send_data_message(queue, recipient, message)
+        send_data_message(queue, message)
         
     def resolve_recipient_from_event(self, event):
         identity = event.get('details', {}).get('userIdentity', {})
