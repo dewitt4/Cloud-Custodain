@@ -195,6 +195,10 @@ class Policy(object):
                 'resources.json', utils.dumps(resources, indent=2))
 
             if not resources:
+                return []
+
+            if self.options.dryrun and not self.resource_manager.supports_dry_run:
+                self.log.debug("dryrun: skipping actions")
                 return resources
 
             at = time.time()            
@@ -211,7 +215,7 @@ class Policy(object):
 
     def __call__(self):
         """Run policy in default mode"""
-        if self.is_lambda:
+        if self.is_lambda and not self.options.dryrun:
             return self.provision()
         else:
             return self.poll()

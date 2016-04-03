@@ -35,23 +35,23 @@ Tag Based Configuration
 Note the tag name is configurable per policy configuration, examples below use
 default tag name, ie. maid_downtime.
 
-- maid_offhours: 
+- maid_downtime: 
 
 An empty tag value implies night and weekend offhours using the default
 time zone configured in the policy (tz=est if unspecified).
 
-- maid_offhours: tz=pt
+- maid_downtime: tz=pt
 
 Note all timezone aliases are referenced to a locality to ensure taking into
 account local daylight savings time (if any).
 
-- maid_offhours: tz=Americas/Los_Angeles
+- maid_downtime: tz=Americas/Los_Angeles
 
 A geography can be specified but must be in the time zone database. 
 
 Per http://www.iana.org/time-zones
 
-- maid_offhours: off
+- maid_downtime: off
 
 If offhours is configured to run in opt-out mode, this tag can be specified
 to disable offhours on a given instance.
@@ -105,6 +105,9 @@ Options
 - default_tz: the default timezone to use when interpreting offhours
 - offhour: the time to turn instances off, specified in 0-24
 - onhour: the time to turn instances on, specified in 0-24
+- opt-out: default behavior is opt in, as in ``tag`` must be present, 
+  with opt-out: true, the tag doesn't need to be present.
+
 
 .. code-block:: yaml
 
@@ -116,7 +119,9 @@ Options
            tag: downtime
            onhour: 8
            offhour: 20
+"""
 
+"""
 TODO:
  
 Also support one time use instances for quickly trying something out,
