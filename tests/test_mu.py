@@ -23,14 +23,14 @@ from .common import BaseTest, Config
 
 class PolicyLambdaProvision(BaseTest):
 
-    role = "arn:aws:iam::119310032964:role/lambda_basic_execution"
+    role = "arn:aws:iam::619193117841:role/lambda_basic_execution"
     
     def assert_items(self, result, expected):
         for k, v in expected.items():
             self.assertEqual(v, result[k])
 
     def test_cwe_trail(self):
-        session_factory = self.replay_flight_data('test_cwe_trail')
+        session_factory = self.replay_flight_data('test_cwe_trail', zdata=True)
         p = Policy({
             'resource': 's3',
             'name': 's3-bucket-policy',
@@ -64,9 +64,11 @@ class PolicyLambdaProvision(BaseTest):
              'MemorySize': 512,
              'Runtime': 'python2.7',
              'Timeout': 60})
+        mgr.remove(pl)
                              
     def test_cwe_instance(self):
-        session_factory = self.replay_flight_data('test_cwe_instance')
+        session_factory = self.replay_flight_data(
+            'test_cwe_instance', zdata=True)
         p = Policy({
             'resource': 's3',
             'name': 'ec2-encrypted-vol',
@@ -99,9 +101,10 @@ class PolicyLambdaProvision(BaseTest):
              "detail": {
                  "state": ["pending"]},
              "detail-type": ["EC2 Instance State-change Notification"]})
+        mgr.remove(pl)
 
     def test_cwe_asg_instance(self):
-        session_factory = self.replay_flight_data('test_cwe_asg')
+        session_factory = self.replay_flight_data('test_cwe_asg', zdata=True)
         p = Policy({
             'resource': 'asg',
             'name': 'asg-spin-detector',
@@ -131,9 +134,10 @@ class PolicyLambdaProvision(BaseTest):
             json.loads(result['Rules'][0]['EventPattern']),
             {"source": ["aws.autoscaling"],
              "detail-type": ["EC2 Instance Launch Unsuccessful"]})
+        mgr.remove(pl)
         
     def test_cwe_schedule(self):
-        session_factory = self.replay_flight_data('test_cwe_schedule')
+        session_factory = self.replay_flight_data('test_cwe_schedule', zdata=True)
         p = Policy({
             'resource': 'ec2',
             'name': 'periodic-ec2-checker',
@@ -162,7 +166,7 @@ class PolicyLambdaProvision(BaseTest):
                 "State": "ENABLED", 
                 "ScheduleExpression": "rate(1 day)", 
                 "Name": "maid-periodic-ec2-checker"})
-        
+        mgr.remove(pl)
 
 class PythonArchiveTest(unittest.TestCase):
 

@@ -38,7 +38,12 @@ def validate(data):
 
     errors = list(validator.iter_errors(data))
     return errors
-    return filter(None, [best_match(validator.iter_errors(data))])
+    #return errors
+    return filter(None, [
+        specific_error(errors[0]),
+        best_match(validator.iter_errors(data)),
+
+    ])
 
 
 def specific_error(error):

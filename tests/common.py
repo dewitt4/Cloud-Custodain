@@ -14,31 +14,28 @@
 import json
 import logging
 import os
-import unittest
 import StringIO
 import shutil
 import tempfile
 import yaml
 
-import boto3
-import placebo
-
-
 from maid import policy
 from maid.ctx import ExecutionContext
 from maid.utils import CONN_CACHE
+
+from zpill import PillTest
+
 
 logging.getLogger('placebo').setLevel(logging.WARNING)
 logging.getLogger('botocore').setLevel(logging.WARNING)
 
 
-def cleanSession():
-    # Clear out thread local session cache
-    CONN_CACHE.session = None
-    
+class BaseTest(PillTest):
 
-class BaseTest(unittest.TestCase):
-
+    def cleanUp(self):
+        # Clear out thread local session cache        
+        CONN_CACHE.session = None
+        
     def get_context(self, config=None, session_factory=None, policy=None):
         if config is None:
             self.context_output_dir = self.mkdtemp()
@@ -73,33 +70,6 @@ class BaseTest(unittest.TestCase):
         old = getattr(obj, attr, None)
         setattr(obj, attr, new)
         self.addCleanup(setattr, obj, attr, old)
-    
-    def record_flight_data(self, test_case):
-        test_dir = placebo_dir(test_case)
-        if os.path.exists(test_dir):
-            shutil.rmtree(test_dir)
-        os.makedirs(test_dir)
-
-        session = boto3.Session()
-        pill = placebo.attach(session, test_dir, debug=True)
-        pill.record()
-        self.addCleanup(pill.stop)
-        self.addCleanup(cleanSession)
-        # return session factory
-        return lambda x=None: session
-    
-    def replay_flight_data(self, test_case):
-        test_dir = placebo_dir(test_case)
-        if not os.path.exists(test_dir):
-            raise RuntimeError(
-                "Invalid Test Dir for flight data %s" % test_dir)
-
-        session = boto3.Session()
-        pill = placebo.attach(session, test_dir)
-        pill.playback()
-        self.addCleanup(pill.stop)
-        self.addCleanup(cleanSession)
-        return lambda x=None: session
 
     def capture_logging(
             self, name=None, level=logging.INFO, 

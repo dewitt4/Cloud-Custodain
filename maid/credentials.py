@@ -28,9 +28,9 @@ class SessionFactory(object):
         self.profile = profile
         self.assume_role = assume_role
 
-    def __call__(self, assume=True):
+    def __call__(self, assume=True, region=None):
         session = Session(
-            region_name=self.region,
+            region_name=region or self.region,
             profile_name=self.profile)
         if self.assume_role and assume:
             session = assumed_session(
