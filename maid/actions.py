@@ -14,8 +14,10 @@
 """
 Actions to take on resources
 """
-
+import base64
 import logging
+import zlib
+
 from botocore.exceptions import ClientError
 
 from maid.registry import PluginRegistry
@@ -150,6 +152,7 @@ class Notify(BaseAction):
     def process(self, resources, event=None):
         message = {'resources': resources,
                    'event': event,
+                   'action': self.data,
                    'policy': self.manager.data}
         self.send_data_message(message)
 
@@ -169,5 +172,5 @@ class Notify(BaseAction):
             }
         client.send_message(
             QueueUrl=queue,
-            MessageBody=utils.dumps(message),
+            MessageBody=base64.b64encode(zlib.compress(utils.dumps(message))),
             MessageAttributes=attrs)
