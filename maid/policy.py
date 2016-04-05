@@ -16,17 +16,15 @@ import logging
 import os
 import time
 
-import jmespath
-
 from botocore.client import ClientError
 
-from maid.ctrail import CloudTrailResource
+from maid.cwe import CloudWatchEvents
 from maid.ctx import ExecutionContext
 from maid.credentials import SessionFactory
 from maid.manager import resources
 from maid import utils
 
-# This import causes our resources to be initialized
+# This import causes our resources to be registered into plugin registries
 import maid.resources
 
 
@@ -110,29 +108,15 @@ class Policy(object):
         """
         mode = self.data.get('mode', {})
         mode_type = mode.get('type')
-        
+
         if mode_type == 'periodic':
             return self.poll()
-        elif mode_type == 'ec2-instance-state':
-            resource_ids = filter(None, [event.get('detail', {}).get('instance-id')])
-        elif mode_type == 'asg-instance-state':
-            raise NotImplementedError("asg-instance-state event not supported")
-        elif mode_type != 'cloudtrail':
-            raise ValueError("Invalid push event mode %s" % self.data)
-        else:
-            info = CloudTrailResource.match(event)
-            if info:
-                resource_ids = info['ids'].search(event)
-            else:
-                id_query = mode.get('ids') or mode.get('resources')
-                if not id_query:
-                    raise ValueError("No id query configured")
-                resource_ids = jmespath.search(id_query, event)
 
-        if not isinstance(resource_ids, list):
-            resource_ids = [resource_ids]
-                
-        self.log.info('found resource ids: %s' % resource_ids)
+        resource_ids = CloudWatchEvents.get_ids(event, mode)
+        if resource_ids is None:
+            raise ValueError("Invalid push event mode %s" % self.data)
+
+        self.log.info('Found resource ids: %s' % resource_ids)
         if not resource_ids:
             self.log.warning("Could not find resource ids with %s" % (
                 mode.get('resources')))
@@ -140,6 +124,7 @@ class Policy(object):
 
         resources = self.resource_manager.get_resources(resource_ids)
         if 'debug' in event:
+
             self.log.info("Resources %s", resources)
 
         resources = self.resource_manager.filter_resources(resources, event)

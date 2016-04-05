@@ -35,7 +35,7 @@ from botocore.exceptions import ClientError
 import maid
 
 # Static event mapping to help simplify cwe rules creation
-from maid.ctrail import CloudTrailResource
+from maid.cwe import CloudWatchEvents
 from maid.utils import parse_s3
 
 
@@ -610,7 +610,7 @@ class CloudWatchEventSource(object):
         sources = self.data.get('sources', [])
         
         for e in self.data.get('events'):
-            event_info = CloudTrailResource.get(e)
+            event_info = CloudWatchEvents.get(e)
             if event_info is None:
                 continue
             sources.append(event_info['source'])
