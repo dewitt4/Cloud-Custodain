@@ -78,7 +78,7 @@ class CloudWatchEvents(object):
 
     @classmethod
     def get_ids(cls, event, mode):
-        mode_type = mode.get('mode_type')
+        mode_type = mode.get('type')
         if mode_type == 'ec2-instance-state':
             resource_ids = filter(None, [event.get('detail', {}).get('instance-id')])
         elif mode_type == 'asg-instance-state':
