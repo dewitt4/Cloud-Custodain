@@ -87,8 +87,6 @@ def type_schema(
     if not required:
         required = []
     if isinstance(required, list):
-        if aliases:
-            required.extend(aliases)
         required.append('type')
     s['required'] = required
     
