@@ -166,7 +166,7 @@ class ValueFilter(Filter):
         'additionalProperties': False,
         'required': ['type'],
         'properties': {
-            'type': {'enum': ['value']},
+            'type': {'type': 'string'},
             'key': {'type': 'string'},
             'value': {'oneOf': [
                 {'type': 'array'},
