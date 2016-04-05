@@ -65,6 +65,31 @@ class ASG(ResourceManager):
         return self.filter_resources(asgs)
 
 
+@actions.register('remove-tag')
+@actions.register('untag')
+@actions.register('unmark')
+class RemoveTag(BaseAction):
+
+    schema = type_schema(
+        'remove-tag',
+        aliases=('untag', 'unmark'),
+        key={'type': 'string'})
+
+    def process(self, asgs):
+        with self.executor_factory(max_workers=10) as w:
+            list(w.map(self.process_asg, asgs))
+
+    def process_asg(self, asg, msg=None):
+        session = local_session(self.manager.session_factory)
+        client = session.client('autoscaling')
+        tag = self.data.get('key', 'maid_status')
+        remove_t = {
+            "Key": tag,
+            "ResourceType": "auto-scaling-group",
+            "ResourceId": asg["AutoScalingGroupName"]}
+        client.delete_tags(Tags=[remove_t])
+
+
 @actions.register('tag')            
 @actions.register('mark')
 class Tag(BaseAction):
