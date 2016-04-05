@@ -20,9 +20,14 @@ from botocore.exceptions import ClientError
 
 from maid.registry import PluginRegistry
 from maid.executor import ThreadPoolExecutor
+from maid import utils
 
 
 class ActionRegistry(PluginRegistry):
+
+    def __init__(self, *args, **kw):
+        super(ActionRegistry, self).__init__(*args, **kw)
+        self.register('notify', Notify)
 
     def parse(self, data, manager):
         results = []
@@ -89,5 +94,80 @@ class BaseAction(object):
                     "Dry run operation %s succeeded" % (
                         self.__class__.__name__.lower()))
             raise
-            
+
+
+class Notify(BaseAction):
+    """
+    Flexible notifications require quite a bit of implementation support
+    on pluggable transports, templates, address resolution, variable
+    extraction, batch periods, etc.
+
+    For expedience and flexibility then, we instead send the data to
+    an sqs queue, for processing. ie. actual communications is DIY.
+
+    Example::
+
+      policies:
+        - name: ec2-bad-instance-kill
+          resource: ec2
+          filters:
+           - Name: bad-instance
+          actions:
+           - terminate
+           - type: notify
+             to:
+              - event-user
+              - resource-creator
+              - email@address
+             # which template for the email should we use
+             template: policy-template
+             transport:
+               type: sqs
+               region: us-east-1
+               queue: xyz
+    """
+
+    MAID_DATA_MESSAGE = "maidmsg/1.0"
     
+    schema = {
+        'type': 'object',
+        'required': ['type'],
+        'properties': {
+            'type': {'enum': ['notify']},
+            'to': {'type': 'array', 'items': {'type': 'string'}},
+            'template': {'type': 'string'},
+            'transport': {
+                'type': 'object',
+                'required': ['type', 'queue'],
+                'properties': {
+                    'queue': {'type': 'string'},
+                    'region': {'type': 'string'},
+                    'type': {'enum': ['sqs']}}
+            }
+        }
+    }
+
+    def process(self, resources, event=None):
+        message = {'resources': resources,
+                   'event': event,
+                   'policy': self.manager.data}
+        self.send_data_message(message)
+
+    def send_data_message(self, message):
+        if self.data['transport']['type'] == 'sqs':
+            self.send_sqs(message)
+
+    def send_sqs(self, message):
+        queue = self.data['transport']['queue']
+        region = self.data['transport'].get('region', 'us-east-1')
+        client = self.manager.session_factory(region=region).client('sqs')
+        attrs = {
+            'mtype': {
+                'DataType': 'String',
+                'StringValue': self.MAID_DATA_MESSAGE,
+                },
+            }
+        client.send_message(
+            QueueUrl=queue,
+            MessageBody=utils.dumps(message),
+            MessageAttributes=attrs)

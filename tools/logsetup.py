@@ -85,10 +85,12 @@ def get_function(session_factory, options, groups):
             CloudWatchLogSubscription(
                 session_factory, groups, options.pattern)])
 
-    # This dance, feels a bit akward for a library usage.
+
     archive = PythonPackageArchive(
+        # Directory to lambda file
         os.path.join(
             os.path.dirname(inspect.getabsfile(maid)), 'logsub.py'),
+        # Don't include virtualenv deps
         lib_filter=lambda x, y, z: ([], []))
     archive.create()
     archive.add_contents(
