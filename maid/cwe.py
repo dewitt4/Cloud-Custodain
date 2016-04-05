@@ -14,10 +14,10 @@
 import jmespath
 
 
-class CloudTrailResource(object):
+class CloudWatchEvents(object):
     """A mapping of events to resource types."""
     
-    mappings = {
+    trail_events = {
         # event source, resource type as keys, mapping to api call and
         # jmespath expression
         'CreateBucket': {
@@ -51,7 +51,7 @@ class CloudTrailResource(object):
 
     @classmethod
     def get(cls, event_name):
-        return cls.mappings.get(event_name)
+        return cls.trail_events.get(event_name)
     
     @classmethod
     def match(cls, event):
@@ -67,11 +67,35 @@ class CloudTrailResource(object):
 
         # We want callers to use a compiled expression, but want to avoid
         # initialization cost of doing it without cause. Not thread safe.
-        if k in cls.mappings:
-            v = dict(cls.mappings[k])
+        if k in cls.trail_events:
+            v = dict(cls.trail_events[k])
             if isinstance(v['ids'], basestring):
                 v['ids'] = e = jmespath.compile('detail.%s' % v['ids'])
-                cls.mappings[k]['ids'] = e
+                cls.trail_events[k]['ids'] = e
             return v
 
         return False
+
+    @classmethod
+    def get_ids(cls, event, mode):
+        mode_type = mode.get('mode_type')
+        if mode_type == 'ec2-instance-state':
+            resource_ids = filter(None, [event.get('detail', {}).get('instance-id')])
+        elif mode_type == 'asg-instance-state':
+            raise NotImplementedError("asg-instance-state event not supported")
+        elif mode_type != 'cloudtrail':
+            return None
+        else:
+            info = CloudWatchEvents.match(event)
+            if info:
+                resource_ids = info['ids'].search(event)
+            else:
+                id_query = mode.get('ids') or mode.get('resources')
+                if not id_query:
+                    raise ValueError("No id query configured")
+                resource_ids = jmespath.search(id_query, event)
+
+        if not isinstance(resource_ids, list):
+            resource_ids = [resource_ids]
+
+        return resource_ids

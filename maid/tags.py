@@ -48,7 +48,8 @@ def register_tags(filters, actions, id_key):
 ACTIONS = [
     'suspend', 'resume', 'terminate', 'stop', 'start',
     'delete', 'deletion']
-    
+
+
 class ResourceTag(object):
 
     @property
