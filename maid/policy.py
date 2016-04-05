@@ -37,6 +37,7 @@ def load(options, path, format='yaml', validate=True):
             data = utils.yaml_load(fh.read())
         elif format == 'json':
             data = utils.loads(fh.read())
+            validate = False
     if validate:
         from maid.schema import validate
         errors = validate(data)
