@@ -163,10 +163,12 @@ class ValueFilter(Filter):
 
     schema = {
         'type': 'object',
+        # Doesn't mix well with inherits that extend
         'additionalProperties': False,
         'required': ['type'],
         'properties': {
-            'type': {'type': 'string'},
+            # Doesn't mix well as enum with inherits that extend
+            'type': {'enum': ['value']},
             'key': {'type': 'string'},
             'value': {'oneOf': [
                 {'type': 'array'},
@@ -267,8 +269,7 @@ class AgeFilter(Filter):
 class EventFilter(ValueFilter):
     """Filter against a cloudwatch event associated to a resource type."""
 
-    schema = type_schema(
-        'event', inherits=('#/definitions/filters/value',))
+    schema = type_schema('event', rinherit=ValueFilter.schema)
 
     def process(self, resources, event=None):
         if event is None:

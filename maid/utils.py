@@ -13,6 +13,7 @@
 # limitations under the License.
 from datetime import datetime
 
+import copy
 import json
 import itertools
 import threading
@@ -64,19 +65,33 @@ def format_event(evt):
 
 
 def type_schema(
-        type_name, inherits=None, aliases=None, required=None, **props):
-    """jsonschema generation helper"""
+        type_name, inherits=None, rinherit=None,
+        aliases=None, required=None, **props):
+    """jsonschema generation helper
 
+    params:
+     - type_name: name of the type
+     - inherits: list of document fragments are also required via anyOf[$ref]
+     - rinherit: use another schema as a base for this, basically work around
+                 inherits issues with additionalProperties and type enums.
+     - aliases: additional names this type maybe called
+     - required: list of required properties, by default 'type' is required
+     - **props: additional key value properties
+    """
     if aliases:
         type_names = [type_name]
         type_names.extend(aliases)
     else:
         type_names = [type_name]
-        
-    s = {
-        'type': 'object',
-        'properties': {
-            'type': {'enum': type_names}}}
+
+    if rinherit:
+        s = copy.deepcopy(rinherit)
+        s['properties']['type'] = {'enum': type_names}
+    else:
+        s = {
+            'type': 'object',
+            'properties': {
+                'type': {'enum': type_names}}}
 
     # Ref based inheritance and additional properties don't mix well.
     # http://goo.gl/8UyRvQ
@@ -89,7 +104,6 @@ def type_schema(
     if isinstance(required, list):
         required.append('type')
     s['required'] = required
-    
     if inherits:
         extended = s
         s = {'allOf': [{'$ref': i} for i in inherits]}

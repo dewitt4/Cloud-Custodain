@@ -24,11 +24,51 @@ class SchemaTest(BaseTest):
             schema = generate()
             Validator.check_schema(schema)
         except Exception:
-            raise
             self.fail("Invalid schema")
 
-    def test_basic_skelton(self):
+    def test_empty_skeleton(self):
         self.assertEqual(validate({'policies': []}), [])
+
+    def test_semantic_error(self):
+        data = {
+            'policies': [
+                {'name': 'test',
+                 'resource': 'ec2',
+                 'filters': {
+                     'type': 'ebs',
+                     'skipped_devices': []}
+                    }]
+            }
+        errors = list(self.validator.iter_errors(data))
+        self.assertEqual(len(errors), 1)
+        error = specific_error(errors[0])
+        self.assertTrue(
+            len(errors[0].absolute_schema_path) < len(
+                error.absolute_schema_path))
+        self.assertEqual(
+            error.message,
+            "{'skipped_devices': [], 'type': 'ebs'} is not of type 'array'")
+
+    def test_semantic_error_on_value_derived(self):
+        data = {
+            'policies': [
+                {'name': 'test',
+                 'resource': 'ec2',
+                 'filters': [
+                     {'type': 'ebs',
+                      'skipped_devices': []}
+                     ]}
+            ]}
+        errors = list(self.validator.iter_errors(data))
+        self.assertEqual(len(errors), 1)
+        error = specific_error(errors[0])
+        self.assertTrue(
+            len(errors[0].absolute_schema_path) < len(
+                error.absolute_schema_path))
+        self.assertEqual(
+            error.message,
+            ("Additional properties are not allowed "
+             "('skipped_devices' was unexpected)"))
 
     def test_invalid_resource_type(self):
         data = {
@@ -55,6 +95,25 @@ class SchemaTest(BaseTest):
             errors = list(validator.iter_errors(data))
             self.assertEqual(len(errors), 1)
 
+    def test_nested_bool_operators(self):
+        data = {
+            'policies': [
+                {'name': 'test',
+                 'resource': 'ec2',
+                 'filters': [
+                     {'or': [
+                         {'tag:Role': 'webserver'},
+                         {'type': 'value', 'key': 'x', 'value': []},
+                         {'and': [
+                             {'tag:Name': 'cattle'},
+                             {'tag:Env': 'prod'}]
+                          }]
+                      }]
+                 }]
+            }
+        errors = list(self.validator.iter_errors(data))
+        self.assertEqual(errors, [])
+
     def test_value_filter_short_form(self):
         data = {
             'policies': [
@@ -64,6 +123,36 @@ class SchemaTest(BaseTest):
                      {"tag:Role": "webserver"}]}
                 ]}
 
+        errors = list(self.validator.iter_errors(data))
+        self.assertEqual(errors, [])
+
+    def test_event_inherited_value_filter(self):
+        data = {
+            'policies': [
+                {'name': 'test',
+                 'resource': 'ec2',
+                 'filters': [
+                     {'type': 'event',
+                      'key': "detail.requestParameters",
+                      "value": "absent"}]}]
+            }
+        errors = list(self.validator.iter_errors(data))
+        self.assertEqual(errors, [])
+
+    def test_ebs_inherited_value_filter(self):
+        data = {
+            'policies': [
+                {'name': 'test',
+                 'resource': 'ec2',
+                 'filters': [
+                     {'type': 'ebs',
+                      'key': 'Encrypted',
+                      'value': False,
+                      'skip-devices': [
+                          '/dev/sda1',
+                          '/dev/xvda']}
+                     ]}
+                ]}
         errors = list(self.validator.iter_errors(data))
         self.assertEqual(errors, [])
 

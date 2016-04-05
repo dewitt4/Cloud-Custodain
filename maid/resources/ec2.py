@@ -125,23 +125,10 @@ class StateTransitionFilter(object):
 @filters.register('ebs')
 class AttachedVolume(ValueFilter):
 
-    schema = {
-        'allOf': [
-            {'$ref': '#/definitions/filters/value'},
-            {
-                'title': 'Filter attached instance volumes',
-                'properties': {
-                    'type': {'enum': ['ebs']},
-                    'operator': {
-                        'enum': ['or', 'and']},
-                    'skip-devices': {
-                        'type': 'array',
-                        'items': {'type': 'string'}
-                    }
-                }
-            }
-        ]
-    }
+    schema = type_schema(
+        'ebs', rinherit=ValueFilter.schema,
+        **{'operator': {'enum': ['and', 'or']},
+           'skip-devices': {'type': 'array', 'items': {'type': 'string'}}})
 
     def process(self, resources, event=None):
         self.volume_map = self.get_volume_mapping(resources)
@@ -181,13 +168,7 @@ class AttachedVolume(ValueFilter):
 @filters.register('image')
 class InstanceImage(ValueFilter):
 
-    schema = {
-        'allOf': [
-            {'$ref': '#/definitions/filters/value'},
-            {'properties': {
-                'type': {'enum': ['image']}}}
-            ]
-    }
+    schema = type_schema('image', rinherit=ValueFilter.schema)
 
     def process(self, resources, event=None):
         self.image_map = self.get_image_mapping(resources)
@@ -213,8 +194,7 @@ class InstanceImage(ValueFilter):
 class InstanceOffHour(OffHour, StateTransitionFilter):
 
     valid_origin_states = ('running',)
-    schema = type_schema(
-        'offhour', inherits=['#/definitions/filters/time'])
+    schema = type_schema('offhour', inherits=['#/definitions/filters/time'])
 
     def process(self, resources, event=None):
         return super(InstanceOffHour, self).process(
@@ -226,8 +206,7 @@ class InstanceOnHour(OnHour, StateTransitionFilter):
     
     valid_origin_states = ('stopped',)
 
-    schema = type_schema(
-        'onhour', inherits=['#/definitions/filters/time'])
+    schema = type_schema('onhour', inherits=['#/definitions/filters/time'])
 
     def process(self, resources, event=None):
         return super(InstanceOnHour, self).process(
@@ -257,8 +236,7 @@ class UpTimeFilter(AgeFilter):
 
     date_attribute = "LaunchTime"
 
-    schema = type_schema(
-        'instance-uptime', days={'type': 'number'})
+    schema = type_schema('instance-uptime', days={'type': 'number'})
     
     
 @filters.register('instance-age')        
@@ -267,8 +245,7 @@ class InstanceAgeFilter(AgeFilter):
     date_attribute = "LaunchTime"
     ebs_key_func = operator.itemgetter('AttachTime')
 
-    schema = type_schema(
-        'instance-age', days={'type': 'number'})
+    schema = type_schema('instance-age', days={'type': 'number'})
     
     def get_resource_date(self, i):
         # LaunchTime is basically how long has the instance
@@ -290,7 +267,7 @@ class Start(BaseAction, StateTransitionFilter):
 
     valid_origin_states = ('stopped',)
 
-    schema = utils.type_schema('start')
+    schema = type_schema('start')
 
     def process(self, instances):
         instances = self.filter_instance_state(instances)
@@ -308,14 +285,8 @@ class Stop(BaseAction, StateTransitionFilter):
     """
     valid_origin_states = ('running', 'pending')
 
-    schema = {
-        'type': 'object',
-        'required': ['type'],
-        'properties': {
-            'type': {'enum': ['stop']},
-            'terminate-ephemeral': {'type': 'boolean'}
-            }
-        }
+    schema =  type_schema(
+        'stop', **{'terminate-ephemeral': {'type': 'boolean'}})
 
     def split_on_storage(self, instances):
         ephemeral = []
@@ -358,7 +329,7 @@ class Terminate(BaseAction, StateTransitionFilter):
 
     valid_origin_states = ('running', 'stopped', 'pending', 'stopping')
 
-    schema = utils.type_schema('terminate', force={'type': 'boolean'})
+    schema = type_schema('terminate', force={'type': 'boolean'})
 
     def process(self, instances):
         instances = self.filter_instance_state(instances)
