@@ -116,15 +116,13 @@ class Policy(object):
         if resource_ids is None:
             raise ValueError("Invalid push event mode %s" % self.data)
 
-        self.log.info('Found resource ids: %s' % resource_ids)
+        self.log.info('Found resource ids: %s' % resource_ids)        
         if not resource_ids:
-            self.log.warning("Could not find resource ids with %s" % (
-                mode.get('resources')))
+            self.log.warning("Could not find resource ids")
             return
 
         resources = self.resource_manager.get_resources(resource_ids)
         if 'debug' in event:
-
             self.log.info("Resources %s", resources)
 
         resources = self.resource_manager.filter_resources(resources, event)

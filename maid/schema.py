@@ -5,7 +5,9 @@ We start with a walkthrough of the various class registries
 of resource types and assemble and generate the schema.
 
 We do some specialization to reduce overall schema size
-via reference usage.
+via reference usage, although in some cases we prefer
+copies, due to issues with inheritance via reference (
+allowedProperties and enum extension).
 
 All filters and actions are annotated with schema typically using
 the utils.type_schema function.
@@ -20,9 +22,10 @@ Implemenation Notes / todo
 
 [x] Handling aliases - match same class under multiple names
   
-[ ] Better handling of inheritance than builtin spec support.
+[x] Better handling of inheritance than builtin spec support.
 
 """
+import json
 import logging
 
 from jsonschema import Draft4Validator as Validator
@@ -57,9 +60,10 @@ def specific_error(error):
     """Try to find the best error for humans to resolve
 
     The jsonschema.exceptions.best_match error is based on purely on a
-    mix of not anyOf, oneOf and schema depth. This often yields odd
-    results, instead we can use a bit of semantic knowledge of schema
-    to provide better results.
+    mix of a strong match (ie. not anyOf, oneOf) and schema depth,
+    this often yields odd results that are semantically confusing,
+    instead we can use a bit of structural knowledge of schema to
+    provide better results.
     """
     if error.validator not in ('anyOf', 'oneOf'):
         return error
@@ -75,7 +79,12 @@ def specific_error(error):
             if r in v['$ref']:
                 found = idx
         if found is not None:
+            # error context is a flat list of all validation
+            # failures, we have to index back to the policy
+            # of interest.
             for e in error.context:
+                # resource policies have a fixed path from
+                # the top of the schema
                 if e.absolute_schema_path[4] == found:
                     return specific_error(e)
             return specific_error(error.context[idx])
@@ -86,6 +95,8 @@ def specific_error(error):
             if '$ref' in v and v['$ref'].endswith(t):
                 found = idx
         if found is not None:
+            # Try to walk back an element/type ref to the specific
+            # error
             spath = list(error.context[0].absolute_schema_path)
             spath.reverse()
             slen = len(spath)
@@ -281,3 +292,8 @@ def process_resource(type_name, resource_type, resource_defs):
     r['policy'] = resource_policy
     return {'$ref': '#/definitions/resources/%s/policy' % type_name}
 
+
+if __name__ == '__main__':
+    # side effect registration
+    import maid.resources
+    print(json.dumps(generate(), indent=2))
