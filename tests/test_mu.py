@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
+import logging
 import unittest
 import StringIO
 import zipfile
@@ -28,6 +29,30 @@ class PolicyLambdaProvision(BaseTest):
     def assert_items(self, result, expected):
         for k, v in expected.items():
             self.assertEqual(v, result[k])
+
+    def test_cwe_update_no_change(self):
+        session_factory = self.replay_flight_data(
+            'test_cwe_update', zdata=True)
+        p = Policy({
+            'resource': 's3',
+            'name': 's3-bucket-policy',
+            'mode': {
+                'type': 'cloudtrail',
+                'events': ["CreateBucket"],
+            },
+            'filters': [
+                {'type': 'missing-policy-statement',
+                 'statement_ids': ['RequireEncryptedPutObject']}],
+            'actions': ['no-op']
+        }, Config.empty())
+        pl = PolicyLambda(p)
+        mgr = LambdaManager(session_factory)
+        result = mgr.publish(pl, 'Dev', role=self.role)
+        output = self.capture_logging('maid.lambda', level=logging.DEBUG)
+        result2 = mgr.publish(PolicyLambda(p), 'Dev', role=self.role)
+        self.assertEqual(len(output.getvalue().strip().split('\n')), 1)
+        self.assertEqual(result['FunctionName'], result2['FunctionName'])
+        mgr.remove(pl)
 
     def test_cwe_trail(self):
         session_factory = self.replay_flight_data('test_cwe_trail', zdata=True)
@@ -137,7 +162,8 @@ class PolicyLambdaProvision(BaseTest):
         mgr.remove(pl)
         
     def test_cwe_schedule(self):
-        session_factory = self.replay_flight_data('test_cwe_schedule', zdata=True)
+        session_factory = self.replay_flight_data(
+            'test_cwe_schedule', zdata=True)
         p = Policy({
             'resource': 'ec2',
             'name': 'periodic-ec2-checker',
