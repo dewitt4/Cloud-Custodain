@@ -66,7 +66,7 @@ class EBS(ResourceManager):
 class AttachedInstanceFilter(ValueFilter):
     """Filter volumes based on filtering on their attached instance"""
 
-    schema = type_schema('instance')
+    schema = type_schema('instance', rinherit=ValueFilter.schema)
 
     def process(self, resources, event=None):
         original_count = len(resources)
