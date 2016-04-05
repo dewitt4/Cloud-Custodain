@@ -40,29 +40,7 @@ def generateBucketContents(s3, bucket, contents):
             ContentType='text/plain')
     
 
-class BaseFTest(BaseTest):
-
-    def capture_logging(
-            self, name="", level=logging.INFO, log_file=None, formatter=None):
-        if log_file is None:
-            log_file = StringIO.StringIO()
-        log_handler = logging.StreamHandler(log_file)
-        if formatter:
-            log_handler.setFormatter(formatter)
-        logger = logging.getLogger(name)
-        logger.addHandler(log_handler)
-        old_logger_level = logger.level
-        logger.setLevel(level)
-        
-        @self.addCleanup
-        def reset_logging():
-            logger.removeHandler(log_handler)
-            logger.setLevel(old_logger_level)
-
-        return log_file
-
-    
-class S3Functional(BaseFTest):
+class S3Functional(BaseTest):
 
     def setUp(self):
         self.session = session_factory()

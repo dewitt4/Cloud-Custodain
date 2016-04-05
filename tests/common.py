@@ -26,7 +26,7 @@ from maid.utils import CONN_CACHE
 from zpill import PillTest
 
 
-logging.getLogger('placebo').setLevel(logging.WARNING)
+logging.getLogger('placebo.pill').setLevel(logging.WARNING)
 logging.getLogger('botocore').setLevel(logging.WARNING)
 
 

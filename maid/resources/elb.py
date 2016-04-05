@@ -148,14 +148,19 @@ class SSLPolicyFilter(Filter):
         - "Protocol-SSLv3"
     """
 
-    schema = type_schema(
-        'ssl-policy',
-        required={
-            'oneOf': [
-                ('type', 'whitelist'),
-                ('type', 'blacklist')]},
-        whitelist={'type': 'array', 'items': {'type': 'string'}},
-        blacklist={'type': 'array', 'items': {'type': 'string'}})
+    schema = {
+        'type': 'object',
+        'additionalProperties': False,
+        'oneOf': [
+            {'required': ['type', 'whitelist']},
+            {'required': ['type', 'blacklist']}
+            ],
+        'properties': {
+            'type': {'enum': ['ssl-policy']},
+            'whitelist': {'type': 'array', 'items': {'type': 'string'}},
+            'blacklist': {'type': 'array', 'items': {'type': 'string'}}
+            }
+        }
 
     def validate(self):
         if 'whitelist' in self.data and 'blacklist' in self.data:

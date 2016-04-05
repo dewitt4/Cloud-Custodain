@@ -45,7 +45,7 @@ def validate(data):
     if not errors:
         return []
     try:
-        e = specific_error(errors[0])
+        return [specific_error(errors[0])]
     except Exception:
         logging.exception(
             "specific_error failed, traceback, followed by fallback")

@@ -207,12 +207,12 @@ class LambdaManager(object):
                     yield f
     
     def publish(self, func, alias=None, role=None, s3_uri=None):
-        #log.info('Publishing maid policy lambda function %s', func.name)
-
-        result = self._create_or_update(func, role, s3_uri, qualifier=alias)
+        result, changed = self._create_or_update(func, role, s3_uri, qualifier=alias)
         func.arn = result['FunctionArn']
-        if alias:
+        if alias and changed:
             func.alias = self.publish_alias(result, alias)
+        else:
+            func.alias = "%s:%s" % (func.arn, alias)
 
         for e in func.get_events(self.session_factory):
             if e.add(func):
@@ -278,6 +278,7 @@ class LambdaManager(object):
         else:
             code_ref = {'ZipFile': archive.get_bytes()}
 
+        changed = False
         if lfunc:
             result = lfunc['Configuration']
             if archive.get_checksum() != lfunc['Configuration']['CodeSha256']:
@@ -285,6 +286,7 @@ class LambdaManager(object):
                 params = dict(FunctionName=func.name, Publish=True)
                 params.update(code_ref)
                 result = self.client.update_function_code(**params)
+                changed = True
             # TODO/Consider also set publish above to false, and publish
             # after configuration change?
             if self.delta_function(lfunc, func, role):
@@ -293,12 +295,15 @@ class LambdaManager(object):
                 del params['Runtime']
                 params['Role'] = role
                 result = self.client.update_function_configuration(**params)
+                changed = True
         else:
+            log.info('Publishing maid policy lambda function %s', func.name)
             params = func.get_config()
             params.update({'Publish': True, 'Code': code_ref, 'Role': role})
             result = self.client.create_function(**params)
+            changed = True
 
-        return result
+        return result, changed
 
     def _upload_func(self, s3_uri, func, archive):
         _, bucket, key_prefix = parse_s3(s3_uri)
@@ -694,8 +699,6 @@ class CloudWatchEventSource(object):
                 found = True
 
         if found:
-            log.debug("Existing cwe rule target found for %s on func:%s" % (
-                self, func_arn))
             return
 
         log.debug('Creating cwe rule target for %s on func:%s' % (
