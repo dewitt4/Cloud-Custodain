@@ -8,13 +8,12 @@ infrastructures by ensuring compliance to security policies, tag
 policies, garbage collection of unused resources, and cost management
 via offhours resource management. 
 
-
 # Links
 
-- [Docs] https://github.kdc.capitalone.com/pages/cloud-maid/cloud-maid/
+- [Docs https://github.kdc.capitalone.com/pages/cloud-maid/cloud-maid/ ]
 - [Architecture](docs/architecture.rst)
-- [Roadmap](docs/roadmap.rst)
 - [Developer Install](docs/developer.rst)
+
 - Resource Guides
   - [EC2](docs/ec2.rst)
   - [S3](docs/s3.rst)
