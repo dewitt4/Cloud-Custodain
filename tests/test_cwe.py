@@ -21,6 +21,18 @@ from maid.cwe import CloudWatchEvents
 
 class CloudWatchEventsFacadeTest(TestCase):
 
+    def test_get_ids(self):
+        self.assertEqual(
+            CloudWatchEvents.get_ids(
+                event_data('event-instance-state.json'),
+                {'type': 'ec2-instance-state'}),
+            ['i-a2d74f12'])
+        self.assertEqual(
+            CloudWatchEvents.get_ids(
+                {'detail': event_data('event-cloud-trail-run-instances.json')},
+                {'type': 'cloudtrail', 'events': ['RunInstances']}),
+            ['i-d49cf94c'])
+            
     def test_non_cloud_trail_event(self):
         for event in ['event-instance-state.json', 'event-scheduled.json']:
             self.assertFalse(CloudWatchEvents.match(event_data(event)))

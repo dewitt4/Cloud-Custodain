@@ -16,7 +16,11 @@ import jmespath
 
 class CloudWatchEvents(object):
     """A mapping of events to resource types."""
-    
+
+    # For common events that we want to match, just keep a short mapping.
+    # Users can specify arbitrary cloud watch events by specifying these
+    # values in their config, but keep the common case simple.
+
     trail_events = {
         # event source, resource type as keys, mapping to api call and
         # jmespath expression
@@ -66,7 +70,8 @@ class CloudWatchEvents(object):
         k = event['detail']['eventName']
 
         # We want callers to use a compiled expression, but want to avoid
-        # initialization cost of doing it without cause. Not thread safe.
+        # initialization cost of doing it without cause. Not thread safe,
+        # but usage context is lambda entry.
         if k in cls.trail_events:
             v = dict(cls.trail_events[k])
             if isinstance(v['ids'], basestring):
@@ -80,7 +85,7 @@ class CloudWatchEvents(object):
     def get_ids(cls, event, mode):
         mode_type = mode.get('type')
         if mode_type == 'ec2-instance-state':
-            resource_ids = filter(None, [event.get('detail', {}).get('instance-id')])
+            resource_ids = [event.get('detail', {}).get('instance-id')]
         elif mode_type == 'asg-instance-state':
             raise NotImplementedError("asg-instance-state event not supported")
         elif mode_type != 'cloudtrail':
@@ -98,4 +103,4 @@ class CloudWatchEvents(object):
         if not isinstance(resource_ids, list):
             resource_ids = [resource_ids]
 
-        return resource_ids
+        return filter(None, resource_ids)

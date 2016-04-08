@@ -451,7 +451,11 @@ class ScanBucket(BucketActionBase):
             with self.executor_factory(max_workers=10) as w:
                 try:
                     return self._process_bucket(b, p, key_log, w)
-                except ClientError, e:
+                except ClientError as e:
+                    if e.response['Error']['Code'] == 'NoSuchBucket':
+                        log.warning(
+                            "Bucket:%s removed while scanning" % b['Name'])
+                        return
                     log.exception(
                         "Error processing bucket:%s paginator:%s" % (
                             b['Name'], p))
