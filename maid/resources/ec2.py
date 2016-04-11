@@ -14,6 +14,8 @@
 import itertools
 import operator
 
+from dateutil.parser import parse
+
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import (
     FilterRegistry, AgeFilter, ValueFilter, Filter
@@ -165,19 +167,40 @@ class AttachedVolume(ValueFilter):
         return self.operator(map(self.match, volumes))
 
     
-@filters.register('image')
-class InstanceImage(ValueFilter):
-
-    schema = type_schema('image', rinherit=ValueFilter.schema)
-
-    def process(self, resources, event=None):
-        self.image_map = self.get_image_mapping(resources)
+class InstanceImageBase(object):
 
     def get_image_mapping(self, resources):
         ec2 = utils.local_session(self.manager.session_factory).client('ec2')
         image_ids = set([i['ImageId'] for i in resources])
         results = ec2.describe_images(ImageIds=list(image_ids))
         return {i['ImageId']: i for i in results['Images']}
+
+
+@filters.register('image-age')
+class ImageAge(AgeFilter, InstanceImageBase):
+
+    schema = type_schema('image-age', days={'type': 'number'})
+
+    def process(self, resources, event=None):
+        self.image_map = self.get_image_mapping(resources)
+        return super(ImageAge, self).process(resources, event)
+
+    def get_resource_date(self, i):
+        if i['ImageId'] not in self.image_map:
+            # our image is no longer available
+            return parse("2000-01-01T01:01:01.000Z")
+        image = self.image_map[i['ImageId']]
+        return parse(image['CreationDate'])
+
+
+@filters.register('image')
+class InstanceImage(ValueFilter, InstanceImageBase):
+
+    schema = type_schema('image', rinherit=ValueFilter.schema)
+
+    def process(self, resources, event=None):
+        self.image_map = self.get_image_mapping(resources)
+        return map(self, resources)
 
     def __call__(self, i):
         image = self.image_map.get(i['InstanceId'])
@@ -188,7 +211,7 @@ class InstanceImage(ValueFilter):
             # Match instead on empty skeleton?
             return False
         return self.match(image)
-        
+
             
 @filters.register('offhour')
 class InstanceOffHour(OffHour, StateTransitionFilter):

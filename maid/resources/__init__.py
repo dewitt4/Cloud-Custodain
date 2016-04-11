@@ -21,4 +21,5 @@ import ec2
 import elb
 import kms
 import rds
+import redshift
 import s3
