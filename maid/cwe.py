@@ -27,15 +27,14 @@ class CloudWatchEvents(object):
         'CreateBucket': {
             'ids': 'requestParameters.bucketName',
             'source': 'aws.s3'},
-        
-        'CreateVolume': {
-            'ids': 'responseElements.volumeId',
-            'source': 'ec2.amazonaws.com'},
 
+        'CreateCluster': {
+            'ids': 'requestParameters.clusterIdentifier',
+            'source': 'redshift.amazonaws.com'},
+        
         'CreateLoadBalancer': {
             'ids': 'requestParameters.loadBalancerName',
-            'source': 'elasticloadbalancing.amazonaws.com',
-            },
+            'source': 'elasticloadbalancing.amazonaws.com'},
         
         'CreateLoadBalancerPolicy': {
             'ids': 'requestParameters.loadBalancerName',
@@ -45,6 +44,10 @@ class CloudWatchEvents(object):
             'ids': 'requestParameters.dBInstanceIdentifier',
             'source': 'rds.amazonaws.com'},
 
+        'CreateVolume': {
+            'ids': 'responseElements.volumeId',
+            'source': 'ec2.amazonaws.com'},
+        
         'SetLoadBalancerPoliciesOfListener': {
             'ids': 'requestParameters.loadBalancerName',
             'source': 'elasticloadbalancing.amazonaws.com'},

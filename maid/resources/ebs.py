@@ -19,7 +19,7 @@ from concurrent.futures import as_completed
 
 from maid.actions import ActionRegistry, BaseAction
 from maid.filters import (
-    FilterRegistry, ValueFilter, ANNOTATION_KEY)
+    FilterRegistry, AgeFilter, ValueFilter, ANNOTATION_KEY)
 
 from maid.manager import ResourceManager, resources
 from maid import tags
@@ -33,6 +33,76 @@ filters = FilterRegistry('ebs.filters')
 actions = ActionRegistry('ebs.actions')
 
 tags.register_tags(filters, actions, 'VolumeId')
+
+
+@resources.register('ebs-snapshot')
+class Snapshot(ResourceManager):
+
+    filter_registry = FilterRegistry('ebs-snapshot.filters')
+    action_registry = ActionRegistry('ebs-snapshot.actions')
+
+    def resources(self):
+        c = self.session_factory().client('ec2')
+        query = self.resource_query()
+        if self._cache.load():
+            snaps = self._cache.get({'resource': 'ebs-snapshot'})
+            return self.filter_resources(snaps)
+        self.log.info('Querying ebs snapshots')
+        p = c.get_paginator('describe_snapshots')
+        results = p.paginate(Filters=query, OwnerIds=['self'])
+        snapshots = list(itertools.chain(*[rp['Snapshots'] for rp in results]))
+        self._cache.save({'resource': 'ebs-snapshot', 'q': query}, snapshots)
+        return self.filter_resources(snapshots)
+
+
+@Snapshot.filter_registry.register('age')
+class SnapshotAge(AgeFilter):
+
+    schema = type_schema('age', days={'type': 'number'})
+    date_attribute = 'StartTime'
+
+
+@Snapshot.action_registry.register('delete')
+class SnapshotDelete(BaseAction):
+
+    schema = type_schema(
+        'delete', **{'skip-ami-snapshots': {'type': 'boolean'}})
+
+    def process(self, snapshots):
+        self.image_snapshots = snaps = set()
+        # Be careful re image snapshots, we do this by default
+        # to keep things safe by default.
+        if self.data.get('skip-ami-snapshots', True):
+            # Auto filter ami referenced snapshots, build map
+            c = local_session(self.session_factory).client('ec2')
+            for i in c.describe_images(OwnerId=['self'])['Images']:
+                for dev in i.get('BlockDeviceMappings'):
+                    if 'Ebs' in dev:
+                        snaps.add(dev['Ebs']['SnapshotId'])
+
+        with self.executor_factory(max_workers=3) as w:
+            futures = []
+            for snapshot_set in chunks(reversed(snapshots), size=50):
+                futures.append(
+                    w.submit(self.process_snapshot_set, snapshot_set))
+                for f in as_completed(futures):
+                    if f.exception():
+                        self.log.error(
+                            "Exception deleting snapshot set \n %s" % (
+                                f.exception()))
+
+    def process_snapshot_set(self, snapshots_set):
+        c = local_session(self.session_factory).client('ec2')
+        for s in snapshots_set:
+            if s in self.image_snapshots:
+                continue
+            try:
+                c.delete_snapshot(
+                    SnapshotId=s, DryRun=self.manager.config.dryrun)
+            except ClientError as e:
+                if e.response['Error']['Code'] == "InvalidSnapshot.NotFound":
+                    continue
+                raise
 
 
 @resources.register('ebs')
