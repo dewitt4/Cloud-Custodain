@@ -355,7 +355,7 @@ class Suspend(BaseAction):
         asgs = [a for a in asgs if a['Instances']]
         self.log.debug("Filtered from %d to %d asgs with instances" % (
             original_count, len(asgs)))
-        with self.executor_factory(max_workers=10) as w:
+        with self.executor_factory(max_workers=3) as w:
             list(w.map(self.process_asg, asgs))
 
     def process_asg(self, asg):
@@ -392,7 +392,7 @@ class Resume(BaseAction):
         asgs = [a for a in asgs if a['SuspendedProcesses']]
         self.log.debug("Filtered from %d to %d suspended asgs" % (
             original_count, len(asgs)))
-        with self.executor_factory(max_workers=10) as w:
+        with self.executor_factory(max_workers=3) as w:
             list(w.map(self.process_asg, asgs))
                 
     def process_asg(self, asg):
