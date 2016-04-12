@@ -116,7 +116,8 @@ def assemble_bucket(item):
         ('get_bucket_acl', 'Acl', None, None),
         ('get_bucket_replication', 'Replication', None, None),
         ('get_bucket_versioning', 'Versioning', None, None),
-        ('get_bucket_lifecycle', 'Lifecycle', None, None),
+        ('get_bucket_website', 'Website', None, None)
+#        ('get_bucket_lifecycle', 'Lifecycle', None, None),
 #        ('get_bucket_cors', 'Cors'),        
 #        ('get_bucket_notification_configuration', 'Notification')
     ]
@@ -193,9 +194,11 @@ class NoGlobalGrants(Filter):
             return
         results = []
         for grant in acl['Grants']:
-            if not 'URI' in grant.get("Grantee", {}):
+            if 'URI' not in grant.get("Grantee", {}):
                 continue
             if grant['Grantee']['URI'] in [self.AUTH_ALL, self.GLOBAL_ALL]:
+                if grant['Permission'] == 'READ' and b['Website']:
+                    continue
                 results.append(grant['Permission'])
 
         c = bucket_client(self.manager.session_factory(), b)

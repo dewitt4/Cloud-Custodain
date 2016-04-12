@@ -46,7 +46,8 @@ class Snapshot(ResourceManager):
         query = self.resource_query()
         if self._cache.load():
             snaps = self._cache.get({'resource': 'ebs-snapshot'})
-            return self.filter_resources(snaps)
+            if snaps is not None:
+                return self.filter_resources(snaps)
         self.log.info('Querying ebs snapshots')
         p = c.get_paginator('describe_snapshots')
         results = p.paginate(Filters=query, OwnerIds=['self'])
