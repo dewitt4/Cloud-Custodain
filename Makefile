@@ -37,5 +37,5 @@ ghpages:
 	git checkout gh-pages && \
 	cp -r docs/build/html/* . && \
 	git add -u && \
-	git add _modules _sources _static generated *.html *.js && \
+	git add -A && \
 	git commit -m "Updated generated Sphinx documentation"

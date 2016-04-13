@@ -1,5 +1,4 @@
-Architecture
-============
+.. _architecture:
 
 Terms
 -----
