@@ -126,13 +126,37 @@ class Formatter(object):
     def to_csv(self, records, reverse=True):
         filtered = filter(self.filter_record, records)
         log.debug("Filtered from %d to %d" % (len(records), len(filtered)))
-        filtered.sort(key=lambda r: r['MaidDate'], reverse=reverse)
+        if 'MaidDate' in records[0]:
+            filtered.sort(
+                key=lambda r: r['MaidDate'], reverse=reverse)
         uniq = self.uniq_by_id(filtered)
         log.debug("Uniqued from %d to %d" % (len(filtered), len(uniq)))
         rows = map(self.extract_csv, uniq)
         return rows
 
 
+class S3Formatter(Formatter):
+
+    def __init__(self):
+        super(S3Formatter, self).__init__(
+            'Name',
+            ['creation-date',
+             'global-permissions',
+             'ownercontact',
+             'asv',
+             'env'])
+
+    def csv_fields(self, record, tag_map):
+        return [
+            record['Name'],
+            record['CreationDate'],
+            ','.join(record['GlobalPermissions']),
+            tag_map.get("OwnerContact", ""),
+            tag_map.get("ASV", ""),
+            tag_map.get("CMDBEnvironment", ""),
+        ]        
+
+            
 class EC2Formatter(Formatter):
     def __init__(self):
         super(EC2Formatter, self).__init__(
@@ -177,7 +201,8 @@ class ASGFormatter(Formatter):
 # FIXME: Should we use a PluginRegistry instead?
 RECORD_TYPE_FORMATTERS = {
     'ec2': EC2Formatter(),
-    'asg': ASGFormatter()
+    'asg': ASGFormatter(),
+    's3': S3Formatter()
 }
 
 
