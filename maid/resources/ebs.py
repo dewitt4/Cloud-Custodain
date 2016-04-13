@@ -52,7 +52,7 @@ class Snapshot(ResourceManager):
         p = c.get_paginator('describe_snapshots')
         results = p.paginate(Filters=query, OwnerIds=['self'])
         snapshots = list(itertools.chain(*[rp['Snapshots'] for rp in results]))
-        self._cache.save({'resource': 'ebs-snapshot', 'q': query}, snapshots)
+        self._cache.save({'resource': 'ebs-snapshot'}, snapshots)
         return self.filter_resources(snapshots)
 
 
@@ -75,12 +75,12 @@ class SnapshotDelete(BaseAction):
         # to keep things safe by default.
         if self.data.get('skip-ami-snapshots', True):
             # Auto filter ami referenced snapshots, build map
-            c = local_session(self.session_factory).client('ec2')
-            for i in c.describe_images(OwnerId=['self'])['Images']:
+            c = local_session(self.manager.session_factory).client('ec2')
+            for i in c.describe_images(Owners=['self'])['Images']:
                 for dev in i.get('BlockDeviceMappings'):
                     if 'Ebs' in dev:
                         snaps.add(dev['Ebs']['SnapshotId'])
-
+        log.info("Deleting %d snapshots", len(snapshots))
         with self.executor_factory(max_workers=3) as w:
             futures = []
             for snapshot_set in chunks(reversed(snapshots), size=50):
@@ -93,13 +93,14 @@ class SnapshotDelete(BaseAction):
                                 f.exception()))
 
     def process_snapshot_set(self, snapshots_set):
-        c = local_session(self.session_factory).client('ec2')
+        c = local_session(self.manager.session_factory).client('ec2')
         for s in snapshots_set:
-            if s in self.image_snapshots:
+            if s['SnapshotId'] in self.image_snapshots:
                 continue
             try:
                 c.delete_snapshot(
-                    SnapshotId=s, DryRun=self.manager.config.dryrun)
+                    SnapshotId=s['SnapshotId'],
+                    DryRun=self.manager.config.dryrun)
             except ClientError as e:
                 if e.response['Error']['Code'] == "InvalidSnapshot.NotFound":
                     continue
