@@ -76,7 +76,7 @@ def specific_error(error):
     if r is not None:
         found = None
         for idx, v in enumerate(error.validator_value):
-            if r in v['$ref']:
+            if r in v['$ref'].rsplit('/', 2):
                 found = idx
         if found is not None:
             # error context is a flat list of all validation
