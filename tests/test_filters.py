@@ -85,6 +85,26 @@ class TestAndFilter(unittest.TestCase):
             False)
 
 
+class TestRegexValue(unittest.TestCase):
+
+    def test_and(self):
+        f = filters.factory(
+            {'type': 'value',
+             'key': 'Color',
+             'value': '.*green.*',
+             'op': 'regex'})
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='green papaya')),
+            True)
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='blue')),
+            False)
+
+
 class TestInstanceAge(BaseFilterTest):
 
     def test_filter_instance_age(self):
