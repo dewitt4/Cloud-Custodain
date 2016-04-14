@@ -22,6 +22,7 @@ from dateutil.parser import parse
 import jmespath
 import logging
 import operator
+import re
 
 from maid.executor import ThreadPoolExecutor
 from maid.registry import PluginRegistry
@@ -35,6 +36,12 @@ class FilterValidationError(Exception): pass
 ANNOTATION_KEY = "MatchedFilters"
 
 
+def regex_match(value, regex):
+    # Note python 2.5+ internally cache regex
+    # would be nice to use re2
+    return bool(re.match(regex, value, flags=re.IGNORECASE))
+
+    
 OPERATORS = {
     'eq': operator.eq,
     'ne': operator.ne,
@@ -43,7 +50,8 @@ OPERATORS = {
     'gte': operator.ge,
     'le': operator.le,
     'lte': operator.le,
-    'lt': operator.lt,    
+    'lt': operator.lt,
+    'regex': regex_match,
     'in': lambda x, y: x in y,
     'ni': lambda x, y: x not in y}
 
@@ -189,7 +197,14 @@ class ValueFilter(Filter):
         if 'op' in self.data:
             if not self.data['op'] in OPERATORS:
                 raise FilterValidationError(
-                    "Invalid operatorin value filter %s" %  self.data)
+                    "Invalid operator in value filter %s" %  self.data)
+            if self.data['op'] == 'regex':
+                # Sanity check that we can compile
+                try:
+                    re.compile(self.data['value'])
+                except re.error as e:
+                    raise FilterValidationError(
+                        "Invalid regex: %s %s" % (e, self.data))
         return self
 
     def __call__(self, i):

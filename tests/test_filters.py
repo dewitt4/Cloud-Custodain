@@ -85,6 +85,35 @@ class TestAndFilter(unittest.TestCase):
             False)
 
 
+class TestRegexValue(unittest.TestCase):
+
+    def test_regex_validate(self):
+        self.assertRaises(
+            base_filters.FilterValidationError,
+            filters.factory,
+            {'type': 'value',
+             'key': 'Color',
+             'value': '*green',
+             'op': 'regex'})
+        
+    def test_regex_match(self):
+        f = filters.factory(
+            {'type': 'value',
+             'key': 'Color',
+             'value': '.*green.*',
+             'op': 'regex'})
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='green papaya')),
+            True)
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='blue')),
+            False)
+
+
 class TestInstanceAge(BaseFilterTest):
 
     def test_filter_instance_age(self):
