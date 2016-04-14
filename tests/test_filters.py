@@ -87,7 +87,16 @@ class TestAndFilter(unittest.TestCase):
 
 class TestRegexValue(unittest.TestCase):
 
-    def test_and(self):
+    def test_regex_validate(self):
+        self.assertRaises(
+            base_filters.FilterValidationError,
+            filters.factory,
+            {'type': 'value',
+             'key': 'Color',
+             'value': '*green',
+             'op': 'regex'})
+        
+    def test_regex_match(self):
         f = filters.factory(
             {'type': 'value',
              'key': 'Color',

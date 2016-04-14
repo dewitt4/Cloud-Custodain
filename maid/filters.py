@@ -197,7 +197,14 @@ class ValueFilter(Filter):
         if 'op' in self.data:
             if not self.data['op'] in OPERATORS:
                 raise FilterValidationError(
-                    "Invalid operatorin value filter %s" %  self.data)
+                    "Invalid operator in value filter %s" %  self.data)
+            if self.data['op'] == 'regex':
+                # Sanity check that we can compile
+                try:
+                    re.compile(self.data['value'])
+                except re.error as e:
+                    raise FilterValidationError(
+                        "Invalid regex: %s %s" % (e, self.data))
         return self
 
     def __call__(self, i):
