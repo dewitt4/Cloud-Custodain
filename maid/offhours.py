@@ -16,10 +16,11 @@ Offhours support
 ================
 
 Turn resources off based on a schedule. There are two usage modes that
-can be configured, opt-in with resources that wish to participate specifying
-a tag value with their configuration for offhours. Additionally opt-out
-where the schedule is set to apply to all resources that match the policy
-filters, resources can specify a tag value then to allow opt-out behavior.
+can be configured, opt-in with resources that wish to participate
+specifying a tag value with their configuration for
+offhours. Additionally opt-out where the schedule is set to apply to
+all resources that match the policy filters, resources can specify a
+tag value then to allow opt-out behavior.
 
 Schedules
 =========
@@ -119,6 +120,7 @@ Options
            tag: downtime
            onhour: 8
            offhour: 20
+
 """
 
 """

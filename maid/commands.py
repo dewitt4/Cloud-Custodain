@@ -18,7 +18,7 @@ import sys
 import time
 
 from maid.credentials import SessionFactory
-from maid.report import report as do_report
+from maid.reports import report as do_report
 from maid import mu, schema
 
 
