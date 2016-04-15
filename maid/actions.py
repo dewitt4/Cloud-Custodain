@@ -133,10 +133,11 @@ class Notify(BaseAction):
     
     schema = {
         'type': 'object',
-        'required': ['type'],
+        'required': ['type', 'transport', 'to'],
         'properties': {
             'type': {'enum': ['notify']},
             'to': {'type': 'array', 'items': {'type': 'string'}},
+            'subject': {'type': 'string'},
             'template': {'type': 'string'},
             'transport': {
                 'type': 'object',

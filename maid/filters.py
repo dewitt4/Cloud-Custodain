@@ -38,10 +38,14 @@ ANNOTATION_KEY = "MatchedFilters"
 
 
 def glob_match(value, pattern):
+    if not isinstance(value, basestring):
+        return False
     return fnmatch.fnmatch(value, pattern)
 
 
 def regex_match(value, regex):
+    if not isinstance(value, basestring):
+        return False
     # Note python 2.5+ internally cache regex
     # would be nice to use re2
     return bool(re.match(regex, value, flags=re.IGNORECASE))
