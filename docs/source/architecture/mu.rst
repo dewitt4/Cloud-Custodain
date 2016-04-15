@@ -1,5 +1,5 @@
-__notes__ = """
-Architecture implementation notes
+Mu
+--
 
 We need to load policies for lambda functions a bit differently so that
 they can create the resources needed.
@@ -11,12 +11,12 @@ For full lifecycle management we need to be able to determine
  - all resources created by maid
  - diff of current resources to goal state of resources
  - remove previous policy lambdas and their event sources
-   - we need either the previous config file or we need
-     to assume only one maid running lambdas in a given
-     account.
+   - we need either the previous config file or we need to assume only one maid running lambdas in a given account.
 
  
 Sample interactions
+
+.. code-block:: yaml
 
   $ cloud-maid resources -c config.yml
 
@@ -86,7 +86,7 @@ TODO:
    both via metadata and/or versioning.
 
 Todo
-----
+####
 
 Maid additionally could use lambda execution for resource intensive policy
 actions, using dynamodb for results aggregation, and a periodic result checker,

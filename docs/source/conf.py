@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Cloud Maid documentation build configuration file, created by
+# Cloud Custodian documentation build configuration file, created by
 # sphinx-quickstart on Mon Dec 21 08:34:24 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -15,11 +15,12 @@
 import sys
 import os
 import shlex
+import sphinx_rtd_theme
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- General configuration ------------------------------------------------
 
@@ -35,7 +36,7 @@ extensions = [
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+#templates_path = ['_templates']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -49,8 +50,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Cloud Maid'
-copyright = u'2015, Capital One Services, LLC'
+project = u'Cloud Custodian'
+copyright = u'2016, Capital One Services, LLC'
 author = u'Kapil Thangavelu'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -111,7 +112,7 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'agogo'
+html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -119,7 +120,8 @@ html_theme = 'agogo'
 #html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = []
+#html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -130,12 +132,12 @@ html_theme = 'agogo'
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+#html_logo = 'c1_labs.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+html_favicon = 'c1_labs.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -172,7 +174,7 @@ html_static_path = ['_static']
 #html_split_index = False
 
 # If true, links to the reST sources are added to the pages.
-#html_show_sourcelink = True
+html_show_sourcelink = False
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 #html_show_sphinx = True
@@ -203,7 +205,7 @@ html_static_path = ['_static']
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'CloudMaiddoc'
+htmlhelp_basename = 'CloudCustodiandoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -225,7 +227,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'CloudMaid.tex', u'Cloud Maid Documentation',
+  (master_doc, 'CloudCustodian.tex', u'Cloud Custodian Documentation',
    u'Kapil Thangavelu', 'manual'),
 ]
 
@@ -255,7 +257,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'cloudmaid', u'Cloud Maid Documentation',
+    (master_doc, 'cloudCustodian', u'Cloud Custodian Documentation',
      [author], 1)
 ]
 
@@ -269,8 +271,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'CloudMaid', u'Cloud Maid Documentation',
-   author, 'CloudMaid', 'One line description of project.',
+  (master_doc, 'CloudCustodian', u'Cloud Custodian Documentation',
+   author, 'CloudCustodian', 'One line description of project.',
    'Miscellaneous'),
 ]
 

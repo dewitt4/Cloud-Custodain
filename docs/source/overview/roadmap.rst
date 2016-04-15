@@ -1,5 +1,5 @@
 Roadmap
-=======
+-------
 
 - [x] Profile and Region Policy Spec
 - [x] PolicyCollection management
@@ -9,7 +9,7 @@ Roadmap
 - [x] Functional Tests
 
 Code Health
------------
+^^^^^^^^^^^
 
 - [ ] Element base for filter and actions
 - [ ] Validate schema from yaml
@@ -17,7 +17,7 @@ Code Health
 
 
 Todo
-----
+^^^^
 
 - [ ] Outbound Email
 - [ ] Cloud Trail Access
