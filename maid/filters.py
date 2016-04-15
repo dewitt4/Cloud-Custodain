@@ -16,13 +16,14 @@ Resource Filtering Logic
 """
 
 from datetime import datetime, timedelta
-from dateutil.tz import tzutc
-from dateutil.parser import parse
-
-import jmespath
+import fnmatch
 import logging
 import operator
 import re
+
+from dateutil.tz import tzutc
+from dateutil.parser import parse
+import jmespath
 
 from maid.executor import ThreadPoolExecutor
 from maid.registry import PluginRegistry
@@ -36,7 +37,15 @@ class FilterValidationError(Exception): pass
 ANNOTATION_KEY = "MatchedFilters"
 
 
+def glob_match(value, pattern):
+    if not isinstance(value, basestring):
+        return False
+    return fnmatch.fnmatch(value, pattern)
+
+
 def regex_match(value, regex):
+    if not isinstance(value, basestring):
+        return False
     # Note python 2.5+ internally cache regex
     # would be nice to use re2
     return bool(re.match(regex, value, flags=re.IGNORECASE))
@@ -51,6 +60,7 @@ OPERATORS = {
     'le': operator.le,
     'lte': operator.le,
     'lt': operator.lt,
+    'glob': glob_match,
     'regex': regex_match,
     'in': lambda x, y: x in y,
     'ni': lambda x, y: x not in y}
