@@ -84,7 +84,27 @@ class TestAndFilter(unittest.TestCase):
                 Color='blue')),
             False)
 
+        
+class TestGlobValue(unittest.TestCase):        
 
+    def test_regex_match(self):
+        f = filters.factory(
+            {'type': 'value',
+             'key': 'Color',
+             'value': '*green*',
+             'op': 'glob'})
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='mighty green papaya')),
+            True)
+        self.assertEqual(
+            f(instance(
+                Architecture='x86_64',
+                Color='blue')),
+            False)
+    
+    
 class TestRegexValue(unittest.TestCase):
 
     def test_regex_validate(self):
