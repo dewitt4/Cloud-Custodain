@@ -174,7 +174,6 @@ def maid_archive(skip=None):
             # Don't bother with shared libs across platforms
             if f.endswith('.so') and host_platform != 'Linux':
                 files.remove(f)
-                
         if os.path.basename(root) == 'site-packages':
             for n in tuple(dirs):
                 if n not in required:
@@ -398,7 +397,15 @@ class AbstractLambdaFunction:
 
     @abc.abstractproperty
     def role(self):
-        """ """                
+        """ """
+
+    @abc.abstractproperty
+    def subnets(self):
+        """ """
+
+    @abc.abstractproperty
+    def security_groups(self):
+        """ """
 
     @abc.abstractmethod
     def get_events(self, session_factory):
@@ -409,7 +416,7 @@ class AbstractLambdaFunction:
         """Return the lambda distribution archive object."""
         
     def get_config(self):
-        return {
+        conf = {
             'FunctionName': self.name,
             'MemorySize': self.memory_size,
             'Role': self.role,
@@ -417,7 +424,12 @@ class AbstractLambdaFunction:
             'Runtime': self.runtime,
             'Handler': self.handler,
             'Timeout': self.timeout}
-        
+        if self.subnets and self.security_groups:
+            conf['VpcConfig'] = {
+                'SubnetIds': self.subnets,
+                'SecurityGroupIds': self.security_groups}
+        return conf
+
 
 class LambdaFunction(AbstractLambdaFunction):
 
@@ -459,6 +471,14 @@ class LambdaFunction(AbstractLambdaFunction):
     @property
     def role(self):
         return self.func_data['role']
+
+    @property
+    def security_groups(self):
+        return self.func_data.get('security_groups', None)
+
+    @property
+    def subnets(self):
+        return self.func_data.get('subnets', None)
 
     def get_events(self, session_factory):
         return self.func_data['events']
@@ -503,6 +523,14 @@ class PolicyLambda(AbstractLambdaFunction):
     @property
     def memory_size(self):
         return self.policy.data['mode'].get('memory', 512)
+
+    @property
+    def security_groups(self):
+        return None
+
+    @property
+    def subnets(self):
+        return None
 
     def get_events(self, session_factory):
         events = []
