@@ -1,23 +1,8 @@
 Roadmap
 -------
 
-- [x] Profile and Region Policy Spec
-- [x] PolicyCollection management
-- [ ] Tag Value Validation, CMDB Integration (Plugin)
-- [x] S3 Output
-- [x] Cloudwatch Metrics
-- [x] Functional Tests
-
-Code Health
-^^^^^^^^^^^
-
-- [ ] Element base for filter and actions
-- [ ] Validate schema from yaml
-- [ ] exec context abstraction for managers and elements
-
-
-Todo
-^^^^
-
-- [ ] Outbound Email
-- [ ] Cloud Trail Access
+We hope to integrate with CMDBs in future, so we can do Tag Value
+validation. Active validation of the values provides better traceability of
+resource ownership in larger shared AWS accounts. We also continue to add
+support for additional AWS resources. Our long term goal is to additional
+cloud providers (e.g., Azure and Google) if there is interest.

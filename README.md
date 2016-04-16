@@ -1,12 +1,8 @@
-# Cloud Maid
+[![Build Status](http://maid-dev-ci.cloud.capitalone.com/api/badges/cloud-maid/cloud-maid/status.svg)](http://maid-dev-ci.cloud.capitalone.com/cloud-maid/cloud-maid)
 
-Cloud maid is a rules engine that provides for querying, filtering,
-and applying actions to AWS resources.
+# Cloud Custodian
 
-Goals for the project are to help organizations manage their cloud
-infrastructures by ensuring compliance to security policies, tag
-policies, garbage collection of unused resources, and cost management
-via offhours resource management. 
+Cloud Custodian is a stateless rules engine for policy definition and enforcement, with metrics and detailed reporting for AWS. It consolidates many of the enterprise and departmental specific cloud controls organizations have into one tool. Organizations can use Custodian to manage their AWS environments by ensuring compliance to security policies, tag policies, garbage collection of unused resources, and cost management via off-hours resource management, all from one tool. Custodian policies are written in simple YAML configuration files that specify given resource types and are constructed from a vocabulary of filters and actions. Custodian was created to unify the dozens of tools and scripts most organizations use for managing their AWS accounts into one open source tool.
 
 # Links
 
@@ -17,7 +13,7 @@ via offhours resource management.
 - Resource Guides
   - [EC2](docs/ec2.rst)
   - [S3](docs/s3.rst)
- 
+
 
 # Usage
 
@@ -75,13 +71,3 @@ the *identify* subcommand.
 
 For additional information please look at the individual
 resource guides and the filtering docs linked above.
-
-
-
-
-
-  
-
-
-
-
