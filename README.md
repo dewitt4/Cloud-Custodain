@@ -1,6 +1,6 @@
-# Cloud Maid
+# Cloud Custodian
 
-Cloud maid is a rules engine that provides for querying, filtering,
+Cloud custodian is a rules engine that provides for querying, filtering,
 and applying actions to AWS resources.
 
 Goals for the project are to help organizations manage their cloud
@@ -10,7 +10,7 @@ via offhours resource management.
 
 # Links
 
-- [Docs https://github.kdc.capitalone.com/pages/cloud-maid/cloud-maid/ ]
+- [Docs](https://github.com/pages/capitalone/cloud-custodian/)
 - [Architecture](docs/architecture.rst)
 - [Developer Install](docs/developer.rst)
 
@@ -56,10 +56,11 @@ policies:
 
 ```
 
-Given that, you can run cloud-maid via
+Given that, you can run cloud-custodian via
 
 ```
-  $ cloud-maid run -c policy.yml
+  $ mkdir out
+  $ custodian run -c policy.yml -s out
 ```
 By default any run of the maid will output csv of the instances operated on.
 
@@ -70,7 +71,7 @@ One is to just query for instances matching and export them as csv or json with
 the *identify* subcommand.
 
 ```
-  $ cloud-maid identify -c policy.yml > instances.json
+  $ custodian identify -c policy.yml > instances.json
 ```
 
 For additional information please look at the individual

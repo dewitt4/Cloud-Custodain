@@ -22,7 +22,8 @@ from .common import BaseTest
 
 class TestVolumeFilter(BaseTest):
 
-    def test_ec2_attached_ebs_filter(self):
+    # DISABLED / Re-record flight data on public account
+    def disabled_xtest_ec2_attached_ebs_filter(self):
         session_factory = self.replay_flight_data(
             'test_ec2_attached_ebs_filter')
         policy = self.load_policy({
@@ -37,7 +38,8 @@ class TestVolumeFilter(BaseTest):
         resources = policy.run()
         self.assertEqual(len(resources), 7)
 
-    def test_ec2_attached_volume_skip_block(self):
+    # DISABLED / Re-record flight data on public account        
+    def disabled_xtest_ec2_attached_volume_skip_block(self):
         session_factory = self.replay_flight_data(
             'test_ec2_attached_ebs_filter')
         policy = self.load_policy({
