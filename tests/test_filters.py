@@ -252,7 +252,7 @@ class TestInstanceValue(BaseFilterTest):
 
     def test_jmespath(self):
         self.assertFilter(
-            {'Placement.AvailabilityZone': 'us-east-1b'},
+            {'Placement.AvailabilityZone': 'us-west-2c'},
             instance(),
             True)
 
@@ -282,7 +282,7 @@ class TestInstanceValue(BaseFilterTest):
 
     def test_complex_value_filter(self):
         self.assertFilter(
-            {"key": "length(BlockDeviceMappings[?Ebs.DeleteOnTermination == `false`].Ebs.DeleteOnTermination)",
+            {"key": "length(BlockDeviceMappings[?Ebs.DeleteOnTermination == `true`].Ebs.DeleteOnTermination)",
              "value": 0,
              "type": "value",
              "op": "gt"},
@@ -291,7 +291,7 @@ class TestInstanceValue(BaseFilterTest):
 
     def test_not_null_filter(self):
         self.assertFilter(
-            {"key": "tag:aws:cloudformation:stack-name",
+            {"key": "Hypervisor",
              "value": "not-null",
              "type": "value"},
             instance(),

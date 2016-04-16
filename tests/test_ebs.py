@@ -24,7 +24,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 class CopyInstanceTagsTest(BaseTest):
 
-    def test_copy_instance_tags(self):
+    # DISABLED / Re-record flight data on public account
+    def disabled_xtest_copy_instance_tags(self):
         # More a functional/coverage test then a unit test.        
         self.patch(
             CopyInstanceTags, 'executor_factory', MainThreadExecutor)
@@ -57,7 +58,8 @@ class CopyInstanceTagsTest(BaseTest):
             
 class EncryptExtantVolumesTest(BaseTest):
 
-    def test_encrypt_volumes(self):
+    # DISABLED / Re-record flight data on public account
+    def disabled_xtest_encrypt_volumes(self):
         # More a functional/coverage test then a unit test.
         self.patch(
             EncryptInstanceVolumes, 'executor_factory', MainThreadExecutor)

@@ -21,7 +21,8 @@ from maid.cwe import CloudWatchEvents
 
 class CloudWatchEventsFacadeTest(TestCase):
 
-    def test_get_ids(self):
+    # DISABLED / Record flight data
+    def disabled_xtest_get_ids(self):
         self.assertEqual(
             CloudWatchEvents.get_ids(
                 event_data('event-instance-state.json'),

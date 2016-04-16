@@ -117,7 +117,7 @@ def load_data(file_name, state=None, **kw):
 
 
 def instance(state=None, **kw):
-    return load_data('instance.json', state, **kw)
+    return load_data('ec2-instance.json', state, **kw)
 
 
 class Bag(dict):
