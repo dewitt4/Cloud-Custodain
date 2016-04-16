@@ -105,7 +105,7 @@ class Notify(BaseAction):
     extraction, batch periods, etc.
 
     For expedience and flexibility then, we instead send the data to
-    an sqs queue, for processing. ie. actual communications is DIY.
+    an sqs queue, for processing. ie. actual communications is DIY atm.
 
     Example::
 
