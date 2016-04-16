@@ -50,7 +50,7 @@ def assumed_session(role_arn, session_name, session=None):
       role_arn: iam role arn to assume
       session_name: client session identifier
       session: an optional extant session, note session is captured
-           in a function closure for renewing the sts assumed role.
+      in a function closure for renewing the sts assumed role.
 
     :return: a boto3 session using the sts assumed role credentials
 
