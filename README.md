@@ -29,7 +29,7 @@ resources.
 
 ## Links
 
-- [Docs](https://github.com/pages/capitalone/cloud-custodian/)
+- [Docs](http://www.capitalone.io/cloud-custodian/)
 
 - [Developer Install](docs/developer.rst)
 
