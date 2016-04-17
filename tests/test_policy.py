@@ -14,8 +14,8 @@
 import shutil
 import tempfile
 
-from maid import policy, manager
-from maid.resources.ec2 import EC2
+from c7n import policy, manager
+from c7n.resources.ec2 import EC2
 
 from .common import BaseTest, Config
 

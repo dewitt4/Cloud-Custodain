@@ -2,21 +2,19 @@
 from botocore.exceptions import ClientError
 import boto3
 
-import logging
 import os
 import shutil
-import StringIO
 import subprocess
 import tempfile
 import unittest
 
 
-from maid.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
+from c7n.resources.s3 import S3, EncryptExtantKeys, EncryptedPrefix
 
-from maid.tests.common import BaseTest, Config, Bag
+from c7n.tests.common import BaseTest, Config, Bag
 
 
-TEST_S3_BUCKET = os.environ.get('TEST_BUCKET', "cloud-maid-ftest")
+TEST_S3_BUCKET = os.environ.get('TEST_BUCKET', "cloud-c7n-ftest")
 
 
 def session_factory():

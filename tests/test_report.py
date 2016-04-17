@@ -15,7 +15,7 @@ import unittest
 
 from dateutil.parser import parse as date_parse
 
-from maid.reports.csvout import RECORD_TYPE_FORMATTERS
+from c7n.reports.csvout import RECORD_TYPE_FORMATTERS
 from .common import load_data
 
 
@@ -26,7 +26,7 @@ class TestEC2Report(unittest.TestCase):
         self.headers = data['ec2']['headers']
         self.rows = data['ec2']['rows']
         for rec in self.records.values():
-            rec['MaidDate'] = date_parse(rec['MaidDate'])
+            rec['CustodianDate'] = date_parse(rec['CustodianDate'])
 
     def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("ec2")
@@ -49,7 +49,7 @@ class TestASGReport(unittest.TestCase):
         self.headers = data['asg']['headers']
         self.rows = data['asg']['rows']
         for rec in self.records.values():
-            rec['MaidDate'] = date_parse(rec['MaidDate'])
+            rec['CustodianDate'] = date_parse(rec['CustodianDate'])
 
     def test_csv(self):
         formatter = RECORD_TYPE_FORMATTERS.get("asg")

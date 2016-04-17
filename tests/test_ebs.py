@@ -14,9 +14,9 @@
 import logging
 
 from .common import BaseTest
-from maid.resources.ebs import (
+from c7n.resources.ebs import (
     CopyInstanceTags, EncryptInstanceVolumes)
-from maid.executor import MainThreadExecutor
+from c7n.executor import MainThreadExecutor
 
 
 logging.basicConfig(level=logging.DEBUG)

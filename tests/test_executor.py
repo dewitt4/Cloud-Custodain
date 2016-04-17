@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from maid import executor
+from c7n import executor
 
 import unittest
 

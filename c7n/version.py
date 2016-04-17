@@ -12,6 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from unittest import TestCase
-from c7n import cache
+version = "0.8.2" 

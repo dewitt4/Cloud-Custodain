@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .common import BaseTest
-from maid.filters import FilterValidationError
+from c7n.filters import FilterValidationError
 from nose.tools import raises
 
 

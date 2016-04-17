@@ -15,7 +15,7 @@ import time
 import unittest
 import logging
 
-from maid.log import CloudWatchLogHandler
+from c7n.log import CloudWatchLogHandler
 from .common import BaseTest
 
 
@@ -24,7 +24,7 @@ class LogTest(BaseTest):
     def test_existing_stream(self):
         session_factory = self.replay_flight_data('test_log_existing_stream')
         handler = CloudWatchLogHandler(session_factory=session_factory)
-        log = logging.getLogger("maid")
+        log = logging.getLogger("custodian")
         log.addHandler(handler)
         self.addCleanup(log.removeHandler, handler)
         log.setLevel(logging.DEBUG)
@@ -37,7 +37,7 @@ class LogTest(BaseTest):
 
     def test_time_flush(self):
         session_factory = self.replay_flight_data('test_log_time_flush')
-        log = logging.getLogger("test-maid")
+        log = logging.getLogger("test-c7n")
         handler = CloudWatchLogHandler(
             "test-maid-4", "alpha", session_factory=session_factory)
         handler.batch_interval = 1
@@ -55,7 +55,7 @@ class LogTest(BaseTest):
     def test_transport_buffer_flush(self):
         session_factory = self.replay_flight_data(
             'test_transport_buffer_flush')
-        log = logging.getLogger("test-maid")
+        log = logging.getLogger("test-c7n")
         handler = CloudWatchLogHandler(
             "test-maid-4", "alpha", session_factory=session_factory)
         handler.batch_size = 5

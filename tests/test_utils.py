@@ -14,7 +14,7 @@
 
 import unittest
 
-from maid import utils
+from c7n import utils
 
 
 class UtilTest(unittest.TestCase):

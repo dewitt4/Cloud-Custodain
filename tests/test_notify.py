@@ -17,7 +17,7 @@ class NotifyTest(BaseTest):
                 {'type': 'notify',
                  'transport' : {
                      'type': 'sqs',
-                     'queue': 'https://sqs.us-east-1.amazonaws.com/619193117841/maid-delivery',
+                     'queue': 'https://sqs.us-east-1.amazonaws.com/652117/maid-delivery',
                      }
                  }
                 ]

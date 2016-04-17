@@ -19,7 +19,7 @@ import tempfile
 
 from unittest import TestCase
 
-from maid.resources.s3 import (
+from c7n.resources.s3 import (
 #    EncryptedPrefix,
 #    NoGlobalGrants,
 #    EncryptionRequiredPolicy,
@@ -28,7 +28,7 @@ from maid.resources.s3 import (
     restore_complete
 )
 
-from maid.resources import s3 as s3_resource
+from c7n.resources import s3 as s3_resource
 
 
 class RestoreCompletionTest(TestCase):

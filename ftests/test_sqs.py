@@ -9,10 +9,10 @@ import unittest
 
 from concurrent.futures import as_completed
 
-from maid.sqsexec import SQSExecutor, MessageIterator
-from maid import utils
+from c7n.sqsexec import SQSExecutor, MessageIterator
+from c7n import utils
 
-TEST_SQS_PREFIX = os.environ.get("TEST_SQS_PREFIX", "cloud-maid-ftest")
+TEST_SQS_PREFIX = os.environ.get("TEST_SQS_PREFIX", "cloud-c7n-ftest")
 
 
 def session_factory():

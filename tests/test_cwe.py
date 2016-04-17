@@ -16,7 +16,7 @@ from unittest import TestCase
 
 from .common import event_data
 
-from maid.cwe import CloudWatchEvents
+from c7n.cwe import CloudWatchEvents
 
 
 class CloudWatchEventsFacadeTest(TestCase):

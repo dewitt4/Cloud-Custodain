@@ -13,9 +13,9 @@
 # limitations under the License.
 import unittest
 
-from maid.resources import ec2
-from maid.resources.ec2 import actions, QueryFilter
-from maid import tags
+from c7n.resources import ec2
+from c7n.resources.ec2 import actions, QueryFilter
+from c7n import tags
 
 from .common import BaseTest
 

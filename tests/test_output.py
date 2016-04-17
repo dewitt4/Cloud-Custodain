@@ -19,14 +19,10 @@ import unittest
 import shutil
 import os
 
-from maid.ctx import ExecutionContext
-from maid.output import MetricsOutput, S3Output
+from c7n.ctx import ExecutionContext
+from c7n.output import S3Output
 
 from .common import Config, Bag
-
-
-class MetricsOutput(unittest.TestCase):
-    pass
 
 
 class S3OutputTest(unittest.TestCase):
@@ -59,7 +55,7 @@ class S3OutputTest(unittest.TestCase):
         output = self.get_s3_output()
         output.join_log()
         
-        l = logging.getLogger('maid.s3')
+        l = logging.getLogger('custodian.s3')
 
         # recent versions of nose mess with the logging manager
         v = l.manager.disable
@@ -72,7 +68,7 @@ class S3OutputTest(unittest.TestCase):
         # Reset logging.manager back to nose configured value
         l.manager.disable = v
         
-        with open(os.path.join(output.root_dir, "maid-run.log")) as fh:
+        with open(os.path.join(output.root_dir, "custodian-run.log")) as fh:
             content = fh.read().strip()
             self.assertTrue(content.endswith('hello world'))
 

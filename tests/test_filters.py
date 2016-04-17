@@ -16,9 +16,9 @@ from dateutil import tz
 from datetime import datetime, timedelta
 import unittest
 
-from maid import filters as base_filters
-from maid.resources.ec2 import filters
-from maid.utils import annotation
+from c7n import filters as base_filters
+from c7n.resources.ec2 import filters
+from c7n.utils import annotation
 from .common import instance, event_data
 
 

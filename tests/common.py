@@ -19,9 +19,9 @@ import shutil
 import tempfile
 import yaml
 
-from maid import policy
-from maid.ctx import ExecutionContext
-from maid.utils import CONN_CACHE
+from c7n import policy
+from c7n.ctx import ExecutionContext
+from c7n.utils import CONN_CACHE
 
 from zpill import PillTest
 

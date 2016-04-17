@@ -21,17 +21,17 @@ import logging
 import os
 import sys
 
-import maid
+import c7n
 
-from maid.credentials import SessionFactory
-from maid.mu import (
+from c7n.credentials import SessionFactory
+from c7n.mu import (
     CloudWatchLogSubscription,
     LambdaFunction,
     LambdaManager,
     PythonPackageArchive)
     
 
-log = logging.getLogger("maid.logsetup")
+log = logging.getLogger("custodian.logsetup")
 
 
 def setup_parser():
@@ -50,7 +50,7 @@ def setup_parser():
 
     # Delivery
     parser.add_argument("--topic", required=True)
-    parser.add_argument("--subject", default="Maid Ops Error")
+    parser.add_argument("--subject", default="Custodian Ops Error")
 
     return parser
 
@@ -89,7 +89,7 @@ def get_function(session_factory, options, groups):
     archive = PythonPackageArchive(
         # Directory to lambda file
         os.path.join(
-            os.path.dirname(inspect.getabsfile(maid)), 'logsub.py'),
+            os.path.dirname(inspect.getabsfile(c7n)), 'logsub.py'),
         # Don't include virtualenv deps
         lib_filter=lambda x, y, z: ([], []))
     archive.create()

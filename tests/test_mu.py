@@ -17,8 +17,8 @@ import unittest
 import StringIO
 import zipfile
 
-from maid.mu import maid_archive, LambdaManager, PolicyLambda
-from maid.policy import Policy
+from c7n.mu import custodian_archive, LambdaManager, PolicyLambda
+from c7n.policy import Policy
 from .common import BaseTest, Config
 
 
@@ -48,7 +48,7 @@ class PolicyLambdaProvision(BaseTest):
         pl = PolicyLambda(p)
         mgr = LambdaManager(session_factory)
         result = mgr.publish(pl, 'Dev', role=self.role)
-        output = self.capture_logging('maid.lambda', level=logging.DEBUG)
+        output = self.capture_logging('custodian.lambda', level=logging.DEBUG)
         result2 = mgr.publish(PolicyLambda(p), 'Dev', role=self.role)
         self.assertEqual(len(output.getvalue().strip().split('\n')), 1)
         self.assertEqual(result['FunctionName'], result2['FunctionName'])
@@ -194,28 +194,29 @@ class PolicyLambdaProvision(BaseTest):
                 "Name": "maid-periodic-ec2-checker"})
         mgr.remove(pl)
 
+
 class PythonArchiveTest(unittest.TestCase):
 
     def test_archive_bytes(self):
-        self.archive = maid_archive()
+        self.archive = custodian_archive()
         self.archive.create()
         self.addCleanup(self.archive.remove)
         self.archive.close()
         io = StringIO.StringIO(self.archive.get_bytes())
         reader = zipfile.ZipFile(io, mode='r')
         fileset = [n.filename for n in reader.filelist]
-        self.assertTrue('maid/__init__.py' in fileset)
+        self.assertTrue('c7n/__init__.py' in fileset)
         
     def test_archive_skip(self):
-        self.archive = maid_archive("*.pyc")
+        self.archive = custodian_archive("*.pyc")
         self.archive.create()
         self.addCleanup(self.archive.remove)        
         self.archive.close()
         with open(self.archive.path) as fh:
             reader = zipfile.ZipFile(fh, mode='r')
             fileset = [n.filename for n in reader.filelist]
-            for i in ['maid/__init__.pyc',
-                      'maid/resources/s3.pyc',
+            for i in ['c7n/__init__.pyc',
+                      'c7n/resources/s3.pyc',
                       'boto3/__init__.py']:
                 self.assertFalse(i in fileset)
         

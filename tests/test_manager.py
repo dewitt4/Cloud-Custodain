@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from maid.ctx import ExecutionContext
-from maid.resources.ec2 import EC2
-from maid.tags import Tag
+from c7n.ctx import ExecutionContext
+from c7n.resources.ec2 import EC2
+from c7n.tags import Tag
 from .common import BaseTest, instance, Bag, Config
 
 

@@ -1,8 +1,6 @@
-import json
-
 from jsonschema.exceptions import best_match
 
-from maid.schema import Validator, validate, generate, specific_error
+from c7n.schema import Validator, validate, generate, specific_error
 from common import BaseTest
 
 
