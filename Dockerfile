@@ -5,6 +5,6 @@ WORKDIR /src
 RUN pip install -r requirements.txt
 RUN python setup.py develop
 
-VOLUME ["/var/log/cloud-maid", "/etc/cloud-maid"]
+VOLUME ["/var/log/cloud-custodian", "/etc/cloud-custodian"]
 
-ENTRYPOINT ["/usr/local/bin/cloud-maid"]
+ENTRYPOINT ["/usr/local/bin/custodian"]
