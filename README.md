@@ -1,22 +1,40 @@
 
-[![Build Status](http://maid-dev-ci.cloud.capitalone.com/api/badges/cloud-maid/cloud-maid/status.svg)](http://maid-dev-ci.cloud.capitalone.com/cloud-maid/cloud-maid)
+[![License](https://img.shields.io/badge/license-Apache%202-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # Cloud Custodian
 
-Cloud Custodian is a stateless rules engine for policy definition and enforcement, with metrics and detailed reporting for AWS. It consolidates many of the enterprise and departmental specific cloud controls organizations have into one tool. Organizations can use Custodian to manage their AWS environments by ensuring compliance to security policies, tag policies, garbage collection of unused resources, and cost management via off-hours resource management, all from one tool. Custodian policies are written in simple YAML configuration files that specify given resource types and are constructed from a vocabulary of filters and actions. Custodian was created to unify the dozens of tools and scripts most organizations use for managing their AWS accounts into one open source tool.
+Cloud Custodian is a rules engine for AWS resource management. It
+allows users to define policies to be enforced to enable a well
+managed cloud, with metrics and structured outputs. It consolidates
+many of the adhoc scripts organizations have into a lightweight
+and flexible tool.
 
-# Links
+Organizations can use Custodian to manage their AWS environments by
+ensuring compliance to security policies, tag policies, garbage
+collection of unused resources, and cost management via off-hours
+resource management.
+
+Custodian policies are written in simple YAML configuration files that
+specify given a resource type (ec2, asg, redshift, etc) and are
+constructed from a vocabulary of filters and actions. Custodian was
+created to unify the dozens of tools and scripts most organizations
+use for managing their AWS accounts into one open source tool and
+provide unified operations and reporting.
+
+It integrates with lambda and cloudwatch events to provide for
+realtime enforcement of policies with builtin provisioning, or can
+isomorphically be used to query and operate against all of account
+resources.
+
+
+## Links
 
 - [Docs](https://github.com/pages/capitalone/cloud-custodian/)
-- [Architecture](docs/architecture.rst)
+
 - [Developer Install](docs/developer.rst)
 
-- Resource Guides
-  - [EC2](docs/ec2.rst)
-  - [S3](docs/s3.rst)
 
-
-# Usage
+## Usage
 
 First a policy file needs to be created in yaml format, as an example:
 
@@ -25,27 +43,40 @@ First a policy file needs to be created in yaml format, as an example:
 
 policies:
  - name: remediate-extant-keys
+   description: |
+     Scan through all s3 buckets in an account and ensure all objects
+     are encrypted (default to AES256).  
    resources: s3
    actions:
      - encrypt-keys
 
-- name: old-instances
-   resource: ec2
-   query:
-     - instance-state-name: running
+ - name: ec2-require-non-public-and-encrypted-volumes
+   resource: ec2 
+   description: |
+     Provision a lambda and cloud watch event target
+     that looks at all new instances not in an autoscale group
+     and terminates those with unencrypted volumes.
+   mode:
+     type: cloudtrail	
+     events:
+  	  - RunInstances
    filters:
-     - type: instance-age
+     - Encrypted: false
+   actions:
+     - terminate
 
-- name: tag-compliance
+ - name: tag-compliance
    resources: ec2
-   query:
-     - instance-state-name: running
+   description:
+     Schedule a resource that does not meet tag compliance policies
+     to be stopped in four days.
    filters:
-     - "tag:CMDBEnvironment": absent
-     - "tag:ASV": absent
+     - State.Name: running
+     - "tag:Environment": absent
+     - "tag:AppId": absent
      - or:
        - "tag:OwnerContact": absent
-   	   - "tag:OwnerEID": absent
+       - "tag:DeptID": absent
    actions:
      - type: mark-for-op
        op: stop
@@ -53,23 +84,48 @@ policies:
 
 ```
 
-Given that, you can run cloud-custodian via
+Given that, you can run cloud-custodian 
 
-```
+```shell
+  # Directory for outputs
   $ mkdir out
+
+  # Validate the configuration
+  $ custodian validate -c policy.yml
+
+  # Dryrun on the policies (no actions executed)
+  $ custodian run --dryrun -c policy.yml -s out
+
+  # Run the policy 
   $ custodian run -c policy.yml -s out
 ```
-By default any run of the maid will output csv of the instances operated on.
+  
+Maid supports a few other useful subcommands and options, including
+outputs to s3, cloud watch metrics, sts role assumption.
 
 
-Maid supports a few other useful subcommands and options.
+Consult the documentation for additional information.
 
-One is to just query for instances matching and export them as csv or json with
-the *identify* subcommand.
+## Get Involved
 
-```
-  $ custodian identify -c policy.yml > instances.json
-```
+Mailing List - https://groups.google.com/forum/#!forum/cloud-custodian
 
-For additional information please look at the individual
-resource guides and the filtering docs linked above.
+Irc - #cloud-custodian on irc.freenode.net
+
+### Contributors :
+
+We welcome Your interest in Capital One’s Open Source Projects (the
+“Project”). Any Contributor to the Project must accept and sign an
+Agreement indicating agreement to the license terms below. Except for
+the license granted in this Agreement to Capital One and to recipients
+of software distributed by Capital One, You reserve all right, title,
+and interest in and to Your Contributions; this Agreement does not
+impact Your rights to use Your own Contributions for any other purpose
+
+##### [Link to Agreement] (https://docs.google.com/forms/d/19LpBBjykHPox18vrZvBbZUcK6gQTj7qv1O5hCduAZFU/viewform)
+
+This project adheres to the
+[Open Code of Conduct][code-of-conduct]. By participating, you are
+expected to honor this code.
+
+[code-of-conduct]: http://www.capitalone.io/codeofconduct/
