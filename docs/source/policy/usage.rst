@@ -6,7 +6,7 @@ Usage
 Offhours
 --------
 
-.. automodule:: maid.offhours
+.. automodule:: c7n.offhours
 
 
 Outputs

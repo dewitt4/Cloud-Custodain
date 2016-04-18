@@ -1,53 +1,49 @@
-Tag compliance across resources (ec2, asg, elb, s3, etc)
+Tag Compliance Across Resources (EC2, ASG, ELB, S3, etc)
 ========================================================
 
 Mark
-~~~~
+  Tag instances with mark instances matching filters with a 'c7n_status' tag by
+  default and configurable value.
 
-Tag instances with mark instances matching filters with a 'c7n_status' tag by
-default and configurable value.
+  Here's an example of renaming an extant tag
 
-Here's an example of renaming an extant tag
-
-.. code-block:: yaml
-
-   policies:
-     - name: ec2-tag-instances
-       resource: ec2
-       filters:
-         - "tag:CostCenter": foobar
-       actions:
-         - type: mark
-           tag: CostCenter
-           msg: barrum
-
+  .. code-block:: yaml
+  
+     policies:
+     
+       - name: ec2-tag-instances
+         resource: ec2
+         filters:
+           - "tag:CostCenter": foobar
+         actions:
+           - type: mark
+             tag: CostCenter
+             msg: barrum
 
 
-.. code-block:: yaml
+Report on Tag Compliance
+  .. code-block:: yaml
+  
+     policies:
+  
+       - name: ec2-tag-compliance
+         resource: ec2
+         comment: |
+           Report on total count of non compliant instances
+         filters:
+           - "tag:Owner": absent
+           - "tag:CostCenter": absent
+           - "tag:Project": absent
 
-   policies:
-     #########################################################
-     ### TAG COMPLIANCE: REPORTING
-     #########################################################
-   
-     - name: ec2-tag-compliance
-       resource: ec2
-       comment: |
-         Report on total count of non compliant instances
-       filters:
-         - "tag:Owner": absent
-         - "tag:CostCenter": absent
-         - "tag:Project": absent
-   
-   
-     #########################################################
-     ### TAG COMPLIANCE: ENFORCEMENT
-     #########################################################
-     ### Summary: All instances that do not have the three
-     ### required tags (CostCenter, Owner Project) will
-     ### be stopped hourly after 2 days, and terminated after 5 days.
-     #########################################################
-   
+
+Enforce Tag Compliance
+  All instances that do not have the three required tags (CostCenter, Owner Project) will
+  be stopped hourly after 2 days, and terminated after 5 days.
+
+  .. code-block:: yaml
+
+     policies:
+  
      - name: ec2-tag-compliance-mark
        resource: ec2
        comment: |

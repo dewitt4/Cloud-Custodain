@@ -1,5 +1,5 @@
-Security compliance around encrypted ebs volumes
-================================================
+RDS - Terminate Unencrypted Public Instances
+============================================
 
 .. code-block:: yaml
 

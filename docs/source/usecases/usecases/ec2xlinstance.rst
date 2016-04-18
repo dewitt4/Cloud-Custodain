@@ -1,5 +1,5 @@
-Waste management and identification based on resource consumption with additional information
-=============================================================================================
+EC2 - XL Instance Report
+========================
 
 .. code-block:: yaml
    

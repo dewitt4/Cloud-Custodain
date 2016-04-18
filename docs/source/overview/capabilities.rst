@@ -6,11 +6,13 @@ AWS resources:
 
 - :ref:`ami`
 - :ref:`asg`
-- :ref:`cft`
+- :ref:`cfn`
 - :ref:`ebs`
 - :ref:`ec2`
 - :ref:`elb`
 - :ref:`kms`
+- :ref:`rds`
+- :ref:`redshift`
 - :ref:`s3`
 
 Custodian uses a flexible query language for filtering resources to a

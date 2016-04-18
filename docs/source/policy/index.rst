@@ -49,20 +49,16 @@ with the status to be stopped on that particular day.
 Terms
 =====
 
-- *Policy*
-
+Policy - :py:class:`c7n.policy`
   Defined in yaml, specifies a set of filters and actions to take
   on a given AWS resource type.
 
-
-- *Resource Manager*
-
+Resource - :py:class:`c7n.manager.ResourceManager`
   Provides for retrieval of a resources of a given type (typically via AWS API)
   and defines the vocabulary of filters and actions that can be used on those
-  resource. (e.g., ASG, S3, EC2, ELBs, etc)
+  resource (e.g., ASG, S3, EC2, ELBs, etc).
 
-- *Mode*
-
+Mode
   Provides for retrieval of a resources of a given type (typically via AWS API) and defines the vocabulary of filters and actions that can be used on those resource. Example resource types are autoscalegroups, s3 buckets, ec2 instances, elbs, etc).
 
 .. code-block:: yaml
@@ -72,11 +68,10 @@ Terms
      events:
        - RunInstances
 
-- *:ref:`filters`*
-
+Filters - :py:class:`c7n.filters`
   Given a set of resources, how do we filter to the subset that we're
-  interested in operating on. The filtering language has some default
-  behaviors across resource types like value filtering with JMESPath
+  interested in operating on. The :ref:`filtering language<filters>` has some
+  default behaviors across resource types like value filtering with JMESPath
   expressions against the JSON representation of a resource, as well
   specific filters for particular resources types (instance age,
   tag count, etc).
@@ -96,8 +91,7 @@ Terms
        value: "SuperUser"
        op: ne
 
-- *Action*
-
+Actions - :py:class:`c7n.actions`
   A verb to use on a given resource, ie. stop, start, suspend
   delete, encrypt, etc.
 
@@ -106,7 +100,7 @@ Terms
    actions:
      - type: tag
        key: c7n_status
-       value: "Instance violates control ISRM-10 (unencrypted ebs)"
+       value: "Unencrypted EBS! Please recreate with Encryption)"
      - type: terminate
        force: true
 
@@ -122,6 +116,7 @@ Filters
 =======
   .. toctree::
 
+     filters
      usage
 
 Resources and Actions
