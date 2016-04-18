@@ -30,8 +30,7 @@ resources.
 ## Links
 
 - [Docs](http://www.capitalone.io/cloud-custodian/)
-
-- [Developer Install](docs/developer.rst)
+- [Developer Install](http://www.capitalone.io/cloud-custodian/quickstart/developer.html)
 
 
 ## Usage
@@ -112,7 +111,7 @@ Mailing List - https://groups.google.com/forum/#!forum/cloud-custodian
 
 Irc - #cloud-custodian on irc.freenode.net
 
-### Contributors :
+### Contributors
 
 We welcome Your interest in Capital One’s Open Source Projects (the
 “Project”). Any Contributor to the Project must accept and sign an
