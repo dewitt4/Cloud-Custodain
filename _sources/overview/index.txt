@@ -5,7 +5,5 @@ Overview
 .. toctree::
 
    capabilities
-   usecases
-   comparisons
    roadmap
-
+   comparisons
