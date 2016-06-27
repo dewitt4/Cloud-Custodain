@@ -166,17 +166,21 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">platform</span>
 <span class="kn">import</span> <span class="nn">tempfile</span>
 <span class="kn">import</span> <span class="nn">zipfile</span>
 
 <span class="kn">from</span> <span class="nn">boto3.s3.transfer</span> <span class="kn">import</span> <span class="n">S3Transfer</span><span class="p">,</span> <span class="n">TransferConfig</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="kn">import</span> <span class="n">ClientError</span>
 
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
+
 <span class="kn">import</span> <span class="nn">c7n</span>
 
 <span class="c1"># Static event mapping to help simplify cwe rules creation</span>
 <span class="kn">from</span> <span class="nn">c7n.cwe</span> <span class="kn">import</span> <span class="n">CloudWatchEvents</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">parse_s3</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">local_session</span>
 
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.lambda&#39;</span><span class="p">)</span>
@@ -188,9 +192,8 @@
 <span class="sd">    Packages up a virtualenv and a source package directory per lambda&#39;s</span>
 <span class="sd">    directory structure.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
-                 <span class="n">src_path</span><span class="p">,</span> <span class="n">virtualenv_dir</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src_path</span><span class="p">,</span> <span class="n">virtualenv_dir</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
                  <span class="n">lib_filter</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">src_filter</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">src_path</span> <span class="o">=</span> <span class="n">src_path</span>
@@ -220,10 +223,10 @@
             <span class="k">return</span> <span class="n">files</span>
         <span class="n">skip_files</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">fnmatch</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip</span><span class="p">))</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span> <span class="k">if</span> <span class="n">f</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">skip_files</span><span class="p">]</span></div>
-    
+
 <div class="viewcode-block" id="PythonPackageArchive.create"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PythonPackageArchive.create">[docs]</a>    <span class="k">def</span> <span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">assert</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span><span class="p">,</span> <span class="s2">&quot;Archive already created&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">delete</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_zip_file</span> <span class="o">=</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span>
             <span class="n">compression</span><span class="o">=</span><span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span>
@@ -245,11 +248,11 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">_zip_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
                         <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">),</span>
                         <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arc_prefix</span><span class="p">,</span> <span class="n">f</span><span class="p">))</span>
-            
+
         <span class="c1"># Library Source</span>
         <span class="n">venv_lib_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">virtualenv_dir</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">,</span> <span class="s1">&#39;python2.7&#39;</span><span class="p">,</span> <span class="s1">&#39;site-packages&#39;</span><span class="p">)</span>
-                    
+
         <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">venv_lib_path</span><span class="p">):</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib_filter</span><span class="p">:</span>
                 <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib_filter</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span>
@@ -259,6 +262,9 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_zip_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
                     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">),</span>
                     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arc_prefix</span><span class="p">,</span> <span class="n">f</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="PythonPackageArchive.add_file"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PythonPackageArchive.add_file">[docs]</a>    <span class="k">def</span> <span class="nf">add_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_zip_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="PythonPackageArchive.add_contents"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PythonPackageArchive.add_contents">[docs]</a>    <span class="k">def</span> <span class="nf">add_contents</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">contents</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dest</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipInfo</span><span class="p">):</span>
@@ -279,6 +285,7 @@
 
 <div class="viewcode-block" id="PythonPackageArchive.remove"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PythonPackageArchive.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># dispose of the temp file for garbag collection</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span> <span class="o">=</span> <span class="bp">None</span></div>
 
@@ -306,9 +313,9 @@
     <span class="sd">&quot;&quot;&quot;Create a lambda code archive for running custodian.&quot;&quot;&quot;</span>
 
     <span class="c1"># Some aggressive shrinking</span>
-    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;concurrent&quot;</span><span class="p">,</span> <span class="s2">&quot;yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;pkg_resources&quot;</span><span class="p">]</span>
-    <span class="n">host_platform</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">uname</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
-    
+    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;concurrent&quot;</span><span class="p">,</span> <span class="s2">&quot;yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;pkg_resources&quot;</span><span class="p">,</span> <span class="s2">&quot;skew&quot;</span><span class="p">]</span>
+    <span class="n">host_platform</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">uname</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+
     <span class="k">def</span> <span class="nf">lib_filter</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">files</span><span class="p">):</span>
             <span class="c1"># Don&#39;t bother with shared libs across platforms</span>
@@ -326,8 +333,8 @@
             <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">),</span> <span class="s1">&#39;..&#39;</span><span class="p">)),</span>
         <span class="n">skip</span><span class="o">=</span><span class="n">skip</span><span class="p">,</span>
         <span class="n">lib_filter</span><span class="o">=</span><span class="n">lib_filter</span><span class="p">)</span></div>
-    
-        
+
+
 <div class="viewcode-block" id="LambdaManager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager">[docs]</a><span class="k">class</span> <span class="nc">LambdaManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Provides CRUD operations around lambda functions</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -342,16 +349,19 @@
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">rp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Functions&#39;</span><span class="p">,</span> <span class="p">[]):</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span><span class="p">:</span>
                     <span class="k">yield</span> <span class="n">f</span>
-                <span class="k">if</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
+                <span class="k">elif</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
                     <span class="k">yield</span> <span class="n">f</span></div>
-    
+
 <div class="viewcode-block" id="LambdaManager.publish"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">s3_uri</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
-        <span class="n">result</span><span class="p">,</span> <span class="n">changed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_or_update</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">role</span><span class="p">,</span> <span class="n">s3_uri</span><span class="p">,</span> <span class="n">qualifier</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
+        <span class="n">result</span><span class="p">,</span> <span class="n">changed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_or_update</span><span class="p">(</span>
+            <span class="n">func</span><span class="p">,</span> <span class="n">role</span><span class="p">,</span> <span class="n">s3_uri</span><span class="p">,</span> <span class="n">qualifier</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
         <span class="n">func</span><span class="o">.</span><span class="n">arn</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;FunctionArn&#39;</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">alias</span> <span class="ow">and</span> <span class="n">changed</span><span class="p">:</span>
             <span class="n">func</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">publish_alias</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">alias</span><span class="p">:</span>
             <span class="n">func</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">func</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">arn</span>
 
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">get_events</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">):</span>
@@ -369,6 +379,33 @@
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                 <span class="k">raise</span></div>
+
+<div class="viewcode-block" id="LambdaManager.metrics"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.metrics">[docs]</a>    <span class="k">def</span> <span class="nf">metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">funcs</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="mi">5</span><span class="o">*</span><span class="mi">60</span><span class="p">):</span>
+
+        <span class="k">def</span> <span class="nf">func_metrics</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;Errors&#39;</span><span class="p">,</span> <span class="s1">&#39;Invocations&#39;</span><span class="p">,</span> <span class="s1">&#39;Durations&#39;</span><span class="p">,</span> <span class="s1">&#39;Throttles&#39;</span><span class="p">):</span>
+                <span class="n">values</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="o">=</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_metric_statistics</span><span class="p">(</span>
+                    <span class="n">Namespace</span><span class="o">=</span><span class="s2">&quot;AWS/Lambda&quot;</span><span class="p">,</span>
+                    <span class="n">Dimensions</span><span class="o">=</span><span class="p">[{</span>
+                        <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;FunctionName&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="p">(</span>
+                            <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">]</span>
+                            <span class="ow">or</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)}],</span>
+                    <span class="n">Statistics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Sum&quot;</span><span class="p">],</span>
+                    <span class="n">StartTime</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+                    <span class="n">EndTime</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+                    <span class="n">Period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span>
+                    <span class="n">MetricName</span><span class="o">=</span><span class="n">m</span><span class="p">)[</span><span class="s1">&#39;Datapoints&#39;</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">values</span>
+
+        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">func_metrics</span><span class="p">,</span> <span class="n">funcs</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">funcs</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                    <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Metrics&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+        <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="LambdaManager.logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.logs">[docs]</a>    <span class="k">def</span> <span class="nf">logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="n">logs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
@@ -394,7 +431,7 @@
                 <span class="n">logGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span> <span class="n">logStreamName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;logStreamName&#39;</span><span class="p">])</span>
             <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]:</span>
                 <span class="k">yield</span> <span class="n">e</span></div>
-        
+
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="LambdaManager.delta_function"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.delta_function">[docs]</a>    <span class="k">def</span> <span class="nf">delta_function</span><span class="p">(</span><span class="n">lambda_func</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">role</span><span class="p">):</span>
         <span class="n">conf</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">get_config</span><span class="p">()</span>
@@ -403,7 +440,7 @@
         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">conf</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">conf</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">lambda_func</span><span class="p">[</span><span class="s1">&#39;Configuration&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">]:</span>
                 <span class="k">return</span> <span class="bp">True</span></div>
-            
+
     <span class="k">def</span> <span class="nf">_create_or_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">s3_uri</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">qualifier</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="n">role</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">role</span> <span class="ow">or</span> <span class="n">role</span>
         <span class="k">assert</span> <span class="n">role</span><span class="p">,</span> <span class="s2">&quot;Lambda function role must be specified&quot;</span>
@@ -458,7 +495,7 @@
             <span class="n">extra_args</span><span class="o">=</span><span class="p">{</span>
                 <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="s1">&#39;AES256&#39;</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key</span>
-    
+
 <div class="viewcode-block" id="LambdaManager.publish_alias"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.publish_alias">[docs]</a>    <span class="k">def</span> <span class="nf">publish_alias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_data</span><span class="p">,</span> <span class="n">alias</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Create or update an alias for the given function.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -471,7 +508,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_alias</span><span class="p">,</span> <span class="n">FunctionName</span><span class="o">=</span><span class="n">func_name</span><span class="p">,</span> <span class="n">Name</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Publishing custodian lambda alias </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>            
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Publishing custodian lambda alias </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
             <span class="n">alias_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">create_alias</span><span class="p">(</span>
                 <span class="n">FunctionName</span><span class="o">=</span><span class="n">func_name</span><span class="p">,</span>
                 <span class="n">Name</span><span class="o">=</span><span class="n">alias</span><span class="p">,</span>
@@ -486,7 +523,7 @@
                 <span class="n">Name</span><span class="o">=</span><span class="n">alias</span><span class="p">,</span>
                 <span class="n">FunctionVersion</span><span class="o">=</span><span class="n">func_version</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">alias_result</span><span class="p">[</span><span class="s1">&#39;AliasArn&#39;</span><span class="p">]</span></div>
-                        
+
 <div class="viewcode-block" id="LambdaManager.get"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_name</span><span class="p">,</span> <span class="n">qualifier</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">:</span> <span class="n">func_name</span><span class="p">}</span>
         <span class="k">if</span> <span class="n">qualifier</span><span class="p">:</span>
@@ -494,7 +531,7 @@
         <span class="k">return</span> <span class="n">resource_exists</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_function</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
 
-    
+
 <div class="viewcode-block" id="resource_exists"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.resource_exists">[docs]</a><span class="k">def</span> <span class="nf">resource_exists</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
@@ -502,15 +539,14 @@
         <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ResourceNotFoundException&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">False</span>
         <span class="k">raise</span></div>
-    
-    
+
+
 <div class="viewcode-block" id="AbstractLambdaFunction"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.AbstractLambdaFunction">[docs]</a><span class="k">class</span> <span class="nc">AbstractLambdaFunction</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Abstract base class for lambda functions.&quot;&quot;&quot;</span>
-    
     <span class="n">__metaclass__</span> <span class="o">=</span> <span class="n">abc</span><span class="o">.</span><span class="n">ABCMeta</span>
 
     <span class="n">alias</span> <span class="o">=</span> <span class="bp">None</span>
-    
+
     <span class="nd">@abc.abstractproperty</span>
     <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Name for the lambda function&quot;&quot;&quot;</span>
@@ -533,7 +569,7 @@
 
     <span class="nd">@abc.abstractproperty</span>
     <span class="k">def</span> <span class="nf">timeout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot; &quot;&quot;&quot;</span>        
+        <span class="sd">&quot;&quot;&quot; &quot;&quot;&quot;</span>
 
     <span class="nd">@abc.abstractproperty</span>
     <span class="k">def</span> <span class="nf">role</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -550,11 +586,11 @@
     <span class="nd">@abc.abstractmethod</span>
 <div class="viewcode-block" id="AbstractLambdaFunction.get_events"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.AbstractLambdaFunction.get_events">[docs]</a>    <span class="k">def</span> <span class="nf">get_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;event sources that should be bound to this lambda.&quot;&quot;&quot;</span></div>
-    
+
     <span class="nd">@abc.abstractmethod</span>
 <div class="viewcode-block" id="AbstractLambdaFunction.get_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.AbstractLambdaFunction.get_archive">[docs]</a>    <span class="k">def</span> <span class="nf">get_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return the lambda distribution archive object.&quot;&quot;&quot;</span></div>
-        
+
 <div class="viewcode-block" id="AbstractLambdaFunction.get_config"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.AbstractLambdaFunction.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">conf</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;FunctionName&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -578,7 +614,7 @@
         <span class="n">required</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
             <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;handler&#39;</span><span class="p">,</span> <span class="s1">&#39;memory_size&#39;</span><span class="p">,</span>
             <span class="s1">&#39;timeout&#39;</span><span class="p">,</span> <span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="s1">&#39;runtime&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="s1">&#39;events&#39;</span><span class="p">))</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">))</span>
         <span class="n">missing</span> <span class="o">=</span> <span class="n">required</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">func_data</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Missing required keys </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">missing</span><span class="p">))</span>
@@ -587,11 +623,11 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
-    
+
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">description</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;description&#39;</span><span class="p">]</span>
-    
+
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;handler&#39;</span><span class="p">]</span>
@@ -607,7 +643,7 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">runtime</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;runtime&#39;</span><span class="p">]</span>
-    
+
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">role</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;role&#39;</span><span class="p">]</span>
@@ -621,12 +657,12 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subnets&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
 
 <div class="viewcode-block" id="LambdaFunction.get_events"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaFunction.get_events">[docs]</a>    <span class="k">def</span> <span class="nf">get_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">())</span></div>
 
 <div class="viewcode-block" id="LambdaFunction.get_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaFunction.get_archive">[docs]</a>    <span class="k">def</span> <span class="nf">get_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">archive</span></div></div>
 
-    
+
 <span class="n">PolicyHandlerTemplate</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span><span class="se">\</span>
 <span class="s2">from c7n import handler</span>
 
@@ -642,7 +678,7 @@
     <span class="n">handler</span> <span class="o">=</span> <span class="s2">&quot;custodian_policy.run&quot;</span>
     <span class="n">runtime</span> <span class="o">=</span> <span class="s2">&quot;python2.7&quot;</span>
     <span class="n">timeout</span> <span class="o">=</span> <span class="mi">60</span>
-    
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">archive</span> <span class="o">=</span> <span class="n">custodian_archive</span><span class="p">(</span><span class="s1">&#39;*pyc&#39;</span><span class="p">)</span>
@@ -677,7 +713,7 @@
         <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CloudWatchEventSource</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">],</span> <span class="n">session_factory</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">events</span></div>
-            
+
 <div class="viewcode-block" id="PolicyLambda.get_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PolicyLambda.get_archive">[docs]</a>    <span class="k">def</span> <span class="nf">get_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span>
@@ -720,7 +756,7 @@
 
 <span class="sd">    .. code-block:: json</span>
 
-<span class="sd">       { </span>
+<span class="sd">       {</span>
 <span class="sd">         &quot;source&quot;: [&quot;aws.ec2&quot;],</span>
 <span class="sd">         &quot;detail-type&quot;: [&quot;EC2 Instance State-change Notification&quot;],</span>
 <span class="sd">         &quot;detail&quot;: { &quot;state&quot;: [&quot;pending&quot;]}</span>
@@ -743,14 +779,16 @@
         <span class="s1">&#39;launch-failure&#39;</span><span class="p">:</span> <span class="s1">&#39;EC2 Instance Launch Unsuccessful&#39;</span><span class="p">,</span>
         <span class="s1">&#39;terminate-success&#39;</span><span class="p">:</span> <span class="s1">&#39;EC2 Instance Terminate Successful&#39;</span><span class="p">,</span>
         <span class="s1">&#39;terminate-failure&#39;</span><span class="p">:</span> <span class="s1">&#39;EC2 Instance Terminate Unsuccessful&#39;</span><span class="p">}</span>
-    
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;custodian-&quot;</span><span class="p">):</span>
+        <span class="kn">import</span> <span class="nn">time</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session_factory</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">prefix</span> <span class="o">=</span> <span class="n">prefix</span>
-        
+
     <span class="k">def</span> <span class="nf">_make_notification_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function_name</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">function_name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">):</span>
             <span class="k">return</span> <span class="s2">&quot;</span><span class="si">%s%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="n">function_name</span><span class="p">)</span>
@@ -773,25 +811,29 @@
         <span class="k">return</span> <span class="bp">False</span></div>
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;CWEvent Type:</span><span class="si">%s</span><span class="s2"> Sources:</span><span class="si">%s</span><span class="s2"> Events:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="k">return</span> <span class="s2">&quot;&lt;CWEvent Type:</span><span class="si">%s</span><span class="s2"> Events:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">),</span>
-            <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sources&#39;</span><span class="p">,</span> <span class="p">[])),</span>
-            <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">[])))</span>
+            <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">[]))))</span>
 
 <div class="viewcode-block" id="CloudWatchEventSource.resolve_cloudtrail_payload"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.resolve_cloudtrail_payload">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_cloudtrail_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">):</span>
         <span class="n">ids</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">sources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sources&#39;</span><span class="p">,</span> <span class="p">[])</span>
-        
+        <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">):</span>
-            <span class="n">event_info</span> <span class="o">=</span> <span class="n">CloudWatchEvents</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">event_info</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
-                <span class="k">continue</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="n">event_info</span> <span class="o">=</span> <span class="n">CloudWatchEvents</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">event_info</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">continue</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">event_info</span> <span class="o">=</span> <span class="n">e</span>
+                <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="s1">&#39;event&#39;</span><span class="p">])</span>
             <span class="n">sources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event_info</span><span class="p">[</span><span class="s1">&#39;source&#39;</span><span class="p">])</span>
-                           
+
         <span class="n">payload</span><span class="p">[</span><span class="s1">&#39;detail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;eventSource&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">sources</span><span class="p">)),</span>
-            <span class="s1">&#39;eventName&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">[])}</span></div>
-            
+            <span class="s1">&#39;eventName&#39;</span><span class="p">:</span> <span class="n">events</span><span class="p">}</span></div>
+
 <div class="viewcode-block" id="CloudWatchEventSource.render_event_pattern"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.render_event_pattern">[docs]</a>    <span class="k">def</span> <span class="nf">render_event_pattern</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">event_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
         <span class="n">payload</span> <span class="o">=</span> <span class="p">{}</span>
@@ -819,7 +861,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">None</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span></div>
-        
+
 <div class="viewcode-block" id="CloudWatchEventSource.add"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
             <span class="n">Name</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">Description</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">description</span><span class="p">,</span> <span class="n">State</span><span class="o">=</span><span class="s1">&#39;ENABLED&#39;</span><span class="p">)</span>
@@ -827,21 +869,21 @@
         <span class="n">pattern</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">render_event_pattern</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">pattern</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s1">&#39;EventPattern&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pattern</span>
-        <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schedule&#39;</span><span class="p">)</span>        
+        <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schedule&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">schedule</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s1">&#39;ScheduleExpression&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">schedule</span>
-            
+
         <span class="n">rule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">rule</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Updating cwe rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>            
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Updating cwe rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>
             <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_rule</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
         <span class="k">elif</span> <span class="ow">not</span> <span class="n">rule</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Creating cwe rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="p">))</span>
             <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_rule</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">response</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;RuleArn&#39;</span><span class="p">:</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]}</span>
-            
+
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
                 <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -852,7 +894,7 @@
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Added lambda invoke cwe rule permission&#39;</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>            
+                <span class="k">raise</span>
 
         <span class="c1"># Add Targets</span>
         <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
@@ -876,7 +918,7 @@
             <span class="n">Rule</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">Targets</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;Id&quot;</span><span class="p">:</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;Arn&quot;</span><span class="p">:</span> <span class="n">func_arn</span><span class="p">}])</span>
 
         <span class="k">return</span> <span class="bp">True</span></div>
-        
+
 <div class="viewcode-block" id="CloudWatchEventSource.update"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.update">[docs]</a>    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div>
 
@@ -891,7 +933,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">enable_rule</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">pass</span></div>
-        
+
 <div class="viewcode-block" id="CloudWatchEventSource.remove"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
             <span class="k">try</span><span class="p">:</span>
@@ -905,11 +947,102 @@
                     <span class="s2">&quot;Could not remove targets for rule </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">delete_rule</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div></div>
-    
+
+
+<div class="viewcode-block" id="BucketNotification"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.BucketNotification">[docs]</a><span class="k">class</span> <span class="nc">BucketNotification</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Subscribe a lambda to bucket notifications. &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session_factory</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span> <span class="o">=</span> <span class="n">bucket</span>
+
+<div class="viewcode-block" id="BucketNotification.delta"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.BucketNotification.delta">[docs]</a>    <span class="k">def</span> <span class="nf">delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">tgt</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">,</span> <span class="s1">&#39;LambdaFunctionArn&#39;</span><span class="p">,</span> <span class="s1">&#39;Events&#39;</span><span class="p">,</span> <span class="s1">&#39;Filters&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">src</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">!=</span> <span class="n">tgt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span></div>
+
+    <span class="k">def</span> <span class="nf">_get_notifies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s3</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">notifies</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">get_bucket_notification_configuration</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">notifies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">f</span>
+        <span class="k">return</span> <span class="n">notifies</span><span class="p">,</span> <span class="n">found</span>
+
+<div class="viewcode-block" id="BucketNotification.add"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.BucketNotification.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">s3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+        <span class="n">notifies</span><span class="p">,</span> <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_notifies</span><span class="p">(</span><span class="n">s3</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span>
+        <span class="n">notifies</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;ResponseMetadata&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">func_arn</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">arn</span>
+        <span class="k">if</span> <span class="n">func_arn</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+            <span class="n">func_arn</span> <span class="o">=</span> <span class="n">func_arn</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">n_params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Id&#39;</span><span class="p">:</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;LambdaFunctionArn&#39;</span><span class="p">:</span> <span class="n">func_arn</span><span class="p">,</span>
+            <span class="s1">&#39;Events&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;s3:ObjectCreated:*&#39;</span><span class="p">])}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filters&#39;</span><span class="p">):</span>
+            <span class="n">n_params</span><span class="p">[</span><span class="s1">&#39;Filters&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;FilterRules&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">filters</span><span class="p">}}</span>
+
+        <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta</span><span class="p">(</span><span class="n">found</span><span class="p">,</span> <span class="n">n_params</span><span class="p">):</span>
+                <span class="n">notifies</span><span class="p">[</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">found</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Bucket lambda notification present&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+
+        <span class="n">lambda_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">StatementId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">Action</span><span class="o">=</span><span class="s1">&#39;lambda:InvokeFunction&#39;</span><span class="p">,</span>
+            <span class="n">Principal</span><span class="o">=</span><span class="s1">&#39;s3.amazonaws.com&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;account_s3&#39;</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SourceArn&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;arn:aws:s3:::</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">lambda_client</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+        <span class="n">notifies</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n_params</span><span class="p">)</span>
+        <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_notification_configuration</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">NotificationConfiguration</span><span class="o">=</span><span class="n">notifies</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">True</span></div>
+
+<div class="viewcode-block" id="BucketNotification.remove"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.BucketNotification.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">s3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+        <span class="n">notifies</span><span class="p">,</span> <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_notifies</span><span class="p">(</span><span class="n">s3</span><span class="p">,</span> <span class="n">func</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">lambda_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">remove_permission</span><span class="p">(</span>
+                <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">],</span> <span class="n">StatementId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Removed lambda permission result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">response</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+        <span class="n">notifies</span><span class="p">[</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">found</span><span class="p">)</span>
+        <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_notification_configuration</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">NotificationConfiguration</span><span class="o">=</span><span class="n">notifies</span><span class="p">)</span></div></div>
+
 
 <div class="viewcode-block" id="CloudWatchLogSubscription"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchLogSubscription">[docs]</a><span class="k">class</span> <span class="nc">CloudWatchLogSubscription</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Subscribe a lambda to a log group[s]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">iam_delay</span> <span class="o">=</span> <span class="mf">1.5</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">log_groups</span><span class="p">,</span> <span class="n">filter_pattern</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log_groups</span> <span class="o">=</span> <span class="n">log_groups</span>
@@ -927,11 +1060,13 @@
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">lambda_client</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
                     <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                    <span class="n">StatementId</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">),</span>
+                    <span class="n">StatementId</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">),</span>
                     <span class="n">SourceArn</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">],</span>
                     <span class="n">Action</span><span class="o">=</span><span class="s1">&#39;lambda:InvokeFunction&#39;</span><span class="p">,</span>
                     <span class="n">Principal</span><span class="o">=</span><span class="s1">&#39;logs.</span><span class="si">%s</span><span class="s1">.amazonaws.com&#39;</span> <span class="o">%</span> <span class="n">region</span><span class="p">)</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added lambda invoke log group permission&quot;</span><span class="p">)</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added lambda ipo nvoke log group permission&quot;</span><span class="p">)</span>
+                <span class="c1"># iam eventual consistency and propagation</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iam_delay</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
                     <span class="k">raise</span>
@@ -941,14 +1076,14 @@
                 <span class="n">filterName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">filterPattern</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">filter_pattern</span><span class="p">,</span>
                 <span class="n">destinationArn</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">alias</span> <span class="ow">or</span> <span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="p">)</span></div>
-            
+
 <div class="viewcode-block" id="CloudWatchLogSubscription.remove"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchLogSubscription.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="n">lambda_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_groups</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">response</span> <span class="o">=</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">remove_permission</span><span class="p">(</span>
                     <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                    <span class="n">StatementId</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">))</span>
+                    <span class="n">StatementId</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">))</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Removed lambda permission result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">response</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
@@ -962,7 +1097,6 @@
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                     <span class="k">raise</span></div></div>
-            
 </pre></div>
 
            </div>

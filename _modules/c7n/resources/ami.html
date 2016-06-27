@@ -33,7 +33,7 @@
 
   
     <link rel="top" title="Cloud Custodian 1.0 documentation" href="../../../index.html"/>
-        <link rel="up" title="Module code" href="../../index.html"/> 
+        <link rel="up" title="c7n.resources" href="../resources.html"/> 
 
   
   <script src="../../../_static/js/modernizr.min.js"></script>
@@ -125,6 +125,8 @@
       
           <li><a href="../../index.html">Module code</a> &raquo;</li>
       
+          <li><a href="../resources.html">c7n.resources</a> &raquo;</li>
+      
     <li>c7n.resources.ami</li>
       <li class="wy-breadcrumbs-aside">
         
@@ -156,7 +158,9 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span>
 
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="kn">import</span> <span class="n">register_tags</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
@@ -166,19 +170,17 @@
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;ami.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;ami.actions&#39;</span><span class="p">)</span>
 
+<span class="n">register_tags</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">actions</span><span class="p">,</span> <span class="s1">&#39;AmiId&#39;</span><span class="p">)</span>
+
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;ami&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="AMI"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.AMI">[docs]</a><span class="k">class</span> <span class="nc">AMI</span><span class="p">(</span><span class="n">ResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="AMI"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.AMI">[docs]</a><span class="k">class</span> <span class="nc">AMI</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="AMI.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.AMI.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">ResourceQuery</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="s1">&#39;aws.ec2.image&#39;</span><span class="p">)):</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreationDate&#39;</span></div>
 
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
-    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
-
-<div class="viewcode-block" id="AMI.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.AMI.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>  <span class="c1"># FIXME: Not used</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Querying images&quot;</span><span class="p">)</span>
-        <span class="n">images</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">describe_images</span><span class="p">(</span><span class="n">Owners</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;self&#39;</span><span class="p">],</span> <span class="n">Filters</span><span class="o">=</span><span class="n">query</span><span class="p">)[</span><span class="s1">&#39;Images&#39;</span><span class="p">]</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">images</span><span class="p">)</span></div></div>
+    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span></div>
 
 
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;deregister&#39;</span><span class="p">)</span>
@@ -194,8 +196,8 @@
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="n">client</span><span class="o">.</span><span class="n">deregister_image</span><span class="p">(</span><span class="n">ImageId</span><span class="o">=</span><span class="n">image</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">])</span></div></div>
 
-        
-<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">)</span>        
+
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ImageAgeFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.ImageAgeFilter">[docs]</a><span class="k">class</span> <span class="nc">ImageAgeFilter</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
 
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;CreationDate&quot;</span>

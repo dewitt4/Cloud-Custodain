@@ -164,20 +164,8 @@
 
 <span class="sd">All filters and actions are annotated with schema typically using</span>
 <span class="sd">the utils.type_schema function.</span>
-
-<span class="sd">Implemenation Notes / todo</span>
-
-<span class="sd">[x] Resource Policy (inherit base property)</span>
-<span class="sd">  </span>
-<span class="sd">[x] Or and And - special treatment, ref each other</span>
-
-<span class="sd">[x] Value filter - &#39;str&#39;: &#39;str&#39; / operator</span>
-
-<span class="sd">[x] Handling aliases - match same class under multiple names</span>
-<span class="sd">  </span>
-<span class="sd">[x] Better handling of inheritance than builtin spec support.</span>
-
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">Counter</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 
@@ -196,6 +184,15 @@
 
     <span class="n">errors</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">validator</span><span class="o">.</span><span class="n">iter_errors</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+        <span class="n">counter</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">([</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">)])</span>
+        <span class="n">dupes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">counter</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">v</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">dupes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dupes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Only one policy with a given name allowed, duplicates: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dupes</span><span class="p">)))]</span>
         <span class="k">return</span> <span class="p">[]</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">specific_error</span><span class="p">(</span><span class="n">errors</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
@@ -220,7 +217,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">error</span><span class="o">.</span><span class="n">validator</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;anyOf&#39;</span><span class="p">,</span> <span class="s1">&#39;oneOf&#39;</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">error</span>
-        
+
     <span class="n">r</span> <span class="o">=</span> <span class="n">t</span> <span class="o">=</span> <span class="bp">None</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">instance</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="n">t</span> <span class="o">=</span> <span class="n">error</span><span class="o">.</span><span class="n">instance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
@@ -285,11 +282,14 @@
             <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;resource&#39;</span><span class="p">],</span>
             <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
             <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;pattern&#39;</span><span class="p">:</span> <span class="s2">&quot;^[A-z][A-z0-9]*(-[A-z0-9]*[A-z][A-z0-9]*)*$&quot;</span><span class="p">},</span>
                 <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
                 <span class="s1">&#39;comment&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
-                <span class="s1">&#39;comments&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>                
+                <span class="s1">&#39;comments&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
                 <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                <span class="s1">&#39;tags&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}},</span>
                 <span class="s1">&#39;mode&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/policy-mode&#39;</span><span class="p">},</span>
                 <span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{</span>
                     <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
@@ -310,10 +310,10 @@
                         <span class="s1">&#39;minProperties&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
                         <span class="s1">&#39;maxProperties&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}}</span>
             <span class="p">},</span>
-        <span class="p">},</span>            
+        <span class="p">},</span>
         <span class="s1">&#39;policy-mode&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">,</span> <span class="s1">&#39;events&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span>
             <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span>
                     <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
@@ -322,11 +322,18 @@
                         <span class="s1">&#39;asg-instance-state&#39;</span><span class="p">,</span>
                         <span class="s1">&#39;periodic&#39;</span>
                     <span class="p">]},</span>
-                <span class="s1">&#39;events&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}},</span>
-                <span class="s1">&#39;sources&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}},</span>
-                <span class="s1">&#39;ids&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+                <span class="s1">&#39;events&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+                        <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                        <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+                         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;event&#39;</span><span class="p">,</span> <span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;ids&#39;</span><span class="p">],</span>
+                         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                             <span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                             <span class="s1">&#39;ids&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                             <span class="s1">&#39;event&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}}]</span>
+                    <span class="p">}}</span>
             <span class="p">},</span>
-        <span class="p">},</span>    
+        <span class="p">},</span>
     <span class="p">}</span>
 
     <span class="n">resource_refs</span> <span class="o">=</span> <span class="p">[]</span>
@@ -335,15 +342,16 @@
             <span class="k">continue</span>
         <span class="n">resource_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">))</span>
-        
+
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s1">&#39;$schema&#39;</span><span class="p">:</span> <span class="s1">&#39;http://json-schema.org/schema#&#39;</span><span class="p">,</span>        
+        <span class="s1">&#39;$schema&#39;</span><span class="p">:</span> <span class="s1">&#39;http://json-schema.org/schema#&#39;</span><span class="p">,</span>
         <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="s1">&#39;http://schema.cloudcustodian.io/v0/custodian.json&#39;</span><span class="p">,</span>
         <span class="s1">&#39;definitions&#39;</span><span class="p">:</span> <span class="n">definitions</span><span class="p">,</span>
         <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;policies&#39;</span><span class="p">],</span>
         <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;vars&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span>
             <span class="s1">&#39;policies&#39;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;additionalItems&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
@@ -351,13 +359,13 @@
                 <span class="p">}</span>
             <span class="p">}</span>
     <span class="p">}</span>
-    
+
     <span class="k">return</span> <span class="n">schema</span></div>
 
 
 <div class="viewcode-block" id="process_resource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.schema.process_resource">[docs]</a><span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">):</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">resource_defs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{},</span> <span class="s1">&#39;filters&#39;</span><span class="p">:</span> <span class="p">{}})</span>
-    
+
     <span class="n">seen_actions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>  <span class="c1"># Aliases get processed once</span>
     <span class="n">action_refs</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">action_name</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -369,11 +377,11 @@
         <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/resources/</span><span class="si">%s</span><span class="s1">/actions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="n">type_name</span><span class="p">,</span> <span class="n">action_name</span><span class="p">)})</span>
-        
+
     <span class="c1"># one word action shortcuts</span>
     <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
         <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">()})</span>
-    
+
     <span class="n">nested_filter_refs</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">filters_seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">resource_type</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
@@ -394,7 +402,7 @@
             <span class="k">continue</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">filters_seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-                
+
         <span class="k">if</span> <span class="n">filter_name</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">):</span>
             <span class="k">continue</span>
         <span class="k">elif</span> <span class="n">filter_name</span> <span class="o">==</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span>
@@ -424,7 +432,7 @@
     <span class="c1"># one word filter shortcuts</span>
     <span class="n">filter_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
         <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">()})</span>
-    
+
     <span class="n">resource_policy</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;allOf&#39;</span><span class="p">:</span> <span class="p">[</span>
             <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/policy&#39;</span><span class="p">},</span>
@@ -439,17 +447,16 @@
             <span class="p">]</span>
     <span class="p">}</span>
 
-
     <span class="k">if</span> <span class="n">type_name</span> <span class="o">==</span> <span class="s1">&#39;ec2&#39;</span><span class="p">:</span>
         <span class="n">resource_policy</span><span class="p">[</span><span class="s1">&#39;allOf&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;query&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-    
+
     <span class="n">r</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">resource_policy</span>
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/resources/</span><span class="si">%s</span><span class="s1">/policy&#39;</span> <span class="o">%</span> <span class="n">type_name</span><span class="p">}</span></div>
 
 
 <span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
-    <span class="c1"># side effect registration</span>
-    <span class="kn">import</span> <span class="nn">c7n.resources</span>
+    <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="kn">import</span> <span class="n">load_resources</span>
+    <span class="n">load_resources</span><span class="p">()</span>
     <span class="c1"># dump our schema</span>
     <span class="c1"># $ python -m c7n.schema</span>
     <span class="k">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">generate</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>

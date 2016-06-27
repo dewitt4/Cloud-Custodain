@@ -33,7 +33,7 @@
 
   
     <link rel="top" title="Cloud Custodian 1.0 documentation" href="../../../index.html"/>
-        <link rel="up" title="Module code" href="../../index.html"/> 
+        <link rel="up" title="c7n.resources" href="../resources.html"/> 
 
   
   <script src="../../../_static/js/modernizr.min.js"></script>
@@ -125,6 +125,8 @@
       
           <li><a href="../../index.html">Module code</a> &raquo;</li>
       
+          <li><a href="../resources.html">c7n.resources</a> &raquo;</li>
+      
     <li>c7n.resources.rds</li>
       <li class="wy-breadcrumbs-aside">
         
@@ -165,14 +167,14 @@
 <span class="sd">   policies:</span>
 <span class="sd">      - name: rds-public</span>
 <span class="sd">        resource: rds</span>
-<span class="sd">        filters: </span>
+<span class="sd">        filters:</span>
 <span class="sd">         - PubliclyAccessible: true</span>
 
 <span class="sd">Find rds instances that are not encrypted</span>
 
 <span class="sd">.. code-block:: yaml</span>
 
-<span class="sd">   policies: </span>
+<span class="sd">   policies:</span>
 <span class="sd">      - name: rds-non-encrypted</span>
 <span class="sd">        resource: rds</span>
 <span class="sd">        filters:</span>
@@ -189,7 +191,7 @@
 <span class="sd">  requires full arns. The api never exposes</span>
 <span class="sd">  arn. We should use a policy attribute</span>
 <span class="sd">  for arn, that can dereference from assume</span>
-<span class="sd">  role, instance profile role, iam user (GetUser), </span>
+<span class="sd">  role, instance profile role, iam user (GetUser),</span>
 <span class="sd">  or for sts assume role users we need to</span>
 <span class="sd">  require cli params for this resource type.</span>
 
@@ -200,54 +202,64 @@
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">logging</span>
-<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">re</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="kn">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span>
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="kn">import</span> <span class="n">tags</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">,</span> <span class="n">chunks</span>
+
+<span class="kn">from</span> <span class="nn">skew.resources.aws</span> <span class="kn">import</span> <span class="n">rds</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.rds&#39;</span><span class="p">)</span>
-
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;rds.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;rds.actions&#39;</span><span class="p">)</span>
 
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-count&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagCountFilter</span><span class="p">)</span>
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
+
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="RDS"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS">[docs]</a><span class="k">class</span> <span class="nc">RDS</span><span class="p">(</span><span class="n">ResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="RDS"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS">[docs]</a><span class="k">class</span> <span class="nc">RDS</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RDS.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">rds</span><span class="o">.</span><span class="n">DBInstance</span><span class="o">.</span><span class="n">Meta</span><span class="p">):</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;DBInstanceIdentifier&#39;</span></div>
 
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
+    <span class="n">account_id</span> <span class="o">=</span> <span class="bp">None</span>
 
-<div class="viewcode-block" id="RDS.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
-            <span class="n">dbs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                <span class="p">{</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;rds&#39;</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">})</span>
-            <span class="k">if</span> <span class="n">dbs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Using cached rds: </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">dbs</span><span class="p">)))</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">dbs</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Querying rds instances&quot;</span><span class="p">)</span>
-        <span class="n">p</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_db_instances&#39;</span><span class="p">)</span>
-        <span class="n">results</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">Filters</span><span class="o">=</span><span class="n">query</span><span class="p">)</span>
-        <span class="n">dbs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
-            <span class="o">*</span><span class="p">[</span><span class="n">rp</span><span class="p">[</span><span class="s1">&#39;DBInstances&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">rp</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">({</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;rds&#39;</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">:</span> <span class="n">query</span><span class="p">},</span> <span class="n">dbs</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">dbs</span><span class="p">)</span></div>
+<div class="viewcode-block" id="RDS.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">account_id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">account_id</span> <span class="o">=</span> <span class="n">get_account_id</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+        <span class="n">_rds_tags</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">),</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
-<div class="viewcode-block" id="RDS.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDS.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">db_id</span> <span class="ow">in</span> <span class="n">resource_ids</span><span class="p">:</span>
-            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
-                <span class="n">c</span><span class="o">.</span><span class="n">describe_db_instances</span><span class="p">(</span>
-                    <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">db_id</span><span class="p">)[</span><span class="s1">&#39;DBInstances&#39;</span><span class="p">])</span>
-        <span class="k">return</span> <span class="n">results</span></div></div>
+
+<span class="k">def</span> <span class="nf">_rds_tags</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">dbs</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">account_id</span><span class="p">,</span> <span class="n">region</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Augment rds instances with their respective tags.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">process_tags</span><span class="p">(</span><span class="n">db</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">arn</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:rds:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:db:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">account_id</span><span class="p">,</span> <span class="n">db</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
+        <span class="n">tag_list</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_tags_for_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">)[</span><span class="s1">&#39;TagList&#39;</span><span class="p">]</span>
+        <span class="n">db</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tag_list</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">db</span>
+
+    <span class="c1"># Rds maintains a low api call limit, so this can take some time :-(</span>
+    <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">dbs</span><span class="p">))</span>
 
 
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;default-vpc&#39;</span><span class="p">)</span>
@@ -280,7 +292,83 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">default_vpc</span> <span class="o">=</span> <span class="n">vpcs</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">vpc_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_vpc</span> <span class="ow">and</span> <span class="bp">True</span> <span class="ow">or</span> <span class="bp">False</span></div>
 
-    
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">ops</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;delete&#39;</span><span class="p">,</span> <span class="s1">&#39;snapshot&#39;</span><span class="p">]})</span>
+
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
+
+<div class="viewcode-block" id="TagDelayedAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:rds:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:db:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;auto-patch&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AutoPatch"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.AutoPatch">[docs]</a><span class="k">class</span> <span class="nc">AutoPatch</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;auto-patch&#39;</span><span class="p">,</span>
+        <span class="n">minor</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span> <span class="n">window</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="AutoPatch.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.AutoPatch.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;AutoMinorVersionUpgrade&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;minor&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;window&#39;</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;PreferredMaintenanceWindow&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;minor&#39;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
+                <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+                <span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Tag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Tag">[docs]</a><span class="k">class</span> <span class="nc">Tag</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">Tag</span><span class="p">):</span>
+
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
+
+<div class="viewcode-block" id="Tag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Tag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:rds:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:db:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RemoveTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RemoveTag">[docs]</a><span class="k">class</span> <span class="nc">RemoveTag</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">RemoveTag</span><span class="p">):</span>
+
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
+
+<div class="viewcode-block" id="RemoveTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RemoveTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:rds:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:db:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">remove_tags_from_resource</span><span class="p">(</span>
+                <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
+
+
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Delete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Delete">[docs]</a><span class="k">class</span> <span class="nc">Delete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
 
@@ -288,16 +376,16 @@
         <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;delete&#39;</span><span class="p">],</span>
-            <span class="s1">&#39;skip-snapshot&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}}</span>
+                     <span class="s1">&#39;skip-snapshot&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}}</span>
             <span class="p">}</span>
         <span class="p">}</span>
 
 <div class="viewcode-block" id="Delete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Delete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">skip</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skip-snapshot&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
-        
+
         <span class="c1"># Concurrency feels like over kill here.</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        
+
         <span class="k">for</span> <span class="n">rdb</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
                 <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">rdb</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
@@ -314,8 +402,167 @@
                 <span class="k">raise</span>
 
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted rds: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">rdb</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span></div></div>
-        
-        
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;snapshot&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Snapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Snapshot">[docs]</a><span class="k">class</span> <span class="nc">Snapshot</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;snapshot&#39;</span><span class="p">]}}}</span>
+
+<div class="viewcode-block" id="Snapshot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Snapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">process_rds_snapshot</span><span class="p">,</span>
+                    <span class="n">resource</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                            <span class="s2">&quot;Exception creating rds snapshot  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="Snapshot.process_rds_snapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Snapshot.process_rds_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">process_rds_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">c</span><span class="o">.</span><span class="n">create_db_snapshot</span><span class="p">(</span>
+            <span class="n">DBSnapshotIdentifier</span><span class="o">=</span><span class="s2">&quot;Backup-</span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Engine&#39;</span><span class="p">]),</span>
+            <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;retention&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RetentionWindow"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RetentionWindow">[docs]</a><span class="k">class</span> <span class="nc">RetentionWindow</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;BackupRetentionPeriod&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;retention&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;days&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span> <span class="s1">&#39;copy-tags&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+<div class="viewcode-block" id="RetentionWindow.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RetentionWindow.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">process_snapshot_retention</span><span class="p">,</span>
+                    <span class="n">resource</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                            <span class="s2">&quot;Exception setting rds retention  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div>
+
+<div class="viewcode-block" id="RetentionWindow.process_snapshot_retention"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RetentionWindow.process_snapshot_retention">[docs]</a>    <span class="k">def</span> <span class="nf">process_snapshot_retention</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">current_retention</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BackupRetentionPeriod&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">current_copy_tags</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;CopyTagsToSnapshot&#39;</span><span class="p">]</span>
+        <span class="n">new_retention</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;days&#39;</span><span class="p">]</span>
+        <span class="n">new_copy_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;copy-tags&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">((</span><span class="n">current_retention</span> <span class="o">&lt;</span> <span class="n">new_retention</span> <span class="ow">or</span>
+                <span class="n">current_copy_tags</span> <span class="o">!=</span> <span class="n">new_copy_tags</span><span class="p">)</span> <span class="ow">and</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="n">resource</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_retention_window</span><span class="p">(</span>
+                <span class="n">resource</span><span class="p">,</span>
+                <span class="nb">max</span><span class="p">(</span><span class="n">current_retention</span><span class="p">,</span> <span class="n">new_retention</span><span class="p">),</span>
+                <span class="n">new_copy_tags</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">resource</span></div>
+
+<div class="viewcode-block" id="RetentionWindow.set_retention_window"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RetentionWindow.set_retention_window">[docs]</a>    <span class="k">def</span> <span class="nf">set_retention_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">retention</span><span class="p">,</span> <span class="n">copy_tags</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">c</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
+            <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+            <span class="n">BackupRetentionPeriod</span><span class="o">=</span><span class="n">retention</span><span class="p">,</span>
+            <span class="n">CopyTagsToSnapshot</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">db_instance_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Database instance is not in available state</span>
+        <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBInstanceStatus&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;available&#39;</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is not in available state&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1"># The specified DB Instance is a member of a cluster and its backup retention should not be modified directly.</span>
+        <span class="c1">#   Instead, modify the backup retention of the cluster using the ModifyDbCluster API</span>
+        <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a cluster member&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1"># DB Backups not supported on a read replica for engine postgres</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
+                <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;postgres&#39;</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a postgres read-replica&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="c1"># DB Backups not supported on a read replica running a mysql version before 5.6.</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
+                <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;mysql&#39;</span><span class="p">):</span>
+            <span class="n">engine_version</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EngineVersion&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+            <span class="c1"># Assume &quot;&lt;major&gt;.&lt;minor&gt;.&lt;whatever&gt;&quot;</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s1">r&#39;(?P&lt;major&gt;\d+)\.(?P&lt;minor&gt;\d+)\..*&#39;</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">match</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">5</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">==</span> <span class="mi">5</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;minor&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">)):</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a version </span><span class="si">%s</span><span class="s2"> mysql read-replica&quot;</span> <span class="o">%</span>
+                    <span class="p">(</span><span class="n">db_instance_id</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">True</span></div>
+
+
+<span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;rds-snapshot&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RDSSnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshot">[docs]</a><span class="k">class</span> <span class="nc">RDSSnapshot</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RDSSnapshot.Meta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshot.Meta">[docs]</a>    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;rds&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;rds-snapshot&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;describe_db_snapshots&#39;</span><span class="p">,</span> <span class="s1">&#39;DBSnapshots&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;DBSnapshotIdentifier&#39;</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;SnapshotCreateTime&#39;</span></div>
+
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="n">Meta</span>
+
+    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;rds-snapshot.filters&#39;</span><span class="p">)</span>
+    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;rds-snapshot.actions&#39;</span><span class="p">)</span></div>
+
+
+<span class="nd">@RDSSnapshot.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RDSSnapshotAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotAge">[docs]</a><span class="k">class</span> <span class="nc">RDSSnapshotAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
+    <span class="n">date_attribute</span> <span class="o">=</span> <span class="s1">&#39;SnapshotCreateTime&#39;</span></div>
+
+
+<span class="nd">@RDSSnapshot.action_registry.register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RDSSnapshotDelete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotDelete">[docs]</a><span class="k">class</span> <span class="nc">RDSSnapshotDelete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RDSSnapshotDelete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotDelete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleting </span><span class="si">%d</span><span class="s2"> rds snapshots&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">snapshots</span><span class="p">))</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">snapshot_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="nb">reversed</span><span class="p">(</span><span class="n">snapshots</span><span class="p">),</span> <span class="n">size</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_snapshot_set</span><span class="p">,</span> <span class="n">snapshot_set</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                            <span class="s2">&quot;Exception deleting snapshot set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">snapshots</span></div>
+
+<div class="viewcode-block" id="RDSSnapshotDelete.process_snapshot_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotDelete.process_snapshot_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_snapshot_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots_set</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots_set</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">c</span><span class="o">.</span><span class="n">delete_db_snapshot</span><span class="p">(</span>
+                    <span class="n">DBSnapshotIdentifier</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>

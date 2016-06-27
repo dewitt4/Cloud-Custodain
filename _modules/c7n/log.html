@@ -168,6 +168,7 @@
 
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">itemgetter</span>
 <span class="kn">import</span> <span class="nn">threading</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
@@ -175,14 +176,14 @@
     <span class="kn">import</span> <span class="nn">Queue</span>
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
     <span class="kn">import</span> <span class="nn">queue</span> <span class="kn">as</span> <span class="nn">Queue</span>
-    
+
 
 <span class="n">FLUSH_MARKER</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
 <span class="n">SHUTDOWN_MARKER</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
 
 
 <div class="viewcode-block" id="Error"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.Error">[docs]</a><span class="k">class</span> <span class="nc">Error</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    
+
     <span class="n">AlreadyAccepted</span> <span class="o">=</span> <span class="s2">&quot;DataAlreadyAcceptedException&quot;</span>
     <span class="n">InvalidToken</span> <span class="o">=</span> <span class="s2">&quot;InvalidSequenceTokenException&quot;</span>
     <span class="n">ResourceExists</span> <span class="o">=</span> <span class="s2">&quot;ResourceAlreadyExistsException&quot;</span>
@@ -191,7 +192,7 @@
 <div class="viewcode-block" id="Error.code"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.Error.code">[docs]</a>    <span class="k">def</span> <span class="nf">code</span><span class="p">(</span><span class="n">e</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Error&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Code&#39;</span><span class="p">)</span></div></div>
 
-    
+
 <div class="viewcode-block" id="CloudWatchLogHandler"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler">[docs]</a><span class="k">class</span> <span class="nc">CloudWatchLogHandler</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">Handler</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Python Log Handler to Send to Cloud Watch Logs</span>
 
@@ -201,7 +202,7 @@
     <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">20</span>
     <span class="n">batch_interval</span> <span class="o">=</span> <span class="mi">40</span>
     <span class="n">batch_min_buffer</span> <span class="o">=</span> <span class="mi">10</span>
-    
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_group</span><span class="o">=</span><span class="n">__name__</span><span class="p">,</span> <span class="n">log_stream</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
                  <span class="n">session_factory</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">CloudWatchLogHandler</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">()</span>
@@ -222,21 +223,20 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
                 <span class="s1">&#39;logs&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">create_log_group</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">)</span>
-                
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">Error</span><span class="o">.</span><span class="n">code</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="o">!=</span> <span class="n">Error</span><span class="o">.</span><span class="n">ResourceExists</span><span class="p">:</span>
                 <span class="k">raise</span>
-        
+
     <span class="c1"># Begin logging.Handler API</span>
-    
 <div class="viewcode-block" id="CloudWatchLogHandler.emit"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler.emit">[docs]</a>    <span class="k">def</span> <span class="nf">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Send logs&quot;&quot;&quot;</span>
         <span class="c1"># We&#39;re sending messages asynchronously, bubble to caller when</span>
         <span class="c1"># we&#39;ve detected an error on the message. This isn&#39;t great,</span>
-        <span class="c1"># but options once we&#39;ve gone async are limited.</span>
+        <span class="c1"># but options once we&#39;ve gone async without a deferred/promise</span>
+        <span class="c1"># aren&#39;t great.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
             <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">transport</span><span class="o">.</span><span class="n">error</span>
-        
+
         <span class="c1"># Sanity safety, people do like to recurse by attaching to</span>
         <span class="c1"># root log :-(</span>
         <span class="k">if</span> <span class="n">message</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;boto&#39;</span><span class="p">):</span>
@@ -248,9 +248,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffers</span><span class="p">(</span>
             <span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">created</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_seen</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_interval</span><span class="p">))</span>
-            
+
         <span class="bp">self</span><span class="o">.</span><span class="n">last_seen</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">created</span></div>
-    
+
 <div class="viewcode-block" id="CloudWatchLogHandler.flush"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler.flush">[docs]</a>    <span class="k">def</span> <span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Ensure all logging output has been flushed.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span><span class="p">:</span>
@@ -258,11 +258,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">flush_buffers</span><span class="p">(</span><span class="n">force</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">FLUSH_MARKER</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">join</span><span class="p">()</span></div>
-        
+
 <div class="viewcode-block" id="CloudWatchLogHandler.close"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span><span class="p">:</span>
             <span class="k">return</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span> <span class="o">=</span> <span class="bp">True</span>        
+        <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span> <span class="o">=</span> <span class="bp">True</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">SHUTDOWN_MARKER</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">threads</span><span class="p">:</span>
@@ -270,14 +270,14 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">threads</span> <span class="o">=</span> <span class="p">[]</span></div>
 
     <span class="c1"># End logging.Handler API</span>
-            
+
 <div class="viewcode-block" id="CloudWatchLogHandler.format_message"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler.format_message">[docs]</a>    <span class="k">def</span> <span class="nf">format_message</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msg</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;format message.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;timestamp&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">created</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">),</span>
                 <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">msg</span><span class="p">),</span>
                 <span class="s1">&#39;stream&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_stream</span> <span class="ow">or</span> <span class="n">msg</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="s1">&#39;group&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">}</span></div>
-    
+
 <div class="viewcode-block" id="CloudWatchLogHandler.start_transports"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.CloudWatchLogHandler.start_transports">[docs]</a>    <span class="k">def</span> <span class="nf">start_transports</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;start thread transports.&quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">transport</span> <span class="o">=</span> <span class="n">Transport</span><span class="p">(</span>
@@ -293,7 +293,7 @@
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="p">[]</span></div></div>
-    
+
 
 <div class="viewcode-block" id="Transport"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.Transport">[docs]</a><span class="k">class</span> <span class="nc">Transport</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
@@ -328,8 +328,9 @@
                 <span class="k">return</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">sequences</span><span class="p">[</span><span class="n">stream</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
         <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
-            <span class="n">logGroupName</span><span class="o">=</span><span class="n">group</span><span class="p">,</span> <span class="n">logStreamName</span><span class="o">=</span><span class="n">stream</span><span class="p">,</span> 
-            <span class="n">logEvents</span><span class="o">=</span><span class="n">messages</span><span class="p">)</span>
+            <span class="n">logGroupName</span><span class="o">=</span><span class="n">group</span><span class="p">,</span> <span class="n">logStreamName</span><span class="o">=</span><span class="n">stream</span><span class="p">,</span>
+            <span class="n">logEvents</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span>
+                <span class="n">messages</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;timestamp&#39;</span><span class="p">),</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">False</span><span class="p">))</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sequences</span><span class="p">[</span><span class="n">stream</span><span class="p">]:</span>
             <span class="n">params</span><span class="p">[</span><span class="s1">&#39;sequenceToken&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sequences</span><span class="p">[</span><span class="n">stream</span><span class="p">]</span>
         <span class="k">try</span><span class="p">:</span>
@@ -342,12 +343,12 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">error</span> <span class="o">=</span> <span class="n">e</span>
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sequences</span><span class="p">[</span><span class="n">stream</span><span class="p">]</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;nextSequenceToken&#39;</span><span class="p">]</span></div>
-        
+
 <div class="viewcode-block" id="Transport.loop"><a class="viewcode-back" href="../../generated/c7n.html#c7n.log.Transport.loop">[docs]</a>    <span class="k">def</span> <span class="nf">loop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">def</span> <span class="nf">keyed</span><span class="p">(</span><span class="n">datum</span><span class="p">):</span>
             <span class="k">return</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">=</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="n">datum</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">),</span> <span class="n">datum</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;stream&#39;</span><span class="p">))</span>
-        
+
         <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">datum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_interval</span><span class="p">)</span>
@@ -366,8 +367,6 @@
                 <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">datum</span><span class="p">,</span> <span class="n">keyed</span><span class="p">):</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">buffers</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">task_done</span><span class="p">()</span></div></div>
-
-    
 </pre></div>
 
            </div>

@@ -33,7 +33,7 @@
 
   
     <link rel="top" title="Cloud Custodian 1.0 documentation" href="../../../index.html"/>
-        <link rel="up" title="Module code" href="../../index.html"/> 
+        <link rel="up" title="c7n.resources" href="../resources.html"/> 
 
   
   <script src="../../../_static/js/modernizr.min.js"></script>
@@ -125,6 +125,8 @@
       
           <li><a href="../../index.html">Module code</a> &raquo;</li>
       
+          <li><a href="../resources.html">c7n.resources</a> &raquo;</li>
+      
     <li>c7n.resources.ec2</li>
       <li class="wy-breadcrumbs-aside">
         
@@ -151,17 +153,19 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">operator</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="kn">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="kn">import</span> <span class="n">parse</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="p">(</span>
     <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span>
 <span class="p">)</span>
 
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.offhours</span> <span class="kn">import</span> <span class="n">OffHour</span><span class="p">,</span> <span class="n">OnHour</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="kn">import</span> <span class="n">tags</span><span class="p">,</span> <span class="n">utils</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">type_schema</span>
@@ -174,57 +178,22 @@
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="EC2"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2">[docs]</a><span class="k">class</span> <span class="nc">EC2</span><span class="p">(</span><span class="n">ResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="EC2"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2">[docs]</a><span class="k">class</span> <span class="nc">EC2</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;aws.ec2.instance&quot;</span>
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
-    
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">EC2</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queries</span> <span class="o">=</span> <span class="n">QueryFilter</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">,</span> <span class="p">[]))</span>
 
-    <span class="nd">@property</span>
-    <span class="k">def</span> <span class="nf">client</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-
-<div class="viewcode-block" id="EC2.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">utils</span><span class="o">.</span><span class="n">query_instances</span><span class="p">(</span>
-            <span class="bp">None</span><span class="p">,</span>
-            <span class="n">client</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">),</span>
-            <span class="n">InstanceIds</span><span class="o">=</span><span class="n">resource_ids</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="EC2.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">qf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>
-        <span class="n">instances</span> <span class="o">=</span> <span class="bp">None</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">load</span><span class="p">():</span>
-            <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">qf</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">instances</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s1">&#39;Using cached instance query: </span><span class="si">%s</span><span class="s1"> instances&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">))</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Querying ec2 instances with </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">qf</span><span class="p">)</span>
-        <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        <span class="n">p</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_instances&#39;</span><span class="p">)</span>
-
-        <span class="n">results</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">Filters</span><span class="o">=</span><span class="n">qf</span><span class="p">)</span>
-        <span class="n">reservations</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
-            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">pp</span><span class="p">[</span><span class="s1">&#39;Reservations&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">pp</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]))</span>
-        <span class="n">instances</span> <span class="o">=</span>  <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
-            <span class="o">*</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;Instances&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">reservations</span><span class="p">]))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> instances on </span><span class="si">%d</span><span class="s2"> reservations&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">reservations</span><span class="p">)))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">qf</span><span class="p">,</span> <span class="n">instances</span><span class="p">)</span>
-
-        <span class="c1"># Filter instances</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span></div>
-    
-<div class="viewcode-block" id="EC2.format_json"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2.format_json">[docs]</a>    <span class="k">def</span> <span class="nf">format_json</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">fh</span><span class="p">):</span>
-        <span class="n">resources</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
-            <span class="n">resources</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;LaunchTime&#39;</span><span class="p">))</span>
-        <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">fh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></div>
+<div class="viewcode-block" id="EC2.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_query</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">q</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">query</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="n">query</span><span class="p">[</span><span class="s1">&#39;Filters&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">EC2</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">query</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="EC2.resource_query"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2.resource_query">[docs]</a>    <span class="k">def</span> <span class="nf">resource_query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">qf</span> <span class="o">=</span> <span class="p">[]</span>
@@ -249,7 +218,7 @@
 <span class="sd">    Try to simplify construction for policy authors by automatically</span>
 <span class="sd">    filtering elements (filters or actions) to the instances states</span>
 <span class="sd">    they are valid for.</span>
-<span class="sd">    </span>
+
 <span class="sd">    For more details see http://goo.gl/TZH9Q5</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -306,7 +275,7 @@
                         <span class="n">volumes</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">,</span> <span class="n">volumes</span><span class="p">))</span></div>
 
-    
+
 <div class="viewcode-block" id="InstanceImageBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceImageBase">[docs]</a><span class="k">class</span> <span class="nc">InstanceImageBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
 <div class="viewcode-block" id="InstanceImageBase.get_image_mapping"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceImageBase.get_image_mapping">[docs]</a>    <span class="k">def</span> <span class="nf">get_image_mapping</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
@@ -318,6 +287,8 @@
 
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ImageAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.ImageAge">[docs]</a><span class="k">class</span> <span class="nc">ImageAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">,</span> <span class="n">InstanceImageBase</span><span class="p">):</span>
+
+    <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;CreationDate&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
 
@@ -352,7 +323,7 @@
             <span class="k">return</span> <span class="bp">False</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">image</span><span class="p">)</span></div>
 
-            
+
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;offhour&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="InstanceOffHour"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceOffHour">[docs]</a><span class="k">class</span> <span class="nc">InstanceOffHour</span><span class="p">(</span><span class="n">OffHour</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
 
@@ -363,10 +334,10 @@
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">InstanceOffHour</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span></div></div>
 
-    
+
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;onhour&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="InstanceOnHour"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceOnHour">[docs]</a><span class="k">class</span> <span class="nc">InstanceOnHour</span><span class="p">(</span><span class="n">OnHour</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
-    
+
     <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;stopped&#39;</span><span class="p">,)</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;onhour&#39;</span><span class="p">,</span> <span class="n">inherits</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;#/definitions/filters/time&#39;</span><span class="p">])</span>
@@ -383,7 +354,7 @@
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_ephemeral</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-    
+
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="EphemeralInstanceFilter.is_ephemeral"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EphemeralInstanceFilter.is_ephemeral">[docs]</a>    <span class="k">def</span> <span class="nf">is_ephemeral</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">bd</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">,</span> <span class="p">[]):</span>
@@ -392,7 +363,7 @@
                     <span class="k">return</span> <span class="bp">False</span>
                 <span class="k">return</span> <span class="bp">True</span>
         <span class="k">return</span> <span class="bp">True</span></div></div>
-    
+
 
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;instance-uptime&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="UpTimeFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.UpTimeFilter">[docs]</a><span class="k">class</span> <span class="nc">UpTimeFilter</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
@@ -400,16 +371,16 @@
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;LaunchTime&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;instance-uptime&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span></div>
-    
-    
-<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;instance-age&#39;</span><span class="p">)</span>        
+
+
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;instance-age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="InstanceAgeFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAgeFilter">[docs]</a><span class="k">class</span> <span class="nc">InstanceAgeFilter</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
 
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;LaunchTime&quot;</span>
     <span class="n">ebs_key_func</span> <span class="o">=</span> <span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;AttachTime&#39;</span><span class="p">)</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;instance-age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
-    
+
 <div class="viewcode-block" id="InstanceAgeFilter.get_resource_date"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAgeFilter.get_resource_date">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_date</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
         <span class="c1"># LaunchTime is basically how long has the instance</span>
         <span class="c1"># been on, use the oldest ebs vol attach time</span>
@@ -423,9 +394,9 @@
         <span class="c1"># Lexographical sort on date</span>
         <span class="n">ebs_vols</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">ebs_vols</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ebs_key_func</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ebs_vols</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;AttachTime&#39;</span><span class="p">]</span></div></div>
-        
-    
-<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;start&#39;</span><span class="p">)</span>        
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;start&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Start"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Start">[docs]</a><span class="k">class</span> <span class="nc">Start</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
 
     <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;stopped&#39;</span><span class="p">,)</span>
@@ -436,8 +407,10 @@
         <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
             <span class="k">return</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">start_instances</span><span class="p">,</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">start_instances</span><span class="p">,</span>
             <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">],</span>
             <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div></div>
 
@@ -446,7 +419,7 @@
 <div class="viewcode-block" id="Stop"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Stop">[docs]</a><span class="k">class</span> <span class="nc">Stop</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Stop instances</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,</span> <span class="s1">&#39;pending&#39;</span><span class="p">)</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,)</span>
 
     <span class="n">schema</span> <span class="o">=</span>  <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;stop&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s1">&#39;terminate-ephemeral&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
@@ -460,29 +433,44 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">persistent</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ephemeral</span><span class="p">,</span> <span class="n">persistent</span></div>
-    
+
 <div class="viewcode-block" id="Stop.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Stop.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
         <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
             <span class="k">return</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="c1"># Ephemeral instance can&#39;t be stopped.</span>
         <span class="n">ephemeral</span><span class="p">,</span> <span class="n">persistent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">split_on_storage</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;terminate-ephemeral&#39;</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ephemeral</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
-                <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ephemeral</span><span class="p">],</span>
-                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_instances_op</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
+                <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ephemeral</span><span class="p">])</span>
         <span class="k">if</span> <span class="n">persistent</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">stop_instances</span><span class="p">,</span>
-                <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">persistent</span><span class="p">],</span>
-                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div></div>
-        
-        
-<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>        
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_run_instances_op</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">stop_instances</span><span class="p">,</span>
+                <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">persistent</span><span class="p">])</span></div>
+
+    <span class="k">def</span> <span class="nf">_run_instances_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">instance_ids</span><span class="p">):</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">InstanceIds</span><span class="o">=</span><span class="n">instance_ids</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;IncorrectInstanceState&#39;</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]</span>
+                    <span class="n">e_instance_id</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="n">msg</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">msg</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)]</span>
+                    <span class="n">instance_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">e_instance_id</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">instance_ids</span><span class="p">:</span>
+                        <span class="k">return</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Terminate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Terminate">[docs]</a><span class="k">class</span> <span class="nc">Terminate</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Terminate a set of instances.</span>
-<span class="sd">    </span>
+
 <span class="sd">    While ec2 offers a bulk delete api, any given instance can be configured</span>
 <span class="sd">    with api deletion termination protection, so we can&#39;t use the bulk call</span>
 <span class="sd">    reliabily, we need to process the instances individually. Additionally</span>
@@ -501,10 +489,12 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Disabling termination protection on instances&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">disable_deletion_protection</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="c1"># limit batch sizes to avoid api limits</span>
         <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_run_api</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
                 <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">],</span>
                 <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div>
 
@@ -521,14 +511,84 @@
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_instance</span><span class="p">,</span> <span class="n">instances</span><span class="p">))</span></div></div>
-            
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;snapshot&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Snapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot">[docs]</a><span class="k">class</span> <span class="nc">Snapshot</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;snapshot&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;copy-tags&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}})</span>
+
+<div class="viewcode-block" id="Snapshot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_volume_set</span><span class="p">,</span> <span class="n">resource</span><span class="p">))</span>
+                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                            <span class="s2">&quot;Exception creating snapshot set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div>
+
+<div class="viewcode-block" id="Snapshot.process_volume_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.process_volume_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_volume_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">block_device</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="s1">&#39;Ebs&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">block_device</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">volume_id</span> <span class="o">=</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span>
+            <span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;Automated,Backup,</span><span class="si">%s</span><span class="s2">,</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span>
+                <span class="n">volume_id</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">create_snapshot</span><span class="p">(</span>
+                    <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">,</span>
+                    <span class="n">VolumeId</span><span class="o">=</span><span class="n">volume_id</span><span class="p">,</span>
+                    <span class="n">Description</span><span class="o">=</span><span class="n">description</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;IncorrectState&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> volume:</span><span class="si">%s</span><span class="s2"> is incorrect state&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                            <span class="n">volume_id</span><span class="p">))</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span>
+
+            <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;Name&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">volume_id</span><span class="p">},</span>
+                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]},</span>
+                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;DeviceName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;DeviceName&#39;</span><span class="p">]}</span>
+            <span class="p">]</span>
+
+            <span class="n">copy_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;copy-tags&#39;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="n">copy_keys</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">copy_keys</span><span class="p">:</span>
+                        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">10</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> volume:</span><span class="si">%s</span><span class="s2"> too many tags to copy&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                        <span class="n">volume_id</span><span class="p">))</span>
+                <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="n">tags</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span>
+
+            <span class="n">c</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span>
+                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">,</span>
+                <span class="n">Resources</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">response</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]],</span>
+                <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
 
 <span class="c1"># Valid EC2 Query Filters</span>
 <span class="c1"># http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html</span>
 <span class="n">EC2_VALID_FILTERS</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;architecture&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;i386&#39;</span><span class="p">,</span> <span class="s1">&#39;x86_64&#39;</span><span class="p">),</span>
     <span class="s1">&#39;availability-zone&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="s1">&#39;iam-instance-profile.arn&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
+    <span class="s1">&#39;iam-instance-profile.arn&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;image-id&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;instance-id&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;instance-lifecycle&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;spot&#39;</span><span class="p">,),</span>
@@ -563,7 +623,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="bp">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="bp">None</span>
-        
+
 <div class="viewcode-block" id="QueryFilter.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.QueryFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
@@ -575,24 +635,20 @@
                 <span class="s1">&#39;tag:&#39;</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;EC2 Query Filter invalid filter name </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
-                
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;EC2 Query Filters must have a value, use tag-key&quot;</span>
                 <span class="s2">&quot; w/ tag name as value for tag present checks&quot;</span>
                 <span class="s2">&quot; </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
-    
+
 <div class="viewcode-block" id="QueryFilter.query"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.QueryFilter.query">[docs]</a>    <span class="k">def</span> <span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
             <span class="n">value</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
-            
+
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">}</span></div></div>
-
-
-    
-                                    
 </pre></div>
 
            </div>

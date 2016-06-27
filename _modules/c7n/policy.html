@@ -152,26 +152,29 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">fnmatch</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">from</span> <span class="nn">botocore.client</span> <span class="kn">import</span> <span class="n">ClientError</span>
 
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">EventAction</span>
 <span class="kn">from</span> <span class="nn">c7n.cwe</span> <span class="kn">import</span> <span class="n">CloudWatchEvents</span>
 <span class="kn">from</span> <span class="nn">c7n.ctx</span> <span class="kn">import</span> <span class="n">ExecutionContext</span>
 <span class="kn">from</span> <span class="nn">c7n.credentials</span> <span class="kn">import</span> <span class="n">SessionFactory</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.output</span> <span class="kn">import</span> <span class="n">DEFAULT_NAMESPACE</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="kn">import</span> <span class="n">utils</span>
 
-<span class="c1"># This import causes our resources to be registered into plugin registries</span>
-<span class="kn">import</span> <span class="nn">c7n.resources</span>
+<span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="kn">import</span> <span class="n">load_resources</span>
 
 
 <div class="viewcode-block" id="load"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.load">[docs]</a><span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s1">&#39;yaml&#39;</span><span class="p">,</span> <span class="n">validate</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid path for config </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">path</span><span class="p">)</span>
-    
+
+    <span class="n">load_resources</span><span class="p">()</span>
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">format</span> <span class="o">==</span> <span class="s1">&#39;yaml&#39;</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">yaml_load</span><span class="p">(</span><span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
@@ -191,19 +194,26 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
-        
-<div class="viewcode-block" id="PolicyCollection.policies"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.policies">[docs]</a>    <span class="k">def</span> <span class="nf">policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+<div class="viewcode-block" id="PolicyCollection.policies"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.policies">[docs]</a>    <span class="k">def</span> <span class="nf">policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="c1"># self.options is the CLI options specified in cli.setup_parser()</span>
         <span class="n">policies</span> <span class="o">=</span> <span class="p">[</span><span class="n">Policy</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-            <span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[])]</span>
+            <span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[])</span>
+                    <span class="k">if</span> <span class="n">resource_type</span> <span class="ow">and</span> <span class="n">resource_type</span> <span class="o">==</span> <span class="n">p</span><span class="o">.</span><span class="n">resource_type</span> <span class="ow">or</span> <span class="mi">1</span><span class="p">]</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">filters</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">policies</span>
 
         <span class="k">return</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span> <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">filters</span><span class="p">)]</span></div>
 
+    <span class="nb">filter</span> <span class="o">=</span> <span class="n">policies</span>
+
     <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">())</span></div>
-    
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">())</span>
+
+    <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">policy_name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policies&#39;</span><span class="p">]]</span></div>
+
 
 <div class="viewcode-block" id="Policy"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy">[docs]</a><span class="k">class</span> <span class="nc">Policy</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
@@ -221,7 +231,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">()</span>
-            
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;&lt;Policy resource: </span><span class="si">%s</span><span class="s2"> name: </span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
@@ -235,13 +249,13 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">False</span>
         <span class="k">return</span> <span class="bp">True</span>
-    
+
 <div class="viewcode-block" id="Policy.push"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.push">[docs]</a>    <span class="k">def</span> <span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">lambda_ctx</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Run policy in push mode against given event.</span>
-<span class="sd"> </span>
+
 <span class="sd">        Lambda automatically generates cloud watch logs, and metrics</span>
 <span class="sd">        for us, albeit with some deficienies, metrics no longer count</span>
-<span class="sd">        against valid resources matches, but against execution. </span>
+<span class="sd">        against valid resources matches, but against execution.</span>
 <span class="sd">        Fortunately we already have replacements.</span>
 
 <span class="sd">        TODO: better customization around execution context outputs</span>
@@ -255,9 +269,9 @@
 
         <span class="n">resource_ids</span> <span class="o">=</span> <span class="n">CloudWatchEvents</span><span class="o">.</span><span class="n">get_ids</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">resource_ids</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid push event mode </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown push event mode </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Found resource ids: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">resource_ids</span><span class="p">)</span>        
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Found resource ids: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">resource_ids</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">resource_ids</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not find resource ids&quot;</span><span class="p">)</span>
             <span class="k">return</span>
@@ -269,11 +283,15 @@
         <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
         <span class="k">if</span> <span class="s1">&#39;debug&#39;</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Filtered resources </span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
-        
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> resources: </span><span class="si">%s</span><span class="s2"> no resources matched&quot;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">))</span>
             <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
+            <span class="s1">&#39;ResourceCount&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="s1">&#39;Count&#39;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">,</span>
+            <span class="nb">buffer</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="s1">&#39;debug&#39;</span> <span class="ow">in</span> <span class="n">event</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Invoking actions </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
@@ -281,7 +299,10 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> invoking action: </span><span class="si">%s</span><span class="s2"> resources: </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">action</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
-            <span class="n">action</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">EventAction</span><span class="p">):</span>
+                <span class="n">action</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">action</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Policy.provision"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Provision policy as a lambda function.&quot;&quot;&quot;</span>
@@ -300,11 +321,12 @@
                     <span class="k">lambda</span> <span class="n">assume</span><span class="o">=</span><span class="bp">False</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span><span class="n">assume</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">manager</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
                 <span class="n">PolicyLambda</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="s1">&#39;current&#39;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">)</span></div>
-            
+
 <div class="viewcode-block" id="Policy.poll"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.poll">[docs]</a>    <span class="k">def</span> <span class="nf">poll</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Query resources and apply policy.&quot;&quot;&quot;</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running policy </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running policy </span><span class="si">%s</span><span class="s2"> resource: </span><span class="si">%s</span><span class="s2"> region:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">)</span>
             <span class="n">s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
             <span class="n">rt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">s</span>
@@ -321,11 +343,11 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[]</span>
 
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">dryrun</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">supports_dry_run</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">dryrun</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;dryrun: skipping actions&quot;</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">resources</span>
 
-            <span class="n">at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>            
+            <span class="n">at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">:</span>
                 <span class="n">s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
                 <span class="n">results</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
@@ -337,6 +359,53 @@
                 <span class="s2">&quot;ActionTime&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">at</span><span class="p">,</span> <span class="s2">&quot;Seconds&quot;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">resources</span></div>
 
+<div class="viewcode-block" id="Policy.get_metrics"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.get_metrics">[docs]</a>    <span class="k">def</span> <span class="nf">get_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">):</span>
+        <span class="c1"># Avoiding runtime lambda dep, premature optimization?</span>
+        <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="kn">import</span> <span class="n">PolicyLambda</span><span class="p">,</span> <span class="n">LambdaManager</span>
+
+        <span class="n">values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Pickup lambda specific metrics (errors, invocations, durations)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_lambda</span><span class="p">:</span>
+            <span class="n">manager</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">metrics</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">PolicyLambda</span><span class="p">(</span><span class="bp">self</span><span class="p">)],</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;ResourceCount&#39;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">metrics</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;ResourceCount&#39;</span><span class="p">,</span> <span class="s1">&#39;ResourceTime&#39;</span><span class="p">,</span> <span class="s1">&#39;ActionTime&#39;</span><span class="p">]</span>
+
+        <span class="n">default_dimensions</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Policy&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;ResType&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span>
+            <span class="s1">&#39;Scope&#39;</span><span class="p">:</span> <span class="s1">&#39;Policy&#39;</span><span class="p">}</span>
+
+        <span class="c1"># Support action, and filter custom metrics</span>
+        <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">filters</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">el</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+                <span class="n">metrics</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">el</span><span class="o">.</span><span class="n">metrics</span><span class="p">)</span>
+
+        <span class="n">session</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="nb">basestring</span><span class="p">):</span>
+                <span class="n">dimensions</span> <span class="o">=</span> <span class="n">default_dimensions</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">m</span><span class="p">,</span> <span class="n">m_dimensions</span> <span class="o">=</span> <span class="n">m</span>
+                <span class="n">dimensions</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">default_dimensions</span><span class="p">)</span>
+                <span class="n">dimensions</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">m_dimensions</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_metric_statistics</span><span class="p">(</span>
+                <span class="n">Namespace</span><span class="o">=</span><span class="n">DEFAULT_NAMESPACE</span><span class="p">,</span>
+                <span class="n">Dimensions</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span>
+                    <span class="ow">in</span> <span class="n">dimensions</span><span class="o">.</span><span class="n">items</span><span class="p">()],</span>
+                <span class="n">Statistics</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Sum&#39;</span><span class="p">,</span> <span class="s1">&#39;Average&#39;</span><span class="p">],</span>
+                <span class="n">StartTime</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+                <span class="n">EndTime</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+                <span class="n">Period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span>
+                <span class="n">MetricName</span><span class="o">=</span><span class="n">m</span><span class="p">)</span>
+            <span class="n">values</span><span class="p">[</span><span class="n">m</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Datapoints&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">values</span></div>
+
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Run policy in default mode&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_lambda</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">dryrun</span><span class="p">:</span>
@@ -345,7 +414,7 @@
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
 
     <span class="n">run</span> <span class="o">=</span> <span class="n">__call__</span>
-    
+
     <span class="k">def</span> <span class="nf">_write_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rel_p</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
         <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="n">rel_p</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
@@ -358,8 +427,6 @@
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;Invalid resource type: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource_type</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">factory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span></div></div>
-
-    
 </pre></div>
 
            </div>

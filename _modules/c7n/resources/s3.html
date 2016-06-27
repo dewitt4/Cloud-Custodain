@@ -33,7 +33,7 @@
 
   
     <link rel="top" title="Cloud Custodian 1.0 documentation" href="../../../index.html"/>
-        <link rel="up" title="Module code" href="../../index.html"/> 
+        <link rel="up" title="c7n.resources" href="../resources.html"/> 
 
   
   <script src="../../../_static/js/modernizr.min.js"></script>
@@ -125,6 +125,8 @@
       
           <li><a href="../../index.html">Module code</a> &raquo;</li>
       
+          <li><a href="../resources.html">c7n.resources</a> &raquo;</li>
+      
     <li>c7n.resources.s3</li>
       <li class="wy-breadcrumbs-aside">
         
@@ -169,7 +171,7 @@
 <span class="sd"> global-grants</span>
 
 <span class="sd">   Check bucket acls for global grants</span>
-<span class="sd">  </span>
+
 <span class="sd"> encryption-policy</span>
 
 <span class="sd">   Attach an encryption required policy to a bucket, this will break</span>
@@ -181,16 +183,20 @@
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="kn">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">as_completed</span>
 
+<span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">math</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="kn">import</span> <span class="n">executor</span>
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span>
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.iamaccess</span> <span class="kn">import</span> <span class="n">CrossAccountAccessFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
@@ -205,87 +211,78 @@
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;s3.actions&#39;</span><span class="p">)</span>
 
 
+<span class="n">MAX_COPY_SIZE</span> <span class="o">=</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">5</span>
+
+
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="S3"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3">[docs]</a><span class="k">class</span> <span class="nc">S3</span><span class="p">(</span><span class="n">ResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="S3"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3">[docs]</a><span class="k">class</span> <span class="nc">S3</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="S3.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">ResourceQuery</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span><span class="s2">&quot;aws.s3.bucket&quot;</span><span class="p">)):</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;BucketName&#39;</span></div>
 
     <span class="n">executor_factory</span> <span class="o">=</span> <span class="n">executor</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span>
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
-    
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">S3</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">log_dir</span>
 
-<div class="viewcode-block" id="S3.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
+<div class="viewcode-block" id="S3.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span>
-                <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resource_ids</span><span class="p">))))</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">buckets</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_ids</span><span class="p">}</span>
+                <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">))))</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
                 <span class="n">assemble_bucket</span><span class="p">,</span>
                 <span class="nb">zip</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">buckets</span><span class="p">))</span>
             <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">results</span></div>
-        
-<div class="viewcode-block" id="S3.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Retrieving buckets&#39;</span><span class="p">)</span>
-        <span class="n">response</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">list_buckets</span><span class="p">()</span>
-        <span class="n">buckets</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;Buckets&#39;</span><span class="p">]</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Got </span><span class="si">%d</span><span class="s1"> buckets&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">))</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Assembling bucket documents&#39;</span><span class="p">)</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
-                <span class="n">assemble_bucket</span><span class="p">,</span>
-                <span class="nb">zip</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">buckets</span><span class="p">))</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">results</span><span class="p">)</span></div></div>
+            <span class="k">return</span> <span class="n">results</span></div></div>
 
-    
+
+<span class="n">S3_AUGMENT_TABLE</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_location&#39;</span><span class="p">,</span> <span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_tagging&#39;</span><span class="p">,</span> <span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[],</span> <span class="s1">&#39;TagSet&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_policy&#39;</span><span class="p">,</span>  <span class="s1">&#39;Policy&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;Policy&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_acl&#39;</span><span class="p">,</span> <span class="s1">&#39;Acl&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_replication&#39;</span><span class="p">,</span> <span class="s1">&#39;Replication&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_versioning&#39;</span><span class="p">,</span> <span class="s1">&#39;Versioning&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_website&#39;</span><span class="p">,</span> <span class="s1">&#39;Website&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_logging&#39;</span><span class="p">,</span> <span class="s1">&#39;Logging&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s1">&#39;LoggingEnabled&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s1">&#39;get_bucket_notification_configuration&#39;</span><span class="p">,</span> <span class="s1">&#39;Notification&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+<span class="c1">#        (&#39;get_bucket_lifecycle&#39;, &#39;Lifecycle&#39;, None, None),</span>
+<span class="c1">#        (&#39;get_bucket_cors&#39;, &#39;Cors&#39;),</span>
+<span class="p">)</span>
+
+
 <div class="viewcode-block" id="assemble_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.assemble_bucket">[docs]</a><span class="k">def</span> <span class="nf">assemble_bucket</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Assemble a document representing all the config state around a bucket.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">factory</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">item</span>
-
     <span class="n">s</span> <span class="o">=</span> <span class="n">factory</span><span class="p">()</span>
     <span class="n">c</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
-
-    <span class="n">methods</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_location&#39;</span><span class="p">,</span> <span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_tagging&#39;</span><span class="p">,</span> <span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[],</span> <span class="s1">&#39;TagSet&#39;</span><span class="p">),</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_policy&#39;</span><span class="p">,</span>  <span class="s1">&#39;Policy&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>   
-        <span class="p">(</span><span class="s1">&#39;get_bucket_acl&#39;</span><span class="p">,</span> <span class="s1">&#39;Acl&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_replication&#39;</span><span class="p">,</span> <span class="s1">&#39;Replication&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_versioning&#39;</span><span class="p">,</span> <span class="s1">&#39;Versioning&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span>
-        <span class="p">(</span><span class="s1">&#39;get_bucket_website&#39;</span><span class="p">,</span> <span class="s1">&#39;Website&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
-<span class="c1">#        (&#39;get_bucket_lifecycle&#39;, &#39;Lifecycle&#39;, None, None),</span>
-<span class="c1">#        (&#39;get_bucket_cors&#39;, &#39;Cors&#39;),        </span>
-<span class="c1">#        (&#39;get_bucket_notification_configuration&#39;, &#39;Notification&#39;)</span>
-    <span class="p">]</span>
-
     <span class="c1"># Bucket Location, Current Client Location, Default Location</span>
     <span class="n">b_location</span> <span class="o">=</span> <span class="n">c_location</span> <span class="o">=</span> <span class="n">location</span> <span class="o">=</span> <span class="s2">&quot;us-east-1&quot;</span>
-    
+    <span class="n">methods</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">S3_AUGMENT_TABLE</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">select</span> <span class="ow">in</span> <span class="n">methods</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
             <span class="n">v</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
             <span class="n">v</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;ResponseMetadata&#39;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">select</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">select</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">select</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
                 <span class="n">v</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="n">select</span><span class="p">]</span>
         <span class="k">except</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">code</span> <span class="o">=</span>  <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">code</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;NoSuch&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;NotFound&quot;</span> <span class="ow">in</span> <span class="n">code</span><span class="p">:</span>
                 <span class="n">v</span> <span class="o">=</span> <span class="n">default</span>
             <span class="k">elif</span> <span class="n">code</span> <span class="o">==</span> <span class="s1">&#39;PermanentRedirect&#39;</span><span class="p">:</span>
-                <span class="c1"># log.warning(e.response)</span>
                 <span class="n">s</span> <span class="o">=</span> <span class="n">factory</span><span class="p">()</span>
                 <span class="n">c</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
                 <span class="c1"># Requeue with the correct region given location constraint</span>
-                <span class="n">methods</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span>
+                <span class="n">methods</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">select</span><span class="p">))</span>
                 <span class="k">continue</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> unable to invoke method:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]))</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> unable to invoke method:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]))</span>
                 <span class="k">return</span> <span class="bp">None</span>
         <span class="c1"># As soon as we learn location (which generally works)</span>
         <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;Location&#39;</span> <span class="ow">and</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
@@ -309,36 +306,64 @@
         <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="p">(</span><span class="n">signature_version</span><span class="o">=</span><span class="s1">&#39;s3v4&#39;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">config</span> <span class="o">=</span> <span class="bp">None</span>
-    <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
-        <span class="s1">&#39;s3&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>        
-        <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span></div>
 
 
-<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;global-grants&#39;</span><span class="p">)</span>        
-<div class="viewcode-block" id="NoGlobalGrants"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoGlobalGrants">[docs]</a><span class="k">class</span> <span class="nc">NoGlobalGrants</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="S3CrossAccountFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3CrossAccountFilter">[docs]</a><span class="k">class</span> <span class="nc">S3CrossAccountFilter</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;global-grants&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="S3CrossAccountFilter.get_accounts"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3CrossAccountFilter.get_accounts">[docs]</a>    <span class="k">def</span> <span class="nf">get_accounts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;add in elb access by default</span>
+
+<span class="sd">        ELB Accounts by region http://goo.gl/a8MXxd</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">accounts</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">S3CrossAccountFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_accounts</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">accounts</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+            <span class="p">[</span><span class="s1">&#39;127311923021&#39;</span><span class="p">,</span>  <span class="c1"># us-east-1</span>
+             <span class="s1">&#39;797873946194&#39;</span><span class="p">,</span>  <span class="c1"># us-west-2</span>
+             <span class="s1">&#39;027434742980&#39;</span><span class="p">,</span>  <span class="c1"># us-west-1</span>
+             <span class="s1">&#39;156460612806&#39;</span><span class="p">,</span>  <span class="c1"># eu-west-1</span>
+             <span class="s1">&#39;054676820928&#39;</span><span class="p">,</span>  <span class="c1"># eu-central-1</span>
+             <span class="s1">&#39;114774131450&#39;</span><span class="p">,</span>  <span class="c1"># ap-southeast-1</span>
+             <span class="s1">&#39;582318560864&#39;</span><span class="p">,</span>  <span class="c1"># ap-northeast-1</span>
+             <span class="s1">&#39;783225319266&#39;</span><span class="p">,</span>  <span class="c1"># ap-southeast-2</span>
+             <span class="s1">&#39;600734575887&#39;</span><span class="p">,</span>  <span class="c1"># ap-northeast-2</span>
+             <span class="s1">&#39;507241528517&#39;</span><span class="p">,</span>  <span class="c1"># sa-east-1</span>
+             <span class="s1">&#39;048591011584&#39;</span><span class="p">,</span>  <span class="c1"># gov-cloud-1</span>
+             <span class="p">])</span></div></div>
+
+
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;global-grants&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="GlobalGrantsFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.GlobalGrantsFilter">[docs]</a><span class="k">class</span> <span class="nc">GlobalGrantsFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;global-grants&#39;</span><span class="p">,</span> <span class="n">permissions</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s1">&#39;READ&#39;</span><span class="p">,</span> <span class="s1">&#39;WRITE&#39;</span><span class="p">,</span> <span class="s1">&#39;WRITE_ACP&#39;</span><span class="p">,</span> <span class="s1">&#39;READ&#39;</span><span class="p">,</span> <span class="s1">&#39;READ_ACP&#39;</span><span class="p">]}})</span>
 
     <span class="n">GLOBAL_ALL</span> <span class="o">=</span> <span class="s2">&quot;http://acs.amazonaws.com/groups/global/AllUsers&quot;</span>
     <span class="n">AUTH_ALL</span> <span class="o">=</span> <span class="s2">&quot;http://acs.amazonaws.com/groups/global/AuthenticatedUsers&quot;</span>
-    
-<div class="viewcode-block" id="NoGlobalGrants.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoGlobalGrants.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+<div class="viewcode-block" id="GlobalGrantsFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.GlobalGrantsFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
             <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">results</span></div>
 
-<div class="viewcode-block" id="NoGlobalGrants.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoGlobalGrants.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<div class="viewcode-block" id="GlobalGrantsFilter.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.GlobalGrantsFilter.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="n">acl</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Acl&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Grants&#39;</span><span class="p">:</span> <span class="p">[]})</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">acl</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Grants&#39;</span><span class="p">]:</span>
             <span class="k">return</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;permissions&#39;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="k">for</span> <span class="n">grant</span> <span class="ow">in</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Grants&#39;</span><span class="p">]:</span>
             <span class="k">if</span> <span class="s1">&#39;URI&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">grant</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Grantee&quot;</span><span class="p">,</span> <span class="p">{}):</span>
                 <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Grantee&#39;</span><span class="p">][</span><span class="s1">&#39;URI&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">AUTH_ALL</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">GLOBAL_ALL</span><span class="p">]:</span>
-                <span class="k">if</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;READ&#39;</span> <span class="ow">and</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Website&#39;</span><span class="p">]:</span>
-                    <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Grantee&#39;</span><span class="p">][</span><span class="s1">&#39;URI&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">AUTH_ALL</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">GLOBAL_ALL</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;READ&#39;</span> <span class="ow">and</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Website&#39;</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">perms</span> <span class="ow">or</span> <span class="p">(</span><span class="n">perms</span> <span class="ow">and</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">perms</span><span class="p">):</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">])</span>
 
         <span class="n">c</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
@@ -353,69 +378,44 @@
 <div class="viewcode-block" id="BucketActionBase.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">permissions</span></div></div>
 
-    
-<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encrypted-prefix&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="EncryptedPrefix"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptedPrefix">[docs]</a><span class="k">class</span> <span class="nc">EncryptedPrefix</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
 
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:GetObject&quot;</span><span class="p">,</span> <span class="s2">&quot;s3:PutObject&quot;</span><span class="p">)</span>
-    
-<div class="viewcode-block" id="EncryptedPrefix.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptedPrefix.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">)</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
-            <span class="k">return</span> <span class="n">results</span></div>
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;has-statement&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="HasStatementFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.HasStatementFilter">[docs]</a><span class="k">class</span> <span class="nc">HasStatementFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find buckets with set of named policy statements.&quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;has-statement&#39;</span><span class="p">,</span>
+        <span class="n">statement_ids</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
 
-<div class="viewcode-block" id="EncryptedPrefix.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptedPrefix.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-        <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
-        <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="s1">&#39;AWSLogs&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="HasStatementFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.HasStatementFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span></div>
 
-        <span class="n">create</span> <span class="o">=</span> <span class="bp">True</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">data</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">head_object</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Key</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
-            <span class="n">create</span> <span class="o">=</span> <span class="bp">False</span>
-            <span class="k">if</span> <span class="s1">&#39;ServerSideEncryption&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">None</span>
-        <span class="k">except</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;404&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>
+<div class="viewcode-block" id="HasStatementFilter.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.HasStatementFilter.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">b</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
+        <span class="n">required</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;StatementId&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">required</span><span class="p">:</span>
+                <span class="n">required</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;StatementId&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">required</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">b</span>
+        <span class="k">return</span> <span class="bp">None</span></div></div>
 
-        <span class="n">crypto_method</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">create</span><span class="p">:</span>
-            <span class="n">content</span> <span class="o">=</span> <span class="s2">&quot;Path Prefix Object For Sub Path Encryption&quot;</span>
-            <span class="n">s3</span><span class="o">.</span><span class="n">put_object</span><span class="p">(</span>
-                <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-                <span class="n">Key</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
-                <span class="n">ACL</span><span class="o">=</span><span class="s2">&quot;bucket-owner-full-control&quot;</span><span class="p">,</span>
-                <span class="n">Body</span><span class="o">=</span><span class="n">content</span><span class="p">,</span>
-                <span class="n">ServerSideEncryption</span><span class="o">=</span><span class="n">crypto_method</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;Prefix&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;Created&#39;</span><span class="p">}</span>
 
-        <span class="c1"># Note on copy we lose individual key acl grants        </span>
-        <span class="n">s3</span><span class="o">.</span><span class="n">copy_object</span><span class="p">(</span>
-            <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Key</span><span class="o">=</span><span class="n">k</span><span class="p">,</span>
-            <span class="n">CopySource</span><span class="o">=</span><span class="s2">&quot;/</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">k</span><span class="p">),</span>
-            <span class="n">MetadataDirective</span><span class="o">=</span><span class="s1">&#39;COPY&#39;</span><span class="p">,</span>
-            <span class="n">ServerSideEncryption</span><span class="o">=</span><span class="n">crypto_method</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;Prefix&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;Updated&#39;</span><span class="p">}</span></div></div>
-        
-
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;missing-statement&#39;</span><span class="p">)</span>
 <span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;missing-policy-statement&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="MissingPolicyStatementFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.MissingPolicyStatementFilter">[docs]</a><span class="k">class</span> <span class="nc">MissingPolicyStatementFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Find buckets missing a set of named policy statements.&quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;missing-policy-statement&#39;</span><span class="p">,</span>
+        <span class="n">aliases</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;missing-statement&#39;</span><span class="p">,),</span>
         <span class="n">statement_ids</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
 
-<div class="viewcode-block" id="MissingPolicyStatementFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.MissingPolicyStatementFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
-            <span class="k">return</span> <span class="n">results</span></div>
-
-<div class="viewcode-block" id="MissingPolicyStatementFilter.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.MissingPolicyStatementFilter.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-        <span class="n">p</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">b</span>
 
@@ -423,25 +423,115 @@
 
         <span class="n">required</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">,</span> <span class="p">[]))</span>
         <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
-        
+
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;StatementId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">required</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;StatementId&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">required</span><span class="p">:</span>
                 <span class="n">required</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;StatementId&#39;</span><span class="p">])</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">required</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">None</span>
-        <span class="k">return</span> <span class="n">b</span></div></div>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">True</span></div>
 
-    
+
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;no-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="NoOp"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoOp">[docs]</a><span class="k">class</span> <span class="nc">NoOp</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;no-op&#39;</span><span class="p">)</span>
-    
+
 <div class="viewcode-block" id="NoOp.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoOp.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">None</span></div></div>
-            
-            
-<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encryption-policy&#39;</span><span class="p">)</span>    
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;remove-statements&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RemovePolicyStatement"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.RemovePolicyStatement">[docs]</a><span class="k">class</span> <span class="nc">RemovePolicyStatement</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;remove-statements&#39;</span><span class="p">,</span>
+        <span class="n">statement_ids</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
+
+<div class="viewcode-block" id="RemovePolicyStatement.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.RemovePolicyStatement.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="RemovePolicyStatement.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.RemovePolicyStatement.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
+
+        <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">]:</span>
+                <span class="n">found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+                <span class="n">statements</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">s3</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">statements</span><span class="p">:</span>
+            <span class="n">s3</span><span class="o">.</span><span class="n">delete_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Policy</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyRemoved&#39;</span><span class="p">,</span> <span class="s1">&#39;Statements&#39;</span><span class="p">:</span> <span class="n">found</span><span class="p">}</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;attach-encrypt&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AttachLambdaEncrypt"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt">[docs]</a><span class="k">class</span> <span class="nc">AttachLambdaEncrypt</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;attach-encrypt&#39;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
+
+<div class="viewcode-block" id="AttachLambdaEncrypt.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;attach-encrypt: role must be specified either&quot;</span>
+                <span class="s2">&quot;via assume or in config&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="AttachLambdaEncrypt.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="kn">import</span> <span class="n">LambdaManager</span>
+        <span class="kn">from</span> <span class="nn">c7n.ufuncs.s3crypt</span> <span class="kn">import</span> <span class="n">get_function</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">get_function</span><span class="p">(</span>
+            <span class="bp">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">))</span>
+
+        <span class="c1"># Publish function to all of our buckets regions</span>
+        <span class="n">region_funcs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
+            <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">,</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+            <span class="n">lambda_mgr</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span>
+                <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="n">r</span><span class="p">))</span>
+            <span class="n">lambda_mgr</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+            <span class="n">region_funcs</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span>
+                        <span class="n">region_funcs</span><span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">,</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">)],</span>
+                        <span class="n">b</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                        <span class="s2">&quot;Error attaching lambda-encrypt </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+            <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AttachLambdaEncrypt.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="kn">import</span> <span class="n">BucketNotification</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">BucketNotification</span><span class="p">({},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">source</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encryption-policy&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="EncryptionRequiredPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionRequiredPolicy">[docs]</a><span class="k">class</span> <span class="nc">EncryptionRequiredPolicy</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:GetBucketPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;s3:PutBucketPolicy&quot;</span><span class="p">)</span>
@@ -451,7 +541,7 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
-        
+
 <div class="viewcode-block" id="EncryptionRequiredPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionRequiredPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
@@ -462,10 +552,10 @@
         <span class="n">p</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No policy found, creating new&quot;</span><span class="p">)</span>
-            <span class="n">p</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Version&#39;</span><span class="p">:</span> <span class="s2">&quot;2012-10-17&quot;</span><span class="p">,</span> <span class="s2">&quot;Statements&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Version&#39;</span><span class="p">:</span> <span class="s2">&quot;2012-10-17&quot;</span><span class="p">,</span> <span class="s2">&quot;Statement&quot;</span><span class="p">:</span> <span class="p">[]}</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
-            
+
         <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
@@ -473,7 +563,7 @@
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                     <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> Found extant Encryption Policy&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
                 <span class="k">return</span>
-        
+
         <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span>
         <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 
@@ -482,11 +572,11 @@
              <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Deny&#39;</span><span class="p">,</span>
              <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span>
              <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:PutObject&#39;</span><span class="p">,</span>
-             <span class="s2">&quot;Resource&quot;</span><span class="p">:</span><span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">/*&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-             <span class="s2">&quot;Condition&quot;</span><span class="p">:{</span>
+             <span class="s2">&quot;Resource&quot;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">/*&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+             <span class="s2">&quot;Condition&quot;</span><span class="p">:</span> <span class="p">{</span>
                  <span class="c1"># AWS Managed Keys or KMS keys, note policy language</span>
                  <span class="c1"># does not support custom kms (todo add issue)</span>
-                 <span class="s2">&quot;StringNotEquals&quot;</span><span class="p">:{</span>
+                 <span class="s2">&quot;StringNotEquals&quot;</span><span class="p">:</span> <span class="p">{</span>
                      <span class="s2">&quot;s3:x-amz-server-side-encryption&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;AES256&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:kms&quot;</span><span class="p">]}}</span>
              <span class="p">})</span>
         <span class="n">p</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">statements</span>
@@ -497,10 +587,10 @@
             <span class="n">Policy</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyAttached&#39;</span><span class="p">}</span></div></div>
 
-        
+
 <div class="viewcode-block" id="BucketScanLog"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketScanLog">[docs]</a><span class="k">class</span> <span class="nc">BucketScanLog</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Offload remediated key ids to a disk file in batches</span>
-<span class="sd">    </span>
+
 <span class="sd">    A bucket keyspace is effectively infinite, we need to store partial</span>
 <span class="sd">    results out of memory, this class provides for a json log on disk</span>
 <span class="sd">    with partial write support.</span>
@@ -508,7 +598,7 @@
 <span class="sd">    json output format:</span>
 <span class="sd">     - [list_of_serialized_keys],</span>
 <span class="sd">     - [] # Empty list of keys at end when we close the buffer</span>
-<span class="sd">    </span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span> <span class="o">=</span> <span class="n">log_dir</span>
@@ -519,12 +609,12 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">path</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">.json&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-    
+
     <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;[</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span>
-    
+
     <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exc_frame</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="c1"># we need an empty marker list at end to avoid trailing commas</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;[]&quot;</span><span class="p">)</span>
@@ -535,7 +625,7 @@
             <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span> <span class="o">=</span> <span class="bp">None</span>
         <span class="k">return</span> <span class="bp">False</span>
-        
+
 <div class="viewcode-block" id="BucketScanLog.add"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketScanLog.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">keys</span><span class="p">))</span>
@@ -559,11 +649,15 @@
             <span class="p">}</span>
         <span class="p">}</span>
 
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ScanBucket</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="p">[]</span>
+
 <div class="viewcode-block" id="ScanBucket.get_bucket_style"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.get_bucket_style">[docs]</a>    <span class="k">def</span> <span class="nf">get_bucket_style</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Versioning&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Status&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;Enabled&#39;</span>
             <span class="ow">and</span> <span class="s1">&#39;versioned&#39;</span> <span class="ow">or</span> <span class="s1">&#39;standard&#39;</span><span class="p">)</span></div>
-    
+
 <div class="viewcode-block" id="ScanBucket.get_bucket_op"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.get_bucket_op">[docs]</a>    <span class="k">def</span> <span class="nf">get_bucket_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">op_name</span><span class="p">):</span>
         <span class="n">bucket_style</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_style</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket_ops</span><span class="p">[</span><span class="n">bucket_style</span><span class="p">][</span><span class="n">op_name</span><span class="p">]</span>
@@ -576,12 +670,19 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
                 <span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span> <span class="k">if</span> <span class="n">f</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;denied.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="p">,</span> <span class="n">fh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="ScanBucket.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="s2">&quot;Scanning bucket:</span><span class="si">%s</span><span class="s2"> visitor:</span><span class="si">%s</span><span class="s2"> style:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_style</span><span class="p">(</span><span class="n">b</span><span class="p">)))</span>
+
         <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span>
         <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 
@@ -599,20 +700,28 @@
                         <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                             <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> removed while scanning&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
                         <span class="k">return</span>
+                    <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
+                        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                            <span class="s2">&quot;Access Denied Bucket:</span><span class="si">%s</span><span class="s2"> while scanning&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                        <span class="k">return</span>
                     <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
                         <span class="s2">&quot;Error processing bucket:</span><span class="si">%s</span><span class="s2"> paginator:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                             <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">p</span><span class="p">))</span></div>
 
     <span class="n">__call__</span> <span class="o">=</span> <span class="n">process_bucket</span>
-    
+
     <span class="k">def</span> <span class="nf">_process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">key_log</span><span class="p">,</span> <span class="n">w</span><span class="p">):</span>
         <span class="n">content_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_op</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="s1">&#39;contents_key&#39;</span><span class="p">)</span>
         <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+
         <span class="k">for</span> <span class="n">key_set</span> <span class="ow">in</span> <span class="n">p</span><span class="p">:</span>
             <span class="n">count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">key_set</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">content_key</span><span class="p">,</span> <span class="p">[]))</span>
 
             <span class="c1"># Empty bucket check</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">content_key</span> <span class="ow">in</span> <span class="n">key_set</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">key_set</span><span class="p">[</span><span class="s1">&#39;IsTruncated&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">content_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key_set</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">key_set</span><span class="p">[</span><span class="s1">&#39;IsTruncated&#39;</span><span class="p">]:</span>
+                <span class="n">b</span><span class="p">[</span><span class="s1">&#39;KeyScanCount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">count</span>
+                <span class="n">b</span><span class="p">[</span><span class="s1">&#39;KeyRemediated&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span>
                 <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
                         <span class="s1">&#39;Remediated&#39;</span><span class="p">:</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span><span class="p">,</span>
                         <span class="s1">&#39;Count&#39;</span><span class="p">:</span> <span class="n">count</span><span class="p">}</span>
@@ -639,7 +748,10 @@
                 <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Scan Complete bucket:</span><span class="si">%s</span><span class="s1"> keys:</span><span class="si">%d</span><span class="s1"> remediated:</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">,</span>
                          <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">count</span><span class="p">,</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;Remediated&#39;</span><span class="p">:</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="s1">&#39;Count&#39;</span><span class="p">:</span> <span class="n">count</span><span class="p">}</span>
+        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;KeyScanCount&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">count</span>
+        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;KeyRemediated&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;Remediated&#39;</span><span class="p">:</span> <span class="n">key_log</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="s1">&#39;Count&#39;</span><span class="p">:</span> <span class="n">count</span><span class="p">}</span>
 
 <div class="viewcode-block" id="ScanBucket.process_chunk"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.process_chunk">[docs]</a>    <span class="k">def</span> <span class="nf">process_chunk</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div>
@@ -649,9 +761,9 @@
 
 <div class="viewcode-block" id="ScanBucket.process_version"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.process_version">[docs]</a>    <span class="k">def</span> <span class="nf">process_version</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s3</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div></div>
-    
 
-<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encrypt-keys&#39;</span><span class="p">)</span>    
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;encrypt-keys&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="EncryptExtantKeys"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptExtantKeys">[docs]</a><span class="k">class</span> <span class="nc">EncryptExtantKeys</span><span class="p">(</span><span class="n">ScanBucket</span><span class="p">):</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
@@ -666,9 +778,15 @@
         <span class="s1">&#39;additonalProperties&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;report-only&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;glacier&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;large&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]}</span>
             <span class="p">}</span>
         <span class="p">}</span>
+
+    <span class="n">metrics</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s1">&#39;Total Keys&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Scope&#39;</span><span class="p">:</span> <span class="s1">&#39;Account&#39;</span><span class="p">}),</span>
+        <span class="p">(</span><span class="s1">&#39;Unencrypted&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Scope&#39;</span><span class="p">:</span> <span class="s1">&#39;Account&#39;</span><span class="p">})]</span>
 
 <div class="viewcode-block" id="EncryptExtantKeys.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptExtantKeys.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="n">t</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
@@ -691,7 +809,7 @@
             <span class="nb">buffer</span><span class="o">=</span><span class="bp">True</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-                
+
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
             <span class="p">(</span><span class="s2">&quot;EncryptExtant Complete keys:</span><span class="si">%d</span><span class="s2"> &quot;</span>
              <span class="s2">&quot;remediated:</span><span class="si">%d</span><span class="s2"> rate:</span><span class="si">%0.2f</span><span class="s2">/s time:</span><span class="si">%0.2f</span><span class="s2">s&quot;</span><span class="p">),</span>
@@ -717,7 +835,6 @@
 
 <div class="viewcode-block" id="EncryptExtantKeys.process_key"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptExtantKeys.process_key">[docs]</a>    <span class="k">def</span> <span class="nf">process_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s3</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="n">k</span> <span class="o">=</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span>
-
         <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="n">info</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">head_object</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
 
@@ -727,10 +844,12 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;report-only&#39;</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">k</span>
 
-        <span class="n">storage_class</span> <span class="o">=</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;StorageClass&#39;</span><span class="p">]</span>
-        
+        <span class="n">storage_class</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;StorageClass&#39;</span><span class="p">,</span> <span class="s1">&#39;STANDARD&#39;</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">storage_class</span> <span class="o">==</span> <span class="s1">&#39;GLACIER&#39;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="s1">&#39;Restore&#39;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;glacier&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">False</span>
+            <span class="k">if</span> <span class="s1">&#39;Restore&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
                 <span class="c1"># This takes multiple hours, we let the next c7n</span>
                 <span class="c1"># run take care of followups.</span>
                 <span class="n">s3</span><span class="o">.</span><span class="n">restore_object</span><span class="p">(</span>
@@ -750,6 +869,10 @@
                   <span class="s1">&#39;MetadataDirective&#39;</span><span class="p">:</span> <span class="s1">&#39;COPY&#39;</span><span class="p">,</span>
                   <span class="s1">&#39;StorageClass&#39;</span><span class="p">:</span> <span class="n">storage_class</span><span class="p">,</span>
                   <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="n">crypto_method</span><span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Size&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">MAX_COPY_SIZE</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;large&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_large_file</span><span class="p">(</span><span class="n">s3</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
         <span class="n">s3</span><span class="o">.</span><span class="n">copy_object</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">k</span></div>
 
@@ -774,7 +897,51 @@
             <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span>
             <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span>
             <span class="n">VersionId</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;VersionId&#39;</span><span class="p">])</span>
-        <span class="k">return</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;VersionId&#39;</span><span class="p">]</span></div></div>
+        <span class="k">return</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;VersionId&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="EncryptExtantKeys.process_large_file"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptExtantKeys.process_large_file">[docs]</a>    <span class="k">def</span> <span class="nf">process_large_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s3</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;For objects over 5gb, use multipart upload to copy&quot;&quot;&quot;</span>
+        <span class="n">part_size</span> <span class="o">=</span> <span class="n">MAX_COPY_SIZE</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">num_parts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;Size&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="n">part_size</span><span class="p">))</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;CopySource&#39;</span><span class="p">)</span>
+
+        <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;MetadataDirective&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;Metadata&#39;</span> <span class="ow">in</span> <span class="n">info</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Metadata&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;Metadata&#39;</span><span class="p">]</span>
+
+        <span class="n">upload_id</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">create_multipart_upload</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)[</span><span class="s1">&#39;UploadId&#39;</span><span class="p">]</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">bucket_name</span><span class="p">,</span>
+                  <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span>
+                  <span class="s1">&#39;CopySource&#39;</span><span class="p">:</span> <span class="s2">&quot;/</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]),</span>
+                  <span class="s1">&#39;UploadId&#39;</span><span class="p">:</span> <span class="n">upload_id</span><span class="p">,</span>
+                  <span class="s1">&#39;CopySource&#39;</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
+                  <span class="s1">&#39;CopySourceIfMatch&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">]}</span>
+
+        <span class="k">def</span> <span class="nf">upload_part</span><span class="p">(</span><span class="n">part_num</span><span class="p">):</span>
+            <span class="n">part_params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">part_params</span><span class="p">[</span><span class="s1">&#39;CopySourceRange&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;bytes=</span><span class="si">%d</span><span class="s2">-</span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">part_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">part_num</span> <span class="o">-</span> <span class="mi">1</span><span class="p">),</span>
+                <span class="nb">min</span><span class="p">(</span><span class="n">part_size</span> <span class="o">*</span> <span class="n">part_num</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Size&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="n">part_params</span><span class="p">[</span><span class="s1">&#39;PartNumber&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">part_num</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">upload_part_copy</span><span class="p">(</span><span class="o">**</span><span class="n">part_params</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;ETag&#39;</span><span class="p">:</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;CopyPartResult&#39;</span><span class="p">][</span><span class="s1">&#39;ETag&#39;</span><span class="p">],</span>
+                    <span class="s1">&#39;PartNumber&#39;</span><span class="p">:</span> <span class="n">part_num</span><span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="n">parts</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">upload_part</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_parts</span><span class="o">+</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Error during large key copy bucket: </span><span class="si">%s</span><span class="s2"> key: </span><span class="si">%s</span><span class="s2">, &quot;</span>
+                <span class="s2">&quot;aborting upload&quot;</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">s3</span><span class="o">.</span><span class="n">abort_multipart_upload</span><span class="p">(</span>
+                <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">UploadId</span><span class="o">=</span><span class="n">upload_id</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="n">s3</span><span class="o">.</span><span class="n">complete_multipart_upload</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="n">UploadId</span><span class="o">=</span><span class="n">upload_id</span><span class="p">,</span>
+            <span class="n">MultipartUpload</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Parts&#39;</span><span class="p">:</span> <span class="n">parts</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span></div></div>
 
 
 <div class="viewcode-block" id="restore_complete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.restore_complete">[docs]</a><span class="k">def</span> <span class="nf">restore_complete</span><span class="p">(</span><span class="n">restore</span><span class="p">):</span>
@@ -783,6 +950,171 @@
     <span class="k">else</span><span class="p">:</span>
         <span class="n">ongoing</span> <span class="o">=</span> <span class="n">restore</span>
     <span class="k">return</span> <span class="s1">&#39;false&#39;</span> <span class="ow">in</span> <span class="n">ongoing</span></div>
+
+
+<span class="nd">@filters.register</span><span class="p">(</span><span class="s1">&#39;is-log-target&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="LogTarget"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget">[docs]</a><span class="k">class</span> <span class="nc">LogTarget</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter and return buckets are log destinations.</span>
+
+<span class="sd">    Not suitable for use in lambda on large accounts, This is a api</span>
+<span class="sd">    heavy process to detect scan all possible log sources.</span>
+
+<span class="sd">    Sources:</span>
+<span class="sd">      - elb (Access Log)</span>
+<span class="sd">      - s3 (Access Log)</span>
+<span class="sd">      - cfn (Template writes)</span>
+<span class="sd">      - cloudtrail</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;is-log-target&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">executor_factory</span> <span class="o">=</span> <span class="n">executor</span><span class="o">.</span><span class="n">MainThreadExecutor</span>
+
+<div class="viewcode-block" id="LogTarget.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">log_buckets</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_elb_bucket_locations</span><span class="p">():</span>
+            <span class="n">log_buckets</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+            <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> elb log targets&quot;</span> <span class="o">%</span> <span class="n">count</span><span class="p">)</span>
+
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_s3_bucket_locations</span><span class="p">(</span><span class="n">buckets</span><span class="p">):</span>
+            <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">log_buckets</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Found </span><span class="si">%d</span><span class="s1"> s3 log targets&#39;</span> <span class="o">%</span> <span class="n">count</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cloud_trail_locations</span><span class="p">(</span><span class="n">buckets</span><span class="p">):</span>
+            <span class="n">log_buckets</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> log targets for </span><span class="si">%d</span><span class="s2"> buckets&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">log_buckets</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="bp">True</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span> <span class="k">if</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">log_buckets</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span> <span class="k">if</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">log_buckets</span><span class="p">]</span></div>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="LogTarget.get_s3_bucket_locations"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget.get_s3_bucket_locations">[docs]</a>    <span class="k">def</span> <span class="nf">get_s3_bucket_locations</span><span class="p">(</span><span class="n">buckets</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;return (bucket_name, prefix) for all s3 logging targets&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]:</span>
+                <span class="k">yield</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;TargetBucket&#39;</span><span class="p">],</span>
+                       <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;TargetPrefix&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;cf-templates-&#39;</span><span class="p">):</span>
+                <span class="k">yield</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="LogTarget.get_cloud_trail_locations"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget.get_cloud_trail_locations">[docs]</a>    <span class="k">def</span> <span class="nf">get_cloud_trail_locations</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trails</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;trailList&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">],</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;S3KeyPrefix&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="LogTarget.get_elb_bucket_locations"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget.get_elb_bucket_locations">[docs]</a>    <span class="k">def</span> <span class="nf">get_elb_bucket_locations</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Try to use the cache if it exists</span>
+        <span class="n">elbs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span> <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;elb&#39;</span><span class="p">})</span>
+
+        <span class="c1"># Sigh, post query refactor reuse, we can&#39;t save our cache here</span>
+        <span class="c1"># as that resource manager does extra lookups on tags. Not</span>
+        <span class="c1"># worth paginating, since with cache usage we have full set in</span>
+        <span class="c1"># mem.</span>
+        <span class="k">if</span> <span class="n">elbs</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_load_balancers&#39;</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">paginate</span><span class="p">()</span>
+            <span class="n">elbs</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">build_full_result</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s1">&#39;LoadBalancerDescriptions&#39;</span><span class="p">,</span> <span class="p">())</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Queried </span><span class="si">%d</span><span class="s2"> elbs&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">elbs</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Using </span><span class="si">%d</span><span class="s2"> cached elbs&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">elbs</span><span class="p">))</span>
+
+        <span class="n">get_elb_attrs</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+            <span class="n">_query_elb_attrs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">elb_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">elbs</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">get_elb_attrs</span><span class="p">,</span> <span class="n">elb_set</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Error while scanning elb log targets: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">tgt</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">():</span>
+                    <span class="k">yield</span> <span class="n">tgt</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">_query_elb_attrs</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">elb_set</span><span class="p">):</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
+    <span class="n">log_targets</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">elb_set</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">attrs</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_load_balancer_attributes</span><span class="p">(</span>
+                <span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">e</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">])[</span>
+                    <span class="s1">&#39;LoadBalancerAttributes&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s1">&#39;AccessLog&#39;</span> <span class="ow">in</span> <span class="n">attrs</span> <span class="ow">and</span> <span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;AccessLog&#39;</span><span class="p">][</span><span class="s1">&#39;Enabled&#39;</span><span class="p">]:</span>
+                <span class="n">log_targets</span><span class="o">.</span><span class="n">append</span><span class="p">((</span>
+                    <span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;AccessLog&#39;</span><span class="p">][</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">],</span>
+                    <span class="n">attrs</span><span class="p">[</span><span class="s1">&#39;AccessLog&#39;</span><span class="p">][</span><span class="s1">&#39;S3BucketPrefix&#39;</span><span class="p">]))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Could not retrieve load balancer </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">e</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">],</span> <span class="n">err</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">log_targets</span>
+
+
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;delete-global-grants&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="DeleteGlobalGrants"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteGlobalGrants">[docs]</a><span class="k">class</span> <span class="nc">DeleteGlobalGrants</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;delete-global-grants&#39;</span><span class="p">,</span>
+        <span class="n">grantees</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
+
+<div class="viewcode-block" id="DeleteGlobalGrants.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteGlobalGrants.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="DeleteGlobalGrants.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteGlobalGrants.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">grantees</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;grantees&#39;</span><span class="p">,</span> <span class="p">[</span>
+                <span class="n">GlobalGrantsFilter</span><span class="o">.</span><span class="n">AUTH_ALL</span><span class="p">,</span> <span class="n">GlobalGrantsFilter</span><span class="o">.</span><span class="n">GLOBAL_ALL</span><span class="p">])</span>
+
+        <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+
+        <span class="n">acl</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Acl&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Grants&#39;</span><span class="p">:</span> <span class="p">[]})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">acl</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Grants&#39;</span><span class="p">]:</span>
+            <span class="k">return</span>
+        <span class="n">new_grants</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">grant</span> <span class="ow">in</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Grants&#39;</span><span class="p">]:</span>
+            <span class="n">grantee</span> <span class="o">=</span> <span class="n">grant</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Grantee&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">grantee</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="c1"># Yuck, &#39;get_bucket_acl&#39; doesn&#39;t return the grantee type.</span>
+            <span class="k">if</span> <span class="s1">&#39;URI&#39;</span> <span class="ow">in</span> <span class="n">grantee</span><span class="p">:</span>
+                <span class="n">grantee</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Group&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">grantee</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;CanonicalUser&#39;</span>
+            <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;URI&#39;</span> <span class="ow">in</span> <span class="n">grantee</span> <span class="ow">and</span>
+                <span class="n">grantee</span><span class="p">[</span><span class="s1">&#39;URI&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">grantees</span> <span class="ow">and</span> <span class="ow">not</span>
+                    <span class="p">(</span><span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;READ&#39;</span> <span class="ow">and</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Website&#39;</span><span class="p">])):</span>
+                <span class="c1"># Remove this grantee.</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_grants</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grant</span><span class="p">)</span>
+
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">({</span><span class="s1">&#39;Owner&#39;</span><span class="p">:</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Owner&#39;</span><span class="p">],</span> <span class="s1">&#39;Grants&#39;</span><span class="p">:</span> <span class="n">new_grants</span><span class="p">})</span>
+
+        <span class="n">c</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
+        <span class="n">c</span><span class="o">.</span><span class="n">put_bucket_acl</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">AccessControlPolicy</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Owner&#39;</span><span class="p">:</span> <span class="n">acl</span><span class="p">[</span><span class="s1">&#39;Owner&#39;</span><span class="p">],</span> <span class="s1">&#39;Grants&#39;</span><span class="p">:</span> <span class="n">new_grants</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">b</span></div></div>
 </pre></div>
 
            </div>
