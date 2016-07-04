@@ -168,7 +168,8 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="p">(</span>
-    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">)</span>
+    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span>
+    <span class="n">OPERATORS</span><span class="p">)</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span>
@@ -471,7 +472,10 @@
     <span class="sd">&quot;&quot;&quot;Filter asg by image age.&quot;&quot;&quot;</span>
 
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;CreationDate&quot;</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;image-age&#39;</span><span class="p">,</span>
+        <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()},</span>
+        <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
 
 <div class="viewcode-block" id="ImageAgeFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ImageAgeFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">asgs</span><span class="p">)</span>
@@ -949,9 +953,16 @@
                 <span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">]))</span>
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">asg_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;autoscaling&#39;</span><span class="p">)</span>
-        <span class="n">asg_client</span><span class="o">.</span><span class="n">delete_auto_scaling_group</span><span class="p">(</span>
-                <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
-                <span class="n">ForceDelete</span><span class="o">=</span><span class="n">force_delete</span><span class="p">)</span></div></div>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">asg_client</span><span class="o">.</span><span class="n">delete_auto_scaling_group</span><span class="p">(</span>
+                    <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
+                    <span class="n">ForceDelete</span><span class="o">=</span><span class="n">force_delete</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ValidationError&#39;</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Erroring deleting asg </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span>
+                <span class="k">return</span>
+            <span class="k">raise</span></div></div>
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;launch-config&#39;</span><span class="p">)</span>
@@ -969,7 +980,10 @@
 <div class="viewcode-block" id="LaunchConfigAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.LaunchConfigAge">[docs]</a><span class="k">class</span> <span class="nc">LaunchConfigAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
 
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s2">&quot;CreatedTime&quot;</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span></div>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;age&#39;</span><span class="p">,</span>
+        <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()},</span>
+        <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span></div>
 
 
 <span class="nd">@LaunchConfig.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
