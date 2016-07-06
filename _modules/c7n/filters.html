@@ -330,7 +330,7 @@
     <span class="sd">&quot;&quot;&quot;Generic value filter using jmespath</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">expr</span> <span class="o">=</span> <span class="bp">None</span>
-    <span class="n">op</span> <span class="o">=</span> <span class="n">v</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">op</span> <span class="o">=</span> <span class="n">v</span> <span class="o">=</span> <span class="n">vtype</span> <span class="o">=</span> <span class="bp">None</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
@@ -341,6 +341,7 @@
             <span class="c1"># Doesn&#39;t mix well as enum with inherits that extend</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;value_type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="s1">&#39;integer&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
                 <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">},</span>
                 <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
@@ -383,6 +384,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value_type&#39;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">i</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">False</span>
@@ -403,17 +405,36 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
             <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
 
+        <span class="c1"># value type conversion</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">v</span><span class="p">,</span> <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
+
         <span class="c1"># Value match</span>
-        <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;absent&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;absent&#39;</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">True</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;not-null&#39;</span> <span class="ow">and</span> <span class="n">r</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;not-null&#39;</span> <span class="ow">and</span> <span class="n">r</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">True</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">:</span>
             <span class="n">op</span> <span class="o">=</span> <span class="n">OPERATORS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">]</span>
-            <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">r</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">True</span>
-        <span class="k">return</span> <span class="bp">False</span></div></div>
+        <span class="k">return</span> <span class="bp">False</span></div>
+
+<div class="viewcode-block" id="ValueFilter.process_value_type"><a class="viewcode-back" href="../../generated/c7n.html#c7n.filters.ValueFilter.process_value_type">[docs]</a>    <span class="k">def</span> <span class="nf">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="o">==</span> <span class="s1">&#39;age&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sentinel</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+                <span class="n">sentinel</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">sentinel</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+            <span class="c1"># Reverse the age comparison, we want to compare the value being</span>
+            <span class="c1"># greater than the sentinel typically. Else the syntax for age</span>
+            <span class="c1"># comparisons is intuitively wrong.</span>
+            <span class="k">return</span> <span class="n">value</span><span class="p">,</span> <span class="n">sentinel</span></div></div>
 
 
 <div class="viewcode-block" id="AgeFilter"><a class="viewcode-back" href="../../generated/c7n.html#c7n.filters.AgeFilter">[docs]</a><span class="k">class</span> <span class="nc">AgeFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
@@ -444,8 +465,8 @@
             <span class="n">n</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">threshold_date</span> <span class="o">=</span> <span class="n">n</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="p">)</span>
         <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_date</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-        <span class="n">op</span> <span class="o">=</span> <span class="n">OPERATORS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;less-than&#39;</span><span class="p">)]</span>
-        <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">threshold_date</span><span class="p">)</span></div>
+        <span class="n">op</span> <span class="o">=</span> <span class="n">OPERATORS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;greater-than&#39;</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">threshold_date</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="EventFilter"><a class="viewcode-back" href="../../generated/c7n.html#c7n.filters.EventFilter">[docs]</a><span class="k">class</span> <span class="nc">EventFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
