@@ -161,7 +161,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="p">(</span>
     <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">ANNOTATION_KEY</span><span class="p">,</span>
-    <span class="n">FilterValidationError</span><span class="p">)</span>
+    <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
@@ -189,7 +189,10 @@
 <span class="nd">@Snapshot.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="SnapshotAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.SnapshotAge">[docs]</a><span class="k">class</span> <span class="nc">SnapshotAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;age&#39;</span><span class="p">,</span>
+        <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span>
+        <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()})</span>
     <span class="n">date_attribute</span> <span class="o">=</span> <span class="s1">&#39;StartTime&#39;</span></div>
 
 
@@ -266,6 +269,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;Source and destination region are the same, skipping&quot;</span><span class="p">)</span>
             <span class="k">return</span>
+
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">,</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">)))</span></div>
 
@@ -300,6 +304,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                 <span class="s2">&quot;Waiting on cross-region snapshot copy </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">copy_ids</span><span class="p">))</span>
             <span class="n">waiter</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="s1">&#39;snapshot_completed&#39;</span><span class="p">)</span>
+            <span class="n">waiter</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">delay</span> <span class="o">=</span> <span class="mi">60</span>
+            <span class="n">waiter</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">max_attempts</span> <span class="o">=</span> <span class="mi">60</span>
             <span class="n">waiter</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">SnapshotIds</span><span class="o">=</span><span class="n">copy_ids</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                 <span class="s2">&quot;Cross region copy complete </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">copy_ids</span><span class="p">))</span></div></div>
