@@ -533,7 +533,6 @@
 <div class="viewcode-block" id="EncryptionRequiredPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionRequiredPolicy">[docs]</a><span class="k">class</span> <span class="nc">EncryptionRequiredPolicy</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:GetBucketPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;s3:PutBucketPolicy&quot;</span><span class="p">)</span>
-
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;encryption-policy&#39;</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
@@ -554,29 +553,35 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
 
+        <span class="n">encryption_sid</span> <span class="o">=</span> <span class="s2">&quot;RequiredEncryptedPutObject&quot;</span>
+        <span class="n">encryption_statement</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Sid&#39;</span><span class="p">:</span> <span class="n">encryption_sid</span><span class="p">,</span>
+            <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Deny&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:PutObject&#39;</span><span class="p">,</span>
+            <span class="s2">&quot;Resource&quot;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">/*&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="s2">&quot;Condition&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="c1"># AWS Managed Keys or KMS keys, note policy language</span>
+                <span class="c1"># does not support custom kms (todo add issue)</span>
+                <span class="s2">&quot;StringNotEquals&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;s3:x-amz-server-side-encryption&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;AES256&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:kms&quot;</span><span class="p">]}}}</span>
+
         <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;RequireEncryptedPutObject&#39;</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                    <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> Found extant Encryption Policy&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
-                <span class="k">return</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> Found extant encrypt policy&quot;</span><span class="p">,</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">s</span> <span class="o">!=</span> <span class="n">encryption_statement</span><span class="p">:</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> updating extant encrypt policy&quot;</span><span class="p">,</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                    <span class="n">statements</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span>
 
         <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span>
         <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 
-        <span class="n">statements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;Sid&#39;</span><span class="p">:</span> <span class="s1">&#39;RequireEncryptedPutObject&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Deny&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:PutObject&#39;</span><span class="p">,</span>
-             <span class="s2">&quot;Resource&quot;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">/*&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-             <span class="s2">&quot;Condition&quot;</span><span class="p">:</span> <span class="p">{</span>
-                 <span class="c1"># AWS Managed Keys or KMS keys, note policy language</span>
-                 <span class="c1"># does not support custom kms (todo add issue)</span>
-                 <span class="s2">&quot;StringNotEquals&quot;</span><span class="p">:</span> <span class="p">{</span>
-                     <span class="s2">&quot;s3:x-amz-server-side-encryption&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;AES256&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:kms&quot;</span><span class="p">]}}</span>
-             <span class="p">})</span>
+        <span class="n">statements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">encryption_statement</span><span class="p">)</span>
         <span class="n">p</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">statements</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Bucket:</span><span class="si">%s</span><span class="s1"> attached encryption policy&#39;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
 
@@ -609,11 +614,17 @@
         <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">.json&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Don&#39;t require output directories</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;[</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span>
 
     <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exc_frame</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fh</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
         <span class="c1"># we need an empty marker list at end to avoid trailing commas</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;[]&quot;</span><span class="p">)</span>
         <span class="c1"># and close the surrounding list</span>
@@ -626,6 +637,8 @@
 
 <div class="viewcode-block" id="BucketScanLog.add"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketScanLog.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fh</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">keys</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;,</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span></div></div>
 
@@ -668,7 +681,7 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
                 <span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span> <span class="k">if</span> <span class="n">f</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">:</span>
             <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
                     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;denied.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
