@@ -153,6 +153,7 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">random</span>
 
@@ -275,10 +276,11 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">()</span>
 
-<div class="viewcode-block" id="StateTransitionFilter.filter_instance_state"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.StateTransitionFilter.filter_instance_state">[docs]</a>    <span class="k">def</span> <span class="nf">filter_instance_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+<div class="viewcode-block" id="StateTransitionFilter.filter_instance_state"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.StateTransitionFilter.filter_instance_state">[docs]</a>    <span class="k">def</span> <span class="nf">filter_instance_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">,</span> <span class="n">states</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">states</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_states</span>
         <span class="n">orig_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span>
-                   <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;State&#39;</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_states</span><span class="p">]</span>
+                   <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;State&#39;</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">states</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instances&quot;</span> <span class="o">%</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">orig_length</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
@@ -475,6 +477,74 @@
             <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div></div>
 
 
+<span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;resize&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Resize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Resize">[docs]</a><span class="k">class</span> <span class="nc">Resize</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Change an instance&#39;s size.</span>
+
+<span class="sd">    An instance can only be resized when its stopped, this action</span>
+<span class="sd">    can optionally restart an instance if needed to effect the instance</span>
+<span class="sd">    type change. Instances are always left in the run state they were</span>
+<span class="sd">    found in.</span>
+
+<span class="sd">    There are a few caveats to be aware of, instance resizing</span>
+<span class="sd">    needs to maintain compatibility for architecture, virtualization type</span>
+<span class="sd">    hvm/pv, and ebs optimization at minimum.</span>
+
+<span class="sd">    http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-resize.html</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,</span> <span class="s1">&#39;stopped&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Resize.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Resize.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">stopped_instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;stopped&#39;</span><span class="p">,))</span>
+        <span class="n">running_instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;restart&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">running_instances</span><span class="p">:</span>
+            <span class="n">Stop</span><span class="p">({</span><span class="s1">&#39;terminate-ephemeral&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">},</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">running_instances</span><span class="p">)</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+            <span class="n">waiter</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_waiter</span><span class="p">(</span><span class="s1">&#39;instance_stopped&#39;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">waiter</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span>
+                    <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">running_instances</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s2">&quot;Exception stopping instances for resize:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">instance_set</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="n">stopped_instances</span><span class="p">,</span> <span class="n">running_instances</span><span class="p">),</span> <span class="mi">20</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">(</span><span class="n">instance_set</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;restart&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">running_instances</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">start_instances</span><span class="p">(</span>
+                <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">running_instances</span><span class="p">])</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="n">stopped_instances</span><span class="p">,</span> <span class="n">running_instances</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Resize.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Resize.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance_set</span><span class="p">):</span>
+        <span class="n">type_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type-map&#39;</span><span class="p">)</span>
+        <span class="n">default_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instance_set</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;resizing </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceType&#39;</span><span class="p">]))</span>
+            <span class="n">new_type</span> <span class="o">=</span> <span class="n">type_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceType&#39;</span><span class="p">],</span> <span class="n">default_type</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">new_type</span> <span class="o">==</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceType&#39;</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">modify_instance_attribute</span><span class="p">(</span>
+                    <span class="n">InstanceId</span><span class="o">=</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span>
+                    <span class="n">InstanceType</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">new_type</span><span class="p">})</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s2">&quot;Exception resizing instance:</span><span class="si">%s</span><span class="s2"> new:</span><span class="si">%s</span><span class="s2"> old:</span><span class="si">%s</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="n">new_type</span><span class="p">,</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceType&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span></div></div>
+
+
 <span class="nd">@actions.register</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Stop"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Stop">[docs]</a><span class="k">class</span> <span class="nc">Stop</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Stop instances</span>
@@ -507,10 +577,10 @@
                 <span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
                 <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ephemeral</span><span class="p">])</span>
         <span class="k">if</span> <span class="n">persistent</span><span class="p">:</span>
-
             <span class="bp">self</span><span class="o">.</span><span class="n">_run_instances_op</span><span class="p">(</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">stop_instances</span><span class="p">,</span>
-                <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">persistent</span><span class="p">])</span></div>
+                <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">persistent</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">instances</span></div>
 
     <span class="k">def</span> <span class="nf">_run_instances_op</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">instance_ids</span><span class="p">):</span>
         <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
