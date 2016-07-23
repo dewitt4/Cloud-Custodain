@@ -154,8 +154,11 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="kn">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="kn">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">DefaultVpcBase</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="kn">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="kn">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="kn">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
@@ -174,6 +177,240 @@
 <div class="viewcode-block" id="SecurityGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroup">[docs]</a><span class="k">class</span> <span class="nc">SecurityGroup</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.ec2.security-group&#39;</span></div>
+
+
+<span class="nd">@SecurityGroup.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;default-vpc&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="SGDefaultVpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGDefaultVpc">[docs]</a><span class="k">class</span> <span class="nc">SGDefaultVpc</span><span class="p">(</span><span class="n">DefaultVpcBase</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;default-vpc&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;VpcId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;VpcId&#39;</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SGPermission"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission">[docs]</a><span class="k">class</span> <span class="nc">SGPermission</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Base class for verifying security group permissions</span>
+
+<span class="sd">    All attributes of a security group permission are available as</span>
+<span class="sd">    value filters.</span>
+
+<span class="sd">    If multiple attributes are specified the permission must satisfy</span>
+<span class="sd">    all of them.</span>
+
+<span class="sd">    If a group has any permissions that match all conditions, then it</span>
+<span class="sd">    matches the filter.</span>
+
+<span class="sd">    Permissions that match on the group are annotated onto the group.</span>
+
+<span class="sd">      - type: ingress</span>
+<span class="sd">        IpProtocol: -1</span>
+<span class="sd">        FromPort: 445</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;IpProtocol&#39;</span><span class="p">,</span> <span class="s1">&#39;FromPort&#39;</span><span class="p">,</span> <span class="s1">&#39;ToPort&#39;</span><span class="p">,</span> <span class="s1">&#39;UserIdGroupPairs&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="s1">&#39;PrefixListIds&#39;</span><span class="p">))</span>
+
+<div class="viewcode-block" id="SGPermission.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">fattrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())))</span>
+
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fattrs</span><span class="p">:</span>
+            <span class="n">fv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fv</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">fv</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">fv</span> <span class="o">=</span> <span class="p">{</span><span class="n">f</span><span class="p">:</span> <span class="n">fv</span><span class="p">}</span>
+            <span class="n">vf</span> <span class="o">=</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="n">fv</span><span class="p">)</span>
+            <span class="n">vf</span><span class="o">.</span><span class="n">annotate</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vf</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SGPermission</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">f</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Matched</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched</span>
+            <span class="k">return</span> <span class="bp">True</span></div>
+
+
+<span class="nd">@SecurityGroup.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;ingress&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="IPPermission"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.IPPermission">[docs]</a><span class="k">class</span> <span class="nc">IPPermission</span><span class="p">(</span><span class="n">SGPermission</span><span class="p">):</span>
+
+    <span class="n">ip_permissions_key</span> <span class="o">=</span> <span class="s2">&quot;IpPermissions&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;additionalProperties&#39;: True,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ingress&#39;</span><span class="p">]}</span>
+            <span class="p">},</span>
+        <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]}</span></div>
+
+
+<span class="nd">@SecurityGroup.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;egress&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="IPPermissionEgress"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.IPPermissionEgress">[docs]</a><span class="k">class</span> <span class="nc">IPPermissionEgress</span><span class="p">(</span><span class="n">SGPermission</span><span class="p">):</span>
+
+    <span class="n">ip_permissions_key</span> <span class="o">=</span> <span class="s2">&quot;IpPermissionsEgress&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;additionalProperties&#39;: True,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;egress&#39;</span><span class="p">]}</span>
+            <span class="p">},</span>
+        <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]}</span></div>
+
+
+<span class="nd">@SecurityGroup.action_registry.register</span><span class="p">(</span><span class="s1">&#39;remove-permissions&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RemovePermissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.RemovePermissions">[docs]</a><span class="k">class</span> <span class="nc">RemovePermissions</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;remove-permissions&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RemovePermissions.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.RemovePermissions.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">i_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ingress&#39;</span><span class="p">)</span>
+        <span class="n">e_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;egress&#39;</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">perms</span> <span class="ow">in</span> <span class="p">[(</span><span class="s1">&#39;ingress&#39;</span><span class="p">,</span> <span class="n">i_perms</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;egress&#39;</span><span class="p">,</span> <span class="n">e_perms</span><span class="p">)]:</span>
+                <span class="k">if</span> <span class="n">perms</span> <span class="o">==</span> <span class="s1">&#39;matched&#39;</span><span class="p">:</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="s1">&#39;MatchedIpPermissions</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">label</span> <span class="o">==</span> <span class="s1">&#39;egress&#39;</span> <span class="ow">and</span> <span class="s1">&#39;Egress&#39;</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                    <span class="n">groups</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">())</span>
+                <span class="k">elif</span> <span class="n">perms</span> <span class="o">==</span> <span class="s1">&#39;all&#39;</span><span class="p">:</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="s1">&#39;IpPermissions</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">label</span> <span class="o">==</span> <span class="s1">&#39;egress&#39;</span> <span class="ow">and</span> <span class="s1">&#39;Egress&#39;</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                    <span class="n">groups</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">())</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">perms</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                    <span class="n">groups</span> <span class="o">=</span> <span class="n">perms</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">groups</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s1">&#39;revoke_security_group_</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="n">method</span><span class="p">(</span><span class="n">GroupId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">],</span> <span class="n">IpPermissions</span><span class="o">=</span><span class="n">groups</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;eni&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="NetworkInterface"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkInterface">[docs]</a><span class="k">class</span> <span class="nc">NetworkInterface</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="NetworkInterface.Meta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkInterface.Meta">[docs]</a>    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ec2&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;eni&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;describe_network_interfaces&#39;</span><span class="p">,</span> <span class="s1">&#39;NetworkInterfaces&#39;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;NetworkInterfaceId&#39;</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;NetworkInterfaceIds&#39;</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;list&#39;</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="bp">None</span></div>
+
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="n">Meta</span></div>
+
+
+<span class="nd">@NetworkInterface.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="InterfaceSubnet"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceSubnet">[docs]</a><span class="k">class</span> <span class="nc">InterfaceSubnet</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">,</span> <span class="n">rinherits</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">annotate</span> <span class="o">=</span> <span class="bp">False</span>
+
+<div class="viewcode-block" id="InterfaceSubnet.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceSubnet.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">subnets</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;SubnetId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">])</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">Subnet</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subnets</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SubnetId&#39;</span><span class="p">]:</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span>
+                        <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">subnets</span><span class="p">))}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">InterfaceSubnet</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">subnets</span><span class="p">[</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;SubnetId&#39;</span><span class="p">]])</span></div>
+
+
+<span class="nd">@NetworkInterface.filter_registry.register</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="InterfaceGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceGroup">[docs]</a><span class="k">class</span> <span class="nc">InterfaceGroup</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">annotate</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">,</span> <span class="n">rinherits</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<div class="viewcode-block" id="InterfaceGroup.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceGroup.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Groups&#39;</span><span class="p">]:</span>
+                <span class="n">groups</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">])</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">SecurityGroup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]:</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span>
+                       <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()}</span>
+        <span class="c1"># todo, something odd here</span>
+        <span class="c1">#in manager.get_resources(sorted(list(groups)))}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">InterfaceGroup</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Groups&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]]):</span>
+                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;MatchedSecurityGroups&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched</span>
+            <span class="k">return</span> <span class="bp">True</span></div>
+
+
+<span class="nd">@NetworkInterface.action_registry.register</span><span class="p">(</span><span class="s1">&#39;remove-groups&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="InterfaceRemoveGroups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceRemoveGroups">[docs]</a><span class="k">class</span> <span class="nc">InterfaceRemoveGroups</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Remove security groups from an interface.</span>
+
+<span class="sd">    Can target either physical groups as a list of group ids or</span>
+<span class="sd">    symbolic groups like &#39;matched&#39; or &#39;all&#39;. &#39;matched&#39; uses</span>
+<span class="sd">    the annotations of the &#39;group&#39; interface filter.</span>
+
+<span class="sd">    Note an interface always gets at least one security group, so</span>
+<span class="sd">    we also allow specification of an isolation/quarantine group</span>
+<span class="sd">    that can be specified if there would otherwise be no groups.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;remove-groups&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;groups&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">,</span> <span class="s1">&#39;all&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}]},</span>
+           <span class="s1">&#39;isolation-group&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
+
+<div class="viewcode-block" id="InterfaceRemoveGroups.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceRemoveGroups.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">target_group_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;groups&#39;</span><span class="p">)</span>
+        <span class="n">isolation_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;isolation-group&#39;</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">rgroups</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Groups&#39;</span><span class="p">]]</span>
+            <span class="k">if</span> <span class="n">target_group_ids</span> <span class="o">==</span> <span class="s1">&#39;matched&#39;</span><span class="p">:</span>
+                <span class="n">group_ids</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;MatchedSecurityGroups&#39;</span><span class="p">,</span> <span class="p">())</span>
+            <span class="k">elif</span> <span class="n">target_group_ids</span> <span class="o">==</span> <span class="s1">&#39;all&#39;</span><span class="p">:</span>
+                <span class="n">group_ids</span> <span class="o">=</span> <span class="n">rgroups</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target_group_ids</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">group_ids</span> <span class="o">=</span> <span class="n">target_group_ids</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">group_ids</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">group_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">rgroups</span><span class="p">:</span>
+                    <span class="n">rgroups</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rgroups</span><span class="p">:</span>
+                <span class="n">rgroups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">isolation_group</span><span class="p">)</span>
+
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_network_interface_attribute</span><span class="p">(</span>
+                <span class="n">NetworkInterfaceId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;NetworkInterfaceId&#39;</span><span class="p">],</span>
+                <span class="n">Groups</span><span class="o">=</span><span class="n">rgroups</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@resources.register</span><span class="p">(</span><span class="s1">&#39;route-table&#39;</span><span class="p">)</span>
