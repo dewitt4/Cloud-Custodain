@@ -172,6 +172,7 @@
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">get_account_id</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -276,7 +277,10 @@
             <span class="c1"># Default SNS Policy does this</span>
             <span class="k">if</span> <span class="s1">&#39;AWS:SourceOwner&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">]:</span>
                 <span class="n">so</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">][</span><span class="s1">&#39;AWS:SourceOwner&#39;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">so</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">so</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                    <span class="n">so</span> <span class="o">=</span> <span class="p">[</span><span class="n">so</span><span class="p">]</span>
+                <span class="n">so</span> <span class="o">=</span> <span class="p">[</span><span class="n">pso</span> <span class="k">for</span> <span class="n">pso</span> <span class="ow">in</span> <span class="n">so</span> <span class="k">if</span> <span class="n">pso</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">so</span><span class="p">:</span>
                     <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
 
             <span class="c1"># Default keys in kms do this</span>
@@ -312,12 +316,19 @@
             <span class="c1"># duplicate block from below, inline closure func</span>
             <span class="c1"># would remove, but slower, else move to class eval</span>
             <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-            <span class="n">v</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnEquals&#39;</span><span class="p">][</span><span class="s1">&#39;aws:SourceArn&#39;</span><span class="p">]</span>
-            <span class="n">v</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">basestring</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">v</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">v</span>
-            <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
-                <span class="n">aid</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">aid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
-                    <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+
+            <span class="n">keys</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;aws:SourceArn&#39;</span><span class="p">,</span> <span class="s1">&#39;AWS:SourceArn&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnEquals&#39;</span><span class="p">]:</span>
+                    <span class="n">v</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnEquals&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">basestring</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">v</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">v</span>
+                <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
+                    <span class="n">aid</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">aid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
+                        <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
         <span class="k">if</span> <span class="s1">&#39;ArnLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
             <span class="c1"># Other valid arn equals? / are invalids allowed?</span>
             <span class="n">v</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnLike&#39;</span><span class="p">][</span><span class="s1">&#39;aws:SourceArn&#39;</span><span class="p">]</span>
