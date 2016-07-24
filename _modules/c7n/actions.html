@@ -386,6 +386,98 @@
             <span class="n">MessageBody</span><span class="o">=</span><span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">zlib</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span><span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">message</span><span class="p">))),</span>
             <span class="n">MessageAttributes</span><span class="o">=</span><span class="n">attrs</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;MessageId&#39;</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="AutoTagUser"><a class="viewcode-back" href="../../generated/c7n.html#c7n.actions.AutoTagUser">[docs]</a><span class="k">class</span> <span class="nc">AutoTagUser</span><span class="p">(</span><span class="n">EventAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tag a resource with the user who created/modified it.</span>
+
+<span class="sd">    policies:</span>
+<span class="sd">      - name: ec2-auto-tag-owner</span>
+<span class="sd">        resource: ec2</span>
+<span class="sd">        filters:</span>
+<span class="sd">         - tag:Owner: absent</span>
+<span class="sd">        actions:</span>
+<span class="sd">         - type: auto-tag-creator</span>
+<span class="sd">           tag: OwnerContact</span>
+
+<span class="sd">    There&#39;s a number of caveats to usage, resources which don&#39;t</span>
+<span class="sd">    include tagging as part of their api, may have some delay before</span>
+<span class="sd">    automation kicks in to create a tag. Real world delay may be several</span>
+<span class="sd">    minutes, with worst case into hours[0]. This creates a race condition</span>
+<span class="sd">    between auto tagging and automation.</span>
+
+<span class="sd">    In practice this window is on the order of a fraction of a second, as</span>
+<span class="sd">    we fetch the resource and evaluate the presence of the tag before</span>
+<span class="sd">    attempting to tag it.</span>
+
+<span class="sd">    References</span>
+<span class="sd">     - AWS Config (see REQUIRED_TAGS caveat) - http://goo.gl/oDUXPY</span>
+<span class="sd">     - CloudTrail User - http://goo.gl/XQhIG6 q</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;auto-tag&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">],</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;user-type&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                      <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
+                          <span class="s1">&#39;IAMUser&#39;</span><span class="p">,</span>
+                          <span class="s1">&#39;AssumedRole&#39;</span><span class="p">,</span>
+                          <span class="s1">&#39;FederatedUser&#39;</span>
+                      <span class="p">]}},</span>
+           <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+           <span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="AutoTagUser.validate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.actions.AutoTagUser.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;cloudtrail&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Auto tag owner requires an event&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Resources does not support tagging&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="AutoTagUser.process"><a class="viewcode-back" href="../../generated/c7n.html#c7n.actions.AutoTagUser.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">event</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;detail&#39;</span><span class="p">]</span>
+        <span class="n">utype</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">utype</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;user-type&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;AssumedRole&#39;</span><span class="p">,</span> <span class="s1">&#39;IAMUser&#39;</span><span class="p">]):</span>
+            <span class="k">return</span>
+
+        <span class="n">user</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">utype</span> <span class="o">==</span> <span class="s2">&quot;IAMUser&quot;</span><span class="p">:</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;userName&#39;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">utype</span> <span class="o">==</span> <span class="s2">&quot;AssumedRole&quot;</span><span class="p">:</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;arn&#39;</span><span class="p">]</span>
+            <span class="n">prefix</span><span class="p">,</span> <span class="n">user</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="c1"># instance role</span>
+            <span class="k">if</span> <span class="n">user</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;i-&#39;</span><span class="p">):</span>
+                <span class="k">return</span>
+            <span class="c1"># lambda function</span>
+            <span class="k">elif</span> <span class="n">user</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;awslambda&#39;</span><span class="p">):</span>
+                <span class="k">return</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;update&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="n">untagged</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                    <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">]:</span>
+                        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+                    <span class="n">untagged</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">untagged</span> <span class="o">=</span> <span class="n">resources</span>
+
+        <span class="n">tag_action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
+        <span class="n">tag_action</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">],</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="n">user</span><span class="p">},</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">untagged</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">untagged</span></div></div>
 </pre></div>
 
            </div>
