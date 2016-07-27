@@ -251,7 +251,6 @@
 
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Too many principals </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">s</span>
 
-
         <span class="c1"># At this point principal is required?</span>
         <span class="n">p</span> <span class="o">=</span> <span class="p">(</span>
             <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">],</span> <span class="n">basestring</span><span class="p">)</span> <span class="ow">and</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span>
@@ -261,6 +260,8 @@
         <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">p</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">pid</span> <span class="o">==</span> <span class="s1">&#39;*&#39;</span><span class="p">:</span>
                 <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="n">pid</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:aws:iam::cloudfront:user&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">account_id</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">account_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
@@ -302,8 +303,13 @@
 
         <span class="k">if</span> <span class="s1">&#39;StringLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
             <span class="c1"># For now allow vpce/vpc conditions as sufficient on s3</span>
-            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span>
-                    <span class="s2">&quot;aws:sourceVpce&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:sourceVpce&quot;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span>
+                    <span class="s1">&#39;StringLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;aws:sourcevpce&quot;</span><span class="p">:</span>
+                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="k">if</span> <span class="s1">&#39;ForAnyValue:StringLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ForAnyValue:StringLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span>
+                    <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s1">&#39;aws:sourcevpce&#39;</span><span class="p">:</span>
                 <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
 
         <span class="k">if</span> <span class="s1">&#39;IpAddress&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
