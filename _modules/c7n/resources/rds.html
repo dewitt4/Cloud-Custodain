@@ -216,6 +216,8 @@
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">)</span>
 
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+
 <span class="kn">from</span> <span class="nn">skew.resources.aws</span> <span class="k">import</span> <span class="n">rds</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.rds&#39;</span><span class="p">)</span>
@@ -416,15 +418,17 @@
 
         <span class="c1"># Concurrency feels like over kill here.</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-
+        <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">rdb</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
                 <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">rdb</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip</span><span class="p">:</span>
                 <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SkipFinalSnapshot&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">params</span><span class="p">[</span>
-                    <span class="s1">&#39;FinalDBSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rdb</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
+                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;FinalDBSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">),</span>
+                        <span class="n">rdb</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
+                        <span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">delete_db_instance</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
