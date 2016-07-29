@@ -289,6 +289,38 @@
     <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">dbs</span><span class="p">))</span>
 
+<span class="k">def</span> <span class="nf">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
+    <span class="n">db_instance_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
+
+    <span class="c1"># Database instance is not in available state</span>
+    <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBInstanceStatus&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;available&#39;</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is not in available state&quot;</span> <span class="o">%</span>
+            <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># The specified DB Instance is a member of a cluster and its backup retention should not be modified directly.</span>
+    <span class="c1">#   Instead, modify the backup retention of the cluster using the ModifyDbCluster API</span>
+    <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a cluster member&quot;</span> <span class="o">%</span>
+            <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># DB Backups not supported on a read replica for engine postgres</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;postgres&#39;</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a postgres read-replica&quot;</span> <span class="o">%</span>
+            <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="c1"># DB Backups not supported on a read replica running a mysql version before 5.6.</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
+            <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;mysql&#39;</span><span class="p">):</span>
+        <span class="n">engine_version</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EngineVersion&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="c1"># Assume &quot;&lt;major&gt;.&lt;minor&gt;.&lt;whatever&gt;&quot;</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s1">r&#39;(?P&lt;major&gt;\d+)\.(?P&lt;minor&gt;\d+)\..*&#39;</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">match</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">5</span> <span class="ow">or</span>
+            <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">==</span> <span class="mi">5</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;minor&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">)):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a version </span><span class="si">%s</span><span class="s2"> mysql read-replica&quot;</span> <span class="o">%</span>
+                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">))</span>
+            <span class="k">return</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="kc">True</span>
 
 <span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default-vpc&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="DefaultVpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.DefaultVpc">[docs]</a><span class="k">class</span> <span class="nc">DefaultVpc</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
@@ -461,6 +493,9 @@
         <span class="k">return</span> <span class="n">resources</span></div>
 
 <div class="viewcode-block" id="Snapshot.process_rds_snapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.Snapshot.process_rds_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">process_rds_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
+            <span class="k">return</span>
+
         <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
         <span class="n">c</span><span class="o">.</span><span class="n">create_db_snapshot</span><span class="p">(</span>
             <span class="n">DBSnapshotIdentifier</span><span class="o">=</span><span class="s2">&quot;Backup-</span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
@@ -498,7 +533,7 @@
 
         <span class="k">if</span> <span class="p">((</span><span class="n">current_retention</span> <span class="o">&lt;</span> <span class="n">new_retention</span> <span class="ow">or</span>
                 <span class="n">current_copy_tags</span> <span class="o">!=</span> <span class="n">new_copy_tags</span><span class="p">)</span> <span class="ow">and</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="n">resource</span><span class="p">)):</span>
+                <span class="n">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="n">resource</span><span class="p">)):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">set_retention_window</span><span class="p">(</span>
                 <span class="n">resource</span><span class="p">,</span>
                 <span class="nb">max</span><span class="p">(</span><span class="n">current_retention</span><span class="p">,</span> <span class="n">new_retention</span><span class="p">),</span>
@@ -510,40 +545,7 @@
         <span class="n">c</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
             <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
             <span class="n">BackupRetentionPeriod</span><span class="o">=</span><span class="n">retention</span><span class="p">,</span>
-            <span class="n">CopyTagsToSnapshot</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div>
-
-    <span class="k">def</span> <span class="nf">_db_instance_eligible_for_backup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="n">db_instance_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
-
-        <span class="c1"># Database instance is not in available state</span>
-        <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBInstanceStatus&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;available&#39;</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is not in available state&quot;</span> <span class="o">%</span>
-                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="c1"># The specified DB Instance is a member of a cluster and its backup retention should not be modified directly.</span>
-        <span class="c1">#   Instead, modify the backup retention of the cluster using the ModifyDbCluster API</span>
-        <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a cluster member&quot;</span> <span class="o">%</span>
-                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="c1"># DB Backups not supported on a read replica for engine postgres</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
-                <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;postgres&#39;</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a postgres read-replica&quot;</span> <span class="o">%</span>
-                <span class="p">(</span><span class="n">db_instance_id</span><span class="p">))</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="c1"># DB Backups not supported on a read replica running a mysql version before 5.6.</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">and</span>
-                <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Engine&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;mysql&#39;</span><span class="p">):</span>
-            <span class="n">engine_version</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EngineVersion&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-            <span class="c1"># Assume &quot;&lt;major&gt;.&lt;minor&gt;.&lt;whatever&gt;&quot;</span>
-            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s1">r&#39;(?P&lt;major&gt;\d+)\.(?P&lt;minor&gt;\d+)\..*&#39;</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">)</span>
-            <span class="k">if</span> <span class="p">(</span><span class="n">match</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">5</span> <span class="ow">or</span>
-                <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;major&#39;</span><span class="p">))</span> <span class="o">==</span> <span class="mi">5</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;minor&#39;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">)):</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a version </span><span class="si">%s</span><span class="s2"> mysql read-replica&quot;</span> <span class="o">%</span>
-                    <span class="p">(</span><span class="n">db_instance_id</span><span class="p">,</span> <span class="n">engine_version</span><span class="p">))</span>
-                <span class="k">return</span> <span class="kc">False</span>
-        <span class="k">return</span> <span class="kc">True</span></div>
+            <span class="n">CopyTagsToSnapshot</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rds-snapshot&#39;</span><span class="p">)</span>
