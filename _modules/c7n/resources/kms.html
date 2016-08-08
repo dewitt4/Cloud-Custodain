@@ -155,7 +155,7 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -205,6 +205,26 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
 
     <span class="n">resource_type</span> <span class="o">=</span> <span class="n">Meta</span></div>
+
+<span class="nd">@Key</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;key-rotation-status&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="KeyRotationStatus"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyRotationStatus">[docs]</a><span class="k">class</span> <span class="nc">KeyRotationStatus</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;key-rotation-status&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<div class="viewcode-block" id="KeyRotationStatus.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyRotationStatus.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="k">def</span> <span class="nf">_key_rotation_status</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_key_rotation_status</span><span class="p">(</span>
+                <span class="n">KeyId</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">])</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;KeyRotationEnabled&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> kms-keys&#39; rotation status&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_key_rotation_status</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">])]</span></div></div>
 
 
 <span class="nd">@Key</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
@@ -256,6 +276,22 @@
             <span class="n">Scope</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;AliasName&#39;</span><span class="p">][</span><span class="mi">6</span><span class="p">:])</span>
 
         <span class="k">return</span> <span class="n">key</span></div></div>
+
+<div class="viewcode-block" id="ResourceKmsKeyAlias"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.ResourceKmsKeyAlias">[docs]</a><span class="k">class</span> <span class="nc">ResourceKmsKeyAlias</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;kms-alias&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+<div class="viewcode-block" id="ResourceKmsKeyAlias.get_matching_aliases"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.ResourceKmsKeyAlias.get_matching_aliases">[docs]</a>    <span class="k">def</span> <span class="nf">get_matching_aliases</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="n">key_aliases</span> <span class="o">=</span> <span class="n">KeyAlias</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">key_aliases_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;TargetKeyId&#39;</span><span class="p">]:</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">key_aliases</span><span class="p">}</span>
+
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">):</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;KeyAlias&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">key_aliases_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;key/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyAlias&#39;</span><span class="p">)):</span>
+                    <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">matched</span></div></div>
 </pre></div>
 
            </div>
