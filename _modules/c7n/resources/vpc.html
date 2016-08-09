@@ -162,15 +162,11 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
-
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Vpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Vpc">[docs]</a><span class="k">class</span> <span class="nc">Vpc</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.ec2.vpc&#39;</span></div>
-
 
 
 <span class="nd">@Vpc</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnets&#39;</span><span class="p">)</span>
@@ -230,15 +226,32 @@
 <span class="sd">    If a group has any permissions that match all conditions, then it</span>
 <span class="sd">    matches the filter.</span>
 
-<span class="sd">    Permissions that match on the group are annotated onto the group.</span>
+<span class="sd">    Permissions that match on the group are annotated onto the group and</span>
+<span class="sd">    can subsequently be used by the remove-permission action.</span>
+
+<span class="sd">    An example::</span>
 
 <span class="sd">      - type: ingress</span>
 <span class="sd">        IpProtocol: -1</span>
 <span class="sd">        FromPort: 445</span>
+
+<span class="sd">    We have specialized handling for matching Ports in ingress/egress</span>
+<span class="sd">    permission From/To range::</span>
+
+<span class="sd">      - type: ingress</span>
+<span class="sd">        Ports: [22, 443, 80]</span>
+
+<span class="sd">    As well for assertions that a ingress/egress permission only matches</span>
+<span class="sd">    a given set of ports, *note* onlyports is an inverse match, it matches</span>
+<span class="sd">    when a permission includes ports outside of the specified set:</span>
+
+<span class="sd">      - type: egress</span>
+<span class="sd">        OnlyPorts: [22, 443, 80]</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;IpProtocol&#39;</span><span class="p">,</span> <span class="s1">&#39;FromPort&#39;</span><span class="p">,</span> <span class="s1">&#39;ToPort&#39;</span><span class="p">,</span> <span class="s1">&#39;UserIdGroupPairs&#39;</span><span class="p">,</span>
-                 <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="s1">&#39;PrefixListIds&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">))</span>
+                 <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="s1">&#39;PrefixListIds&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">,</span> <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">))</span>
 
 <div class="viewcode-block" id="SGPermission.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">delta</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">attrs</span><span class="p">)</span>
@@ -251,7 +264,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">fattrs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ports</span> <span class="o">=</span> <span class="s1">&#39;Ports&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;Ports&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="p">()</span>
-
+        <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span> <span class="o">=</span> <span class="s1">&#39;OnlyPorts&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;OnlyPorts&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="p">()</span>
         <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">fattrs</span><span class="p">:</span>
             <span class="n">fv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fv</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
@@ -265,19 +278,26 @@
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">perm</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]:</span>
             <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">f</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="p">(</span><span class="n">perm</span><span class="p">):</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="k">break</span>
-            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">p</span> <span class="o">&gt;=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;FromPort&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">p</span> <span class="o">&lt;=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;ToPort&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="s1">&#39;FromPort&#39;</span> <span class="ow">in</span> <span class="n">perm</span> <span class="ow">and</span> <span class="s1">&#39;ToPort&#39;</span> <span class="ow">in</span> <span class="n">perm</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">port</span> <span class="o">&gt;=</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;FromPort&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">&lt;=</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;ToPort&#39;</span><span class="p">]:</span>
+                        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+                <span class="n">only_found</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">port</span> <span class="o">==</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;FromPort&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">==</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;ToPort&#39;</span><span class="p">]:</span>
+                        <span class="n">only_found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">only_found</span><span class="p">:</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="k">break</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
                 <span class="k">continue</span>
-            <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+            <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
             <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Matched</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched</span>
@@ -314,7 +334,8 @@
 <span class="nd">@SecurityGroup</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-permissions&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RemovePermissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.RemovePermissions">[docs]</a><span class="k">class</span> <span class="nc">RemovePermissions</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;remove-permissions&#39;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;remove-permissions&#39;</span><span class="p">,</span> <span class="n">groups</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">,</span> <span class="s1">&#39;all&#39;</span><span class="p">]})</span>
 
 <div class="viewcode-block" id="RemovePermissions.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.RemovePermissions.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">i_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ingress&#39;</span><span class="p">)</span>
