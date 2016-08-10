@@ -163,6 +163,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.credentials</span> <span class="k">import</span> <span class="n">SessionFactory</span>
 <span class="kn">from</span> <span class="nn">c7n.reports</span> <span class="k">import</span> <span class="n">report</span> <span class="k">as</span> <span class="n">do_report</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">Bag</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">mu</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">version</span>
 
 
@@ -191,8 +192,16 @@
         <span class="k">if</span> <span class="nb">format</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;json&#39;</span><span class="p">,):</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
 
+
     <span class="n">errors</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+        <span class="n">null_config</span> <span class="o">=</span> <span class="n">Bag</span><span class="p">(</span><span class="n">log_group</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">assume_role</span><span class="o">=</span><span class="s2">&quot;na&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">policy</span><span class="o">.</span><span class="n">Policy</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">null_config</span><span class="p">,</span> <span class="n">Bag</span><span class="p">())</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Policy: </span><span class="si">%s</span><span class="s2"> is invalid&quot;</span> <span class="o">%</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Config valid&quot;</span><span class="p">)</span>
         <span class="k">return</span>
 
@@ -261,7 +270,8 @@
 
     <span class="n">manager</span><span class="o">.</span><span class="n">metrics</span><span class="p">(</span><span class="n">funcs</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="mi">60</span><span class="o">*</span><span class="mi">30</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">all</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">funcs</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">yaml</span><span class="o">.</span><span class="n">SafeDumper</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span></div>
+        <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span>
+            <span class="n">funcs</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">yaml</span><span class="o">.</span><span class="n">SafeDumper</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="cmd_version"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.cmd_version">[docs]</a><span class="k">def</span> <span class="nf">cmd_version</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
