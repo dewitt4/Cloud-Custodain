@@ -157,14 +157,13 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
-<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">DefaultVpcBase</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">snapshot_identifier</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.redshift&#39;</span><span class="p">)</span>
 
@@ -249,15 +248,13 @@
 
 <div class="viewcode-block" id="Delete.process_db_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.Delete.process_db_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_db_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db_set</span><span class="p">):</span>
         <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;redshift&#39;</span><span class="p">)</span>
-        <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">db</span> <span class="ow">in</span> <span class="n">db_set</span><span class="p">:</span>
             <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">:</span> <span class="n">db</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">]}</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip</span><span class="p">:</span>
                 <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SkipFinalClusterSnapshot&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;FinalClusterSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">db</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">],</span>
-                        <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">)))</span>
+                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;FinalClusterSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snapshot_identifier</span><span class="p">(</span>
+                    <span class="s1">&#39;Final&#39;</span><span class="p">,</span> <span class="n">db</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">])</span>
             <span class="n">c</span><span class="o">.</span><span class="n">delete_cluster</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
 </pre></div>
 
