@@ -156,6 +156,11 @@
 <span class="sd">&quot;&quot;&quot;AWS Account as a custodian resource.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+
+<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
+<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
+
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
@@ -330,12 +335,66 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;password-policy&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
 
-<div class="viewcode-block" id="AccountPasswordPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.AccountPasswordPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+<div class="viewcode-block" id="AccountPasswordPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.AccountPasswordPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;password_policy&#39;</span><span class="p">):</span>
             <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
             <span class="n">policy</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_account_password_policy</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PasswordPolicy&#39;</span><span class="p">,</span> <span class="p">{})</span>
             <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;password_policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;password_policy&#39;</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="n">resources</span>
+        <span class="k">return</span> <span class="p">[]</span></div></div>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;service-limit&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ServiceLimit"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.ServiceLimit">[docs]</a><span class="k">class</span> <span class="nc">ServiceLimit</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if account&#39;s service limits are past a given threshold.&quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;service-limit&#39;</span><span class="p">,</span>
+        <span class="n">threshold</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+        <span class="n">refresh_period</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+        <span class="n">limits</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}},</span>
+        <span class="n">services</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;EC2&#39;</span><span class="p">,</span> <span class="s1">&#39;ELB&#39;</span><span class="p">,</span> <span class="s1">&#39;VPC&#39;</span><span class="p">,</span> <span class="s1">&#39;AutoScaling&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;RDS&#39;</span><span class="p">,</span> <span class="s1">&#39;EBS&#39;</span><span class="p">,</span> <span class="s1">&#39;SES&#39;</span><span class="p">,</span> <span class="s1">&#39;IAM&#39;</span><span class="p">]}})</span>
+
+    <span class="n">check_id</span> <span class="o">=</span> <span class="s1">&#39;eW7HH0l7J9&#39;</span>
+
+    <span class="n">check_limit</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;region&#39;</span><span class="p">,</span> <span class="s1">&#39;service&#39;</span><span class="p">,</span> <span class="s1">&#39;check&#39;</span><span class="p">,</span> <span class="s1">&#39;limit&#39;</span><span class="p">,</span> <span class="s1">&#39;extant&#39;</span><span class="p">,</span> <span class="s1">&#39;color&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ServiceLimit.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.ServiceLimit.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;support&#39;</span><span class="p">)</span>
+        <span class="n">checks</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trusted_advisor_check_result</span><span class="p">(</span>
+            <span class="n">checkId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_id</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s1">&#39;en&#39;</span><span class="p">)[</span><span class="s1">&#39;result&#39;</span><span class="p">]</span>
+
+        <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;ServiceLimits&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">checks</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="n">timedelta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;refresh_period&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">check_date</span> <span class="o">=</span> <span class="n">parse_date</span><span class="p">(</span><span class="n">checks</span><span class="p">[</span><span class="s1">&#39;timestamp&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">delta</span> <span class="o">&gt;</span> <span class="n">check_date</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">refresh_trusted_advisor_check</span><span class="p">(</span><span class="n">checkId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_id</span><span class="p">)</span>
+        <span class="n">threshold</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;threshold&#39;</span><span class="p">)</span>
+
+        <span class="n">services</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;services&#39;</span><span class="p">)</span>
+        <span class="n">limits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;limits&#39;</span><span class="p">)</span>
+        <span class="n">exceeded</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">checks</span><span class="p">[</span><span class="s1">&#39;flaggedResources&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">threshold</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ok&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">limit</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">check_limit</span><span class="p">,</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;metadata&#39;</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="n">services</span> <span class="ow">and</span> <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;service&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">services</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">limits</span> <span class="ow">and</span> <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;check&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">limits</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span>
+            <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;percentage&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">limit</span><span class="p">[</span><span class="s1">&#39;extant&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span>
+                <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;limit&#39;</span><span class="p">])</span> <span class="o">*</span> <span class="mi">100</span>
+            <span class="k">if</span> <span class="n">threshold</span> <span class="ow">and</span> <span class="n">limit</span><span class="p">[</span><span class="s1">&#39;percentage&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">exceeded</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">exceeded</span><span class="p">:</span>
+            <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;ServiceLimitsExceeded&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exceeded</span>
             <span class="k">return</span> <span class="n">resources</span>
         <span class="k">return</span> <span class="p">[]</span></div></div>
 </pre></div>
