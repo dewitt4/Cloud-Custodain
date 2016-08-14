@@ -152,22 +152,41 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Offhours support</span>
-<span class="sd">================</span>
+<span class="sd">Resource Scheduling Offhours</span>
+<span class="sd">============================</span>
 
-<span class="sd">Turn resources off based on a schedule. There are two usage modes that</span>
-<span class="sd">can be configured, opt-in with resources that wish to participate</span>
-<span class="sd">specifying a tag value with their configuration for</span>
-<span class="sd">offhours. Additionally opt-out where the schedule is set to apply to</span>
-<span class="sd">all resources that match the policy filters, resources can specify a</span>
-<span class="sd">tag value then to allow opt-out behavior.</span>
+<span class="sd">Custodian provides for time based filters, that allow for taking periodic</span>
+<span class="sd">action on a resource, with resource schedule customization based on tag values.</span>
+<span class="sd">A common use is offhours scheduling for asgs, and instances.</span>
 
-<span class="sd">Schedules</span>
-<span class="sd">=========</span>
+<span class="sd">Features</span>
+<span class="sd">========</span>
+
+<span class="sd">- Flexible offhours scheduling with opt-in, opt-out selection, and timezone</span>
+<span class="sd">  support.</span>
+<span class="sd">- Resume during offhours support.</span>
+<span class="sd">- Can be combined with other filters to get a particular set (</span>
+<span class="sd">  resources with tag, vpc, etc).</span>
+<span class="sd">- Can be combined with arbitrary actions</span>
+
+<span class="sd">Policy Configuration</span>
+<span class="sd">====================</span>
+
+<span class="sd">We provide an `onhour` and `offhour` time filter, each should be used in a</span>
+<span class="sd">different policy, they support the same configuration options</span>
+
+<span class="sd"> - :weekends: default true, whether to leave resources off for the weekend</span>
+<span class="sd"> - :weekend-only: default false, whether to turn the resource off only on the</span>
+<span class="sd">   weekend</span>
+<span class="sd"> - :default_tz: which tz to utilize when evaluating time</span>
+<span class="sd"> - :tag: default maid_offhours, which resource tag key to look for the</span>
+<span class="sd">   resource&#39;s schedule.</span>
+<span class="sd"> - :opt-out: applies the default schedule to resource which do not specify</span>
+<span class="sd">   any value. a value of `off` to disable/exclude the resource.</span>
 
 <span class="sd">The default off hours and on hours are specified per the policy configuration</span>
 <span class="sd">along with the opt-in/opt-out behavior. Resources can specify the timezone</span>
-<span class="sd">that they wish to have this scheduled utilized with.</span>
+<span class="sd">that they wish to have this scheduled utilized with::</span>
 
 
 <span class="sd">Tag Based Configuration</span>
@@ -176,7 +195,7 @@
 <span class="sd">Note the tag name is configurable per policy configuration, examples below use</span>
 <span class="sd">default tag name, ie. custodian_downtime.</span>
 
-<span class="sd">- custodian_downtime: </span>
+<span class="sd">- custodian_downtime:</span>
 
 <span class="sd">An empty tag value implies night and weekend offhours using the default</span>
 <span class="sd">time zone configured in the policy (tz=est if unspecified).</span>
@@ -188,7 +207,7 @@
 
 <span class="sd">- custodian_downtime: tz=Americas/Los_Angeles</span>
 
-<span class="sd">A geography can be specified but must be in the time zone database. </span>
+<span class="sd">A geography can be specified but must be in the time zone database.</span>
 
 <span class="sd">Per http://www.iana.org/time-zones</span>
 
@@ -212,7 +231,7 @@
 <span class="sd">          - type: offhour</span>
 <span class="sd">       actions:</span>
 <span class="sd">         - stop</span>
-<span class="sd">   </span>
+
 <span class="sd">     - name: offhours-start</span>
 <span class="sd">       resource: ec2</span>
 <span class="sd">       filters:</span>
@@ -228,16 +247,16 @@
 <span class="sd">      - name: asg-offhours-stop</span>
 <span class="sd">        resource: ec2</span>
 <span class="sd">        filters:</span>
-<span class="sd">           - type: offhour</span>
+<span class="sd">           - offhour</span>
 <span class="sd">        actions:</span>
 <span class="sd">           - suspend</span>
 <span class="sd">      - name: asg-onhours-start</span>
 <span class="sd">        resource: ec2</span>
 <span class="sd">        filters:</span>
-<span class="sd">           - type: onhour</span>
+<span class="sd">           - onhour</span>
 <span class="sd">        actions:</span>
 <span class="sd">           - resume</span>
-<span class="sd">     </span>
+
 
 <span class="sd">Options</span>
 <span class="sd">=======</span>
@@ -246,7 +265,7 @@
 <span class="sd">- default_tz: the default timezone to use when interpreting offhours</span>
 <span class="sd">- offhour: the time to turn instances off, specified in 0-24</span>
 <span class="sd">- onhour: the time to turn instances on, specified in 0-24</span>
-<span class="sd">- opt-out: default behavior is opt in, as in ``tag`` must be present, </span>
+<span class="sd">- opt-out: default behavior is opt in, as in ``tag`` must be present,</span>
 <span class="sd">  with opt-out: true, the tag doesn&#39;t need to be present.</span>
 
 
@@ -262,54 +281,20 @@
 <span class="sd">           offhour: 20</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 
+<span class="c1"># note we have to module import for our testing mocks</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="k">import</span> <span class="n">join</span>
 
 <span class="kn">from</span> <span class="nn">dateutil</span> <span class="k">import</span> <span class="n">zoneinfo</span>
 
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
-
-<span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;maid_offhours&quot;</span>
-
-<span class="n">TZ_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;pdt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;pt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;pst&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;est&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;edt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;et&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;cst&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;cdt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;ct&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;mt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Denver&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;gmt&#39;</span><span class="p">:</span> <span class="s1">&#39;Europe/London&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;gt&#39;</span><span class="p">:</span> <span class="s1">&#39;Europe/London&#39;</span>
-<span class="p">}</span>
-
-<span class="n">TIME_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;w&#39;</span><span class="p">:</span> <span class="s1">&#39;week&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;d&#39;</span><span class="p">:</span> <span class="s1">&#39;day&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;m&#39;</span><span class="p">:</span> <span class="s1">&#39;month&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;y&#39;</span><span class="p">:</span> <span class="s1">&#39;year&#39;</span>
-<span class="p">}</span>
-
-<span class="n">DEFAULT_OFFHOUR</span> <span class="o">=</span> <span class="mi">19</span>
-<span class="n">DEFAULT_ONHOUR</span> <span class="o">=</span> <span class="mi">7</span>
-<span class="n">DEFAULT_TZ</span> <span class="o">=</span> <span class="s1">&#39;et&#39;</span>
-
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">dumps</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.offhours&#39;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="resource_id"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.resource_id">[docs]</a><span class="k">def</span> <span class="nf">resource_id</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
-    <span class="k">if</span> <span class="s1">&#39;InstanceId&#39;</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;instance:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>
-    <span class="k">if</span> <span class="s1">&#39;AutoScalingGroupName&#39;</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;asg:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">]</span></div>
-    
-            
 <div class="viewcode-block" id="Time"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time">[docs]</a><span class="k">class</span> <span class="nc">Time</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
@@ -317,135 +302,331 @@
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
             <span class="s1">&#39;default_tz&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;skew&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
             <span class="s1">&#39;weekends&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;weekends-only&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;opt-out&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;debug&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="p">}</span>
         <span class="p">}</span>
-    
-    <span class="c1"># Allow up to this many hours after sentinel time</span>
-    <span class="c1"># to continue to match</span>
-    <span class="n">skew</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">time_type</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># Defaults and constants</span>
+    <span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;maid_offhours&quot;</span>
+    <span class="n">DEFAULT_TZ</span> <span class="o">=</span> <span class="s1">&#39;et&#39;</span>
+
+    <span class="n">TZ_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;pdt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;pt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;pst&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Los_Angeles&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;est&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;edt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;et&#39;</span><span class="p">:</span> <span class="s1">&#39;America/New_York&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cst&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cdt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ct&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Chicago&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;mt&#39;</span><span class="p">:</span> <span class="s1">&#39;America/Denver&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;gmt&#39;</span><span class="p">:</span> <span class="s1">&#39;Europe/London&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;gt&#39;</span><span class="p">:</span> <span class="s1">&#39;Europe/London&#39;</span><span class="p">}</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">Time</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">skew</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skew&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">skew</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">weekends</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;weekends&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default_tz&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_TZ</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weekends</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;weekends&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weekends_only</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;weekends-only&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">opt_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;opt-out&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
-        
-    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-        <span class="n">parts</span><span class="p">,</span> <span class="n">tag_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tag_parts</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">parts</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_out</span><span class="p">:</span>
-                <span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">return</span> <span class="kc">False</span>
-        <span class="k">if</span> <span class="s1">&#39;off&#39;</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;offhours disabled on </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">resource_id</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_current_time</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">parts</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_TAG</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_default_schedule</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">ScheduleParser</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span><span class="p">)</span>
 
-<div class="viewcode-block" id="Time.process_current_time"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.process_current_time">[docs]</a>    <span class="k">def</span> <span class="nf">process_current_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">parts</span><span class="p">):</span>
-        <span class="n">tz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_tz</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">tz</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enabled_count</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="Time.validate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tz</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid timezone specified </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span><span class="p">)</span>
+        <span class="n">hour</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">hour&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_HR</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">hour</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">VALID_HOURS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Invalid hour specified </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">hour</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Time.process"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">Time</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;parse errors </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">join</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;parse_errors.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="p">,</span> <span class="n">fh</span><span class="o">=</span><span class="n">fh</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;disabled count </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">join</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;opted_out.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+                <span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span><span class="p">,</span> <span class="n">fh</span><span class="o">=</span><span class="n">fh</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tag_value</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="c1"># Sigh delayed init, due to circle dep, process/init would be better but</span>
+        <span class="c1"># unit testing is calling this direct.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s1">&#39;InstanceId&#39;</span>
+                <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+
+        <span class="c1"># The resource tag is not present, if we&#39;re not running in an opt-out</span>
+        <span class="c1"># mode, we&#39;re done.</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt_out</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="c1"># take the defaults</span>
+
+        <span class="c1"># Resource opt out, track and record</span>
+        <span class="k">if</span> <span class="s1">&#39;off&#39;</span> <span class="o">==</span> <span class="n">value</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">opted_out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
-        
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">enabled_count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_schedule</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> failed to process resource:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">,</span> <span class="n">i</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">],</span> <span class="n">value</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="Time.process_resource_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.process_resource_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Does the resource tag schedule and policy match the current time.&quot;&quot;&quot;</span>
+        <span class="n">rid</span> <span class="o">=</span> <span class="n">i</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">has_resource_schedule</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+            <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span>
+
+        <span class="k">if</span> <span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid schedule on resource:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">tz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tz</span><span class="p">(</span><span class="n">schedule</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tz</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Could not resolve tz on resource:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
         <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
             <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="n">schedule</span><span class="p">)</span></div>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">weekends</span> <span class="ow">and</span> <span class="n">now</span><span class="o">.</span><span class="n">weekday</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">):</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;skipping weekends&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">False</span>
-
-        <span class="n">sentinel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sentinel_time</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
-
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-            <span class="s2">&quot;resource: </span><span class="si">%s</span><span class="s2"> comparing sentinel: </span><span class="si">%s</span><span class="s2"> to current: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                <span class="n">resource_id</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">now</span><span class="p">))</span>
-                  
-        <span class="k">if</span> <span class="n">sentinel</span> <span class="o">==</span> <span class="n">now</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">skew</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">hour</span> <span class="o">=</span> <span class="n">sentinel</span><span class="o">.</span><span class="n">hour</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">skew</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-            <span class="n">sentinel</span> <span class="o">=</span> <span class="n">sentinel</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="n">hour</span> <span class="o">+</span> <span class="n">i</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">sentinel</span> <span class="o">==</span> <span class="n">now</span><span class="p">:</span>
+<div class="viewcode-block" id="Time.match"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.match">[docs]</a>    <span class="k">def</span> <span class="nf">match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span> <span class="n">schedule</span><span class="p">):</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="n">schedule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">,</span> <span class="p">())</span>
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">time</span><span class="p">:</span>
+            <span class="n">days</span><span class="p">,</span> <span class="n">hour</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;days&quot;</span><span class="p">),</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hour&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">now</span><span class="o">.</span><span class="n">weekday</span><span class="p">()</span> <span class="ow">in</span> <span class="n">days</span> <span class="ow">and</span> <span class="n">now</span><span class="o">.</span><span class="n">hour</span> <span class="o">==</span> <span class="n">hour</span><span class="p">:</span>
                 <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="Time.get_tag_parts"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_tag_parts">[docs]</a>    <span class="k">def</span> <span class="nf">get_tag_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-        <span class="c1"># Look for downtime tag, Normalize tag key and tag value</span>
-        <span class="n">tag_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-        <span class="n">tag_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])}</span>
-        <span class="k">if</span> <span class="n">tag_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tag_map</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">tag_map</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="n">tag_map</span><span class="p">[</span><span class="n">tag_key</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-        <span class="c1"># Sigh.. some folks seem to be interpreting the docs quote marks as</span>
+<div class="viewcode-block" id="Time.get_tag_value"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_tag_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_tag_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get the resource&#39;s tag value specifying its schedule.&quot;&quot;&quot;</span>
+        <span class="c1"># Look for the tag, Normalize tag key and tag value</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># utf8, or do translate tables via unicode ord mapping</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">found</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf8&#39;</span><span class="p">)</span>
+        <span class="c1"># Some folks seem to be interpreting the docs quote marks as</span>
         <span class="c1"># literal for values.</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
-        <span class="n">parts</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;resource: </span><span class="si">%s</span><span class="s1"> specifies downtime with value: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="n">resource_id</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">value</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">parts</span><span class="p">,</span> <span class="n">tag_map</span></div>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39; &#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span></div>
 
-<div class="viewcode-block" id="Time.get_sentinel_time"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_sentinel_time">[docs]</a>    <span class="k">def</span> <span class="nf">get_sentinel_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tz</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">t</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
-            <span class="n">hour</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hour&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="n">minute</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;minute&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-            <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="Time.get_tz"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_tz">[docs]</a>    <span class="k">def</span> <span class="nf">get_tz</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">tz</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span><span class="n">cls</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tz</span><span class="p">,</span> <span class="n">tz</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="Time.get_local_tz"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_local_tz">[docs]</a>    <span class="k">def</span> <span class="nf">get_local_tz</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parts</span><span class="p">):</span>
-        <span class="n">tz_spec</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;tz=&#39;</span><span class="p">):</span>
-                <span class="n">tz_spec</span> <span class="o">=</span> <span class="n">p</span>
-                <span class="k">break</span>
-        <span class="k">if</span> <span class="n">tz_spec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">tz_spec</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default_tz&#39;</span><span class="p">)</span> <span class="ow">or</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default-tz&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TZ</span><span class="p">))</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">tz_spec</span> <span class="o">=</span> <span class="n">tz_spec</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Time.get_default_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.Time.get_default_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;use subclass&quot;</span><span class="p">)</span></div></div>
 
-        <span class="k">if</span> <span class="n">tz_spec</span> <span class="ow">in</span> <span class="n">TZ_ALIASES</span><span class="p">:</span>
-            <span class="n">tz_spec</span> <span class="o">=</span> <span class="n">TZ_ALIASES</span><span class="p">[</span><span class="n">tz_spec</span><span class="p">]</span>
-        <span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span><span class="n">tz_spec</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">tz</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="s2">&quot;filter:offhours unknown tz </span><span class="si">%s</span><span class="s2"> for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="n">tz_spec</span><span class="p">,</span> <span class="n">parts</span><span class="p">))</span>
-                    
-            <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">return</span> <span class="n">tz</span></div></div>
-    
 
 <div class="viewcode-block" id="OffHour"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OffHour">[docs]</a><span class="k">class</span> <span class="nc">OffHour</span><span class="p">(</span><span class="n">Time</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;offhour&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">Time</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;offhour&#39;</span><span class="p">,</span> <span class="s1">&#39;default_tz&#39;</span><span class="p">],</span>
         <span class="n">offhour</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;maximum&#39;</span><span class="p">:</span> <span class="mi">24</span><span class="p">})</span>
+    <span class="n">time_type</span> <span class="o">=</span> <span class="s2">&quot;off&quot;</span>
 
-<div class="viewcode-block" id="OffHour.get_sentinel_time"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OffHour.get_sentinel_time">[docs]</a>    <span class="k">def</span> <span class="nf">get_sentinel_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tz</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">OffHour</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_sentinel_time</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">t</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;offhour&#39;</span><span class="p">,</span> <span class="n">DEFAULT_OFFHOUR</span><span class="p">))</span></div></div>
+    <span class="n">DEFAULT_HR</span> <span class="o">=</span> <span class="mi">19</span>
 
-                         
+<div class="viewcode-block" id="OffHour.get_default_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OffHour.get_default_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">default</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;tz&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;hour&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">hour&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_HR</span><span class="p">)}]}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">weekends_only</span><span class="p">:</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">weekends</span><span class="p">:</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">default</span></div></div>
+
+
 <div class="viewcode-block" id="OnHour"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OnHour">[docs]</a><span class="k">class</span> <span class="nc">OnHour</span><span class="p">(</span><span class="n">Time</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;onhour&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">Time</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;onhour&#39;</span><span class="p">,</span> <span class="s1">&#39;default_tz&#39;</span><span class="p">],</span>
         <span class="n">onhour</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;maximum&#39;</span><span class="p">:</span> <span class="mi">24</span><span class="p">})</span>
+    <span class="n">time_type</span> <span class="o">=</span> <span class="s2">&quot;on&quot;</span>
 
-<div class="viewcode-block" id="OnHour.get_sentinel_time"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OnHour.get_sentinel_time">[docs]</a>    <span class="k">def</span> <span class="nf">get_sentinel_time</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tz</span><span class="p">):</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">OnHour</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_sentinel_time</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">t</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">hour</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;onhour&#39;</span><span class="p">,</span> <span class="n">DEFAULT_ONHOUR</span><span class="p">))</span></div></div>
+    <span class="n">DEFAULT_HR</span> <span class="o">=</span> <span class="mi">7</span>
 
-    
-    
+<div class="viewcode-block" id="OnHour.get_default_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.OnHour.get_default_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">default</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;tz&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;hour&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">hour&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_HR</span><span class="p">)}]}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">weekends_only</span><span class="p">:</span>
+            <span class="c1"># turn on monday</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">weekends</span><span class="p">:</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">default</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">default</span></div></div>
 
+
+<div class="viewcode-block" id="ScheduleParser"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.ScheduleParser">[docs]</a><span class="k">class</span> <span class="nc">ScheduleParser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parses tag values for custom on/off hours schedules.</span>
+
+<span class="sd">    At the minimum the ``on`` and ``off`` values are required. Each of</span>
+<span class="sd">    these must be seperated by a ``;`` in the format described below.</span>
+
+<span class="sd">    **Schedule format**::</span>
+
+<span class="sd">        # up mon-fri from 7am-7pm; eastern time</span>
+<span class="sd">        off=(M-F,19);on=(M-F,7)</span>
+<span class="sd">        # up mon-fri from 6am-9pm; up sun from 10am-6pm; pacific time</span>
+<span class="sd">        off=[(M-F,21),(U,18)];on=[(M-F,6),(U,10)];tz=pt</span>
+
+<span class="sd">    **Possible values**:</span>
+
+<span class="sd">        +------------+----------------------+</span>
+<span class="sd">        | field      | values               |</span>
+<span class="sd">        +============+======================+</span>
+<span class="sd">        | days       | M, T, W, H, F, S, U  |</span>
+<span class="sd">        +------------+----------------------+</span>
+<span class="sd">        | hours      | 1, 2, 3, ..., 22, 23 |</span>
+<span class="sd">        +------------+----------------------+</span>
+
+<span class="sd">        Days can be specified in a range (ex. M-F).</span>
+
+<span class="sd">    If the timezone is not supplied, it is assumed ET (eastern time), but this</span>
+<span class="sd">    default can be configurable.</span>
+
+<span class="sd">    **Parser output**:</span>
+
+<span class="sd">    The schedule parser will return a ``dict`` or ``None`` (if the schedule is</span>
+<span class="sd">    invalid)::</span>
+
+<span class="sd">        # off=[(M-F,21),(U,18)];on=[(M-F,6),(U,10)];tz=pt</span>
+<span class="sd">        {</span>
+<span class="sd">          off: [</span>
+<span class="sd">            { days: &quot;M-F&quot;, hour: 21 },</span>
+<span class="sd">            { days: &quot;U&quot;, hour: 18 }</span>
+<span class="sd">          ],</span>
+<span class="sd">          on: [</span>
+<span class="sd">            { days: &quot;M-F&quot;, hour: 6 },</span>
+<span class="sd">            { days: &quot;U&quot;, hour: 10 }</span>
+<span class="sd">          ],</span>
+<span class="sd">          tz: &quot;pt&quot;</span>
+<span class="sd">        }</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">DAY_MAP</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;m&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;t&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;h&#39;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;f&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> <span class="s1">&#39;s&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">:</span> <span class="mi">6</span><span class="p">}</span>
+    <span class="n">VALID_HOURS</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">24</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">default_schedule</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span> <span class="o">=</span> <span class="n">default_schedule</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="ScheduleParser.parse"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.ScheduleParser.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag_value</span><span class="p">):</span>
+        <span class="c1"># check the cache</span>
+        <span class="k">if</span> <span class="n">tag_value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[</span><span class="n">tag_value</span><span class="p">]</span>
+
+        <span class="n">schedule</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="c1"># parse schedule components</span>
+        <span class="n">pieces</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">piece</span> <span class="ow">in</span> <span class="n">pieces</span><span class="p">:</span>
+            <span class="n">kv</span> <span class="o">=</span> <span class="n">piece</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+            <span class="c1"># components must by key=value</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">kv</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">kv</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;on&#39;</span><span class="p">,</span> <span class="s1">&#39;off&#39;</span><span class="p">,</span> <span class="s1">&#39;tz&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="s1">&#39;tz&#39;</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_resource_schedule</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">schedule</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+        <span class="c1"># add default timezone, if none supplied or blank</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">schedule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">):</span>
+            <span class="n">schedule</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">]</span>
+
+        <span class="c1"># cache</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[</span><span class="n">tag_value</span><span class="p">]</span> <span class="o">=</span> <span class="n">schedule</span>
+        <span class="k">return</span> <span class="n">schedule</span></div>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="ScheduleParser.has_resource_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.ScheduleParser.has_resource_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">has_resource_schedule</span><span class="p">(</span><span class="n">tag_value</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;off=&#39;</span> <span class="ow">in</span> <span class="n">tag_value</span> <span class="ow">and</span> <span class="s1">&#39;on=&#39;</span> <span class="ow">in</span> <span class="n">tag_value</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ScheduleParser.parse_resource_schedule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.ScheduleParser.parse_resource_schedule">[docs]</a>    <span class="k">def</span> <span class="nf">parse_resource_schedule</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lexeme</span><span class="p">):</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">exprs</span> <span class="o">=</span> <span class="n">lexeme</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;[]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,(&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">exprs</span><span class="p">:</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;()&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+            <span class="c1"># custom hours must have two parts: (&lt;days&gt;, &lt;hour&gt;)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">tokens</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">hour</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">tokens</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">hour</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">VALID_HOURS</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expand_day_range</span><span class="p">(</span><span class="n">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">days</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">parsed</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;days&#39;</span><span class="p">:</span> <span class="n">days</span><span class="p">,</span> <span class="s1">&#39;hour&#39;</span><span class="p">:</span> <span class="n">hour</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">parsed</span></div>
+
+<div class="viewcode-block" id="ScheduleParser.expand_day_range"><a class="viewcode-back" href="../../generated/c7n.html#c7n.offhours.ScheduleParser.expand_day_range">[docs]</a>    <span class="k">def</span> <span class="nf">expand_day_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">days</span><span class="p">):</span>
+        <span class="c1"># single day specified</span>
+        <span class="k">if</span> <span class="n">days</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">DAY_MAP</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">DAY_MAP</span><span class="p">[</span><span class="n">days</span><span class="p">]]</span>
+        <span class="n">day_range</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DAY_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">,</span> <span class="n">days</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">))</span>
+                     <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">day_range</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="c1"># support wrap around days aka friday-monday = 4,5,6,0</span>
+        <span class="k">if</span> <span class="n">day_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">day_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="nb">range</span><span class="p">(</span><span class="n">day_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">7</span><span class="p">)</span> <span class="o">+</span> <span class="nb">range</span><span class="p">(</span><span class="n">day_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">range</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">day_range</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">day_range</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
