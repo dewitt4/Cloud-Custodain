@@ -169,8 +169,9 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.offhours</span> <span class="k">import</span> <span class="n">OffHour</span><span class="p">,</span> <span class="n">OnHour</span>
-<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span><span class="p">,</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
 
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;ec2.filters&#39;</span><span class="p">)</span>
@@ -185,6 +186,8 @@
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;aws.ec2.instance&quot;</span>
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
+
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;RequestLimitExceeded&#39;</span><span class="p">,)))</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">EC2</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
@@ -249,7 +252,8 @@
 
         <span class="c1"># Okay go and do the tag lookup</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        <span class="n">tag_set</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_tags</span><span class="p">(</span>
+        <span class="n">tag_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">describe_tags</span><span class="p">,</span>
             <span class="n">Filters</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;resource-type&#39;</span><span class="p">,</span>
                       <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;instance&#39;</span><span class="p">]}])[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
         <span class="n">resource_tags</span> <span class="o">=</span> <span class="p">{}</span>

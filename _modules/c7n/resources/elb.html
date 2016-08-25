@@ -166,7 +166,7 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.elb&#39;</span><span class="p">)</span>
 
@@ -184,14 +184,15 @@
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;aws.elb.loadbalancer&quot;</span>
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,)))</span>
 
 <div class="viewcode-block" id="ELB.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">_elb_tags</span><span class="p">(</span>
-            <span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">)</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
-<span class="k">def</span> <span class="nf">_elb_tags</span><span class="p">(</span><span class="n">elbs</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">_elb_tags</span><span class="p">(</span><span class="n">elbs</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
 
     <span class="k">def</span> <span class="nf">process_tags</span><span class="p">(</span><span class="n">elb_set</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
@@ -199,7 +200,8 @@
 
         <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_tags</span><span class="p">(</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">describe_tags</span><span class="p">,</span>
                     <span class="n">LoadBalancerNames</span><span class="o">=</span><span class="n">elb_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
                 <span class="k">break</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
