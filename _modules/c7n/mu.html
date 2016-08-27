@@ -515,7 +515,7 @@
                 <span class="n">FunctionVersion</span><span class="o">=</span><span class="n">func_version</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="p">(</span><span class="n">exists</span><span class="p">[</span><span class="s1">&#39;FunctionVersion&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">func_version</span> <span class="ow">and</span>
-                <span class="n">exists</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">alias</span><span class="p">):</span>
+                    <span class="n">exists</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">alias</span><span class="p">):</span>
                 <span class="k">return</span> <span class="n">exists</span><span class="p">[</span><span class="s1">&#39;AliasArn&#39;</span><span class="p">]</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Updating custodian lambda alias </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
             <span class="n">alias_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">update_alias</span><span class="p">(</span>
@@ -532,11 +532,11 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_function</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="resource_exists"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.resource_exists">[docs]</a><span class="k">def</span> <span class="nf">resource_exists</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+<div class="viewcode-block" id="resource_exists"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.resource_exists">[docs]</a><span class="k">def</span> <span class="nf">resource_exists</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">NotFound</span><span class="o">=</span><span class="s2">&quot;ResourceNotFoundException&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
     <span class="k">except</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ResourceNotFoundException&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">NotFound</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">raise</span></div>
 
@@ -710,8 +710,13 @@
 
 <div class="viewcode-block" id="PolicyLambda.get_events"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PolicyLambda.get_events">[docs]</a>    <span class="k">def</span> <span class="nf">get_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
         <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CloudWatchEventSource</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">],</span> <span class="n">session_factory</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;config-rule&#39;</span><span class="p">:</span>
+            <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">ConfigRule</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">],</span> <span class="n">session_factory</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">CloudWatchEventSource</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">],</span> <span class="n">session_factory</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">events</span></div>
 
 <div class="viewcode-block" id="PolicyLambda.get_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PolicyLambda.get_archive">[docs]</a>    <span class="k">def</span> <span class="nf">get_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -781,8 +786,6 @@
         <span class="s1">&#39;terminate-failure&#39;</span><span class="p">:</span> <span class="s1">&#39;EC2 Instance Terminate Unsuccessful&#39;</span><span class="p">}</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;custodian-&quot;</span><span class="p">):</span>
-        <span class="kn">import</span> <span class="nn">time</span>
-        <span class="n">t</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session_factory</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">)</span>
@@ -816,7 +819,6 @@
             <span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">,</span> <span class="p">[]))))</span>
 
 <div class="viewcode-block" id="CloudWatchEventSource.resolve_cloudtrail_payload"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.CloudWatchEventSource.resolve_cloudtrail_payload">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_cloudtrail_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">):</span>
-        <span class="n">ids</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">sources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;sources&#39;</span><span class="p">,</span> <span class="p">[])</span>
         <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;events&#39;</span><span class="p">):</span>
@@ -1097,6 +1099,138 @@
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                     <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="ConfigRule"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule">[docs]</a><span class="k">class</span> <span class="nc">ConfigRule</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Use a lambda as a custom config rule.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">RESOURCE_TYPE_MAP</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># Networking</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::EC2::VPNGateway&#39;,</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::EC2::VPNConnection&#39;,</span>
+        <span class="s1">&#39;vpc&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::VPC&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;subnet&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::Subnet&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;route-table&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::RouteTable&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;network-acl&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::NetworkAcl&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;internet-gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::InternetGateway&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;customer-gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::CustomerGateway&#39;</span><span class="p">,</span>
+        <span class="c1"># RDS</span>
+        <span class="s1">&#39;rds&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::RDS::DBInstance&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;rds-snapshot&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::RDS::DBSnapshot&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::RDS::DBSubnetGroup&#39;,</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::RDS::DBSecurityGroup&#39;</span>
+        <span class="c1">#</span>
+        <span class="c1"># IAM</span>
+        <span class="s1">&#39;iam-policy&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::IAM::Policy&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam-role&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::IAM::Role&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam-group&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::IAM::Group&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam-user&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::IAM::User&#39;</span><span class="p">,</span>
+        <span class="c1"># EC2</span>
+        <span class="s1">&#39;security-group&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::SecurityGroup&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;eni&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::NetworkInterface&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::Instance&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;network-addr&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::EIP&#39;</span><span class="p">,</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::EC2::Host&#39;,</span>
+        <span class="s1">&#39;ebs&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::EC2::Volume&#39;</span><span class="p">,</span>
+        <span class="c1"># Happy Trails, Prospector</span>
+        <span class="c1">#&#39;&#39;: &#39;AWS::CloudTrail::Trail&#39;,</span>
+        <span class="s1">&#39;acm-certificate&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::ACM::Certificate&#39;</span><span class="p">}</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session_factory</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;&lt;ConfigRule&gt;&quot;</span>
+
+<div class="viewcode-block" id="ConfigRule.get_rule_params"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule.get_rule_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_rule_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="c1"># config does not support versions/aliases on lambda funcs</span>
+        <span class="n">func_arn</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">arn</span>
+        <span class="k">if</span> <span class="n">func_arn</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">6</span><span class="p">:</span>
+            <span class="n">func_arn</span><span class="p">,</span> <span class="n">version</span> <span class="o">=</span> <span class="n">func_arn</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">ConfigRuleName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">Description</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+            <span class="n">Source</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;Owner&#39;</span><span class="p">:</span> <span class="s1">&#39;CUSTOM_LAMBDA&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;SourceIdentifier&#39;</span><span class="p">:</span> <span class="n">func_arn</span><span class="p">,</span>
+                <span class="s1">&#39;SourceDetails&#39;</span><span class="p">:</span> <span class="p">[{</span>
+                    <span class="s1">&#39;EventSource&#39;</span><span class="p">:</span> <span class="s1">&#39;aws.config&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;MessageType&#39;</span><span class="p">:</span> <span class="s1">&#39;ConfigurationItemChangeNotification&#39;</span><span class="p">}]</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">PolicyLambda</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Scope&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;ComplianceResourceTypes&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">RESOURCE_TYPE_MAP</span><span class="p">[</span>
+                    <span class="n">func</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">]]}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Scope&#39;</span><span class="p">][</span><span class="s1">&#39;ComplianceResourceTypes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s1">&#39;resource-types&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="k">return</span> <span class="n">params</span></div>
+
+<div class="viewcode-block" id="ConfigRule.get"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule.get">[docs]</a>    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule_name</span><span class="p">):</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="n">resource_exists</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">describe_config_rules</span><span class="p">,</span>
+            <span class="n">ConfigRuleNames</span><span class="o">=</span><span class="p">[</span><span class="n">rule_name</span><span class="p">],</span>
+            <span class="n">NotFound</span><span class="o">=</span><span class="s2">&quot;NoSuchConfigRuleException&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rules</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">rules</span>
+        <span class="k">return</span> <span class="n">rules</span><span class="p">[</span><span class="s1">&#39;ConfigRules&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span></div>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="ConfigRule.delta"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule.delta">[docs]</a>    <span class="k">def</span> <span class="nf">delta</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="c1"># doesn&#39;t seem like we have anything mutable at the moment,</span>
+        <span class="c1"># since we restrict params, maybe reusing the same policy name</span>
+        <span class="c1"># with a different resource type.</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;Scope&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Scope&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;Source&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Source&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Description&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ConfigRule.add"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">rule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_rule_params</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">rule</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Updating config rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="p">)</span>
+            <span class="n">rule</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_config_rule</span><span class="p">(</span><span class="n">ConfigRule</span><span class="o">=</span><span class="n">rule</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">rule</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Config rule up to date&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
+                <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">StatementId</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">SourceAccount</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">],</span>
+                <span class="n">Action</span><span class="o">=</span><span class="s1">&#39;lambda:InvokeFunction&#39;</span><span class="p">,</span>
+                <span class="n">Principal</span><span class="o">=</span><span class="s1">&#39;config.amazonaws.com&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Adding config rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_config_rule</span><span class="p">(</span><span class="n">ConfigRule</span><span class="o">=</span><span class="n">params</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ConfigRule.remove"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.ConfigRule.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">rule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">delete_config_rule</span><span class="p">(</span>
+                <span class="n">ConfigRuleName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
