@@ -264,8 +264,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">security_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_security_groups</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">key_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_key_pairs</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">elbs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_elbs</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_images</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshots</span><span class="p">()</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshots</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_images</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="ConfigValidFilter.get_subnets"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_subnets">[docs]</a>    <span class="k">def</span> <span class="nf">get_subnets</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="kn">from</span> <span class="nn">c7n.resources.vpc</span> <span class="k">import</span> <span class="n">Subnet</span>
@@ -290,7 +290,22 @@
 <div class="viewcode-block" id="ConfigValidFilter.get_images"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_images">[docs]</a>    <span class="k">def</span> <span class="nf">get_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="kn">from</span> <span class="nn">c7n.resources.ami</span> <span class="k">import</span> <span class="n">AMI</span>
         <span class="n">manager</span> <span class="o">=</span> <span class="n">AMI</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="k">return</span> <span class="nb">set</span><span class="p">([</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()])</span></div>
+        <span class="n">images</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="c1"># Verify image snapshot validity, i&#39;ve been told by a TAM this</span>
+        <span class="c1"># is a possibility, but haven&#39;t seen evidence of it, since</span>
+        <span class="c1"># snapshots are strongly ref&#39;d by amis, but its negible cost</span>
+        <span class="c1"># to verify.</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">():</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">for</span> <span class="n">bd</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                <span class="k">if</span> <span class="s1">&#39;Ebs&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span> <span class="ow">or</span> <span class="s1">&#39;SnapshotId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">]:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">images</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">images</span></div>
 
 <div class="viewcode-block" id="ConfigValidFilter.get_snapshots"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_snapshots">[docs]</a>    <span class="k">def</span> <span class="nf">get_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="kn">from</span> <span class="nn">c7n.resources.ebs</span> <span class="k">import</span> <span class="n">Snapshot</span>
@@ -347,7 +362,8 @@
 <div class="viewcode-block" id="ValidConfigFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ValidConfigFilter">[docs]</a><span class="k">class</span> <span class="nc">ValidConfigFilter</span><span class="p">(</span><span class="n">ConfigValidFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters autoscale groups to find those that are structurally valid.</span>
 
-<span class="sd">    This operates as the inverse of the invalid filter for multi-step workflows.</span>
+<span class="sd">    This operates as the inverse of the invalid filter for multi-step</span>
+<span class="sd">    workflows.</span>
 
 <span class="sd">    See details on the invalid filter for a list of checks made.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -589,6 +605,49 @@
                 <span class="nb">dict</span><span class="p">(</span><span class="n">Key</span><span class="o">=</span><span class="n">t</span><span class="p">,</span> <span class="n">ResourceType</span><span class="o">=</span><span class="s1">&#39;auto-scaling-group&#39;</span><span class="p">,</span>
                      <span class="n">ResourceId</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">]))</span>
         <span class="n">client</span><span class="o">.</span><span class="n">delete_tags</span><span class="p">(</span><span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;capacity-delta&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="CapacityDelta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.CapacityDelta">[docs]</a><span class="k">class</span> <span class="nc">CapacityDelta</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;size-delta&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CapacityDelta.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.CapacityDelta.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span> <span class="ow">or</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]]</span></div></div>
+
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resize&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Resize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize">[docs]</a><span class="k">class</span> <span class="nc">Resize</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;resize&#39;</span><span class="p">,</span>
+        <span class="c1">#min_size={&#39;type&#39;: &#39;string&#39;},</span>
+        <span class="c1">#max_size={&#39;type&#39;: &#39;string&#39;},</span>
+        <span class="n">desired_size</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;desired_size&#39;</span><span class="p">,))</span>
+
+<div class="viewcode-block" id="Resize.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired_size&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;current&#39;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;only resizing desired/min to current capacity is supported&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Resize.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;autoscaling&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span><span class="p">:</span>
+            <span class="n">current_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span>
+            <span class="n">min_size</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]</span>
+            <span class="n">desired</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;desired </span><span class="si">%d</span><span class="s1"> to </span><span class="si">%s</span><span class="s1">, min </span><span class="si">%d</span><span class="s1"> to </span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">,</span>
+                      <span class="n">desired</span><span class="p">,</span> <span class="n">current_size</span><span class="p">,</span> <span class="n">min_size</span><span class="p">,</span> <span class="n">current_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_auto_scaling_group</span><span class="p">,</span>
+                <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
+                <span class="n">DesiredCapacity</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="n">current_size</span><span class="p">,</span> <span class="n">desired</span><span class="p">)),</span>
+                <span class="n">MinSize</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="n">current_size</span><span class="p">,</span> <span class="n">min_size</span><span class="p">)))</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
