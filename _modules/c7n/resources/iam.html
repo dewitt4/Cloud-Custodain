@@ -159,7 +159,7 @@
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -179,14 +179,232 @@
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-user&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="User"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.User">[docs]</a><span class="k">class</span> <span class="nc">User</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
-
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.user&#39;</span></div>
 
 
-<span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="UserAttachedPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy">[docs]</a><span class="k">class</span> <span class="nc">UserAttachedPolicy</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-policy&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.Policy">[docs]</a><span class="k">class</span> <span class="nc">Policy</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.policy&#39;</span></div>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-profile&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="InstanceProfile"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.InstanceProfile">[docs]</a><span class="k">class</span> <span class="nc">InstanceProfile</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.instance-profile&#39;</span></div>
+
+
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-certificate&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ServerCertificate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.ServerCertificate">[docs]</a><span class="k">class</span> <span class="nc">ServerCertificate</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.server-certificate&#39;</span></div>
+
+
+<div class="viewcode-block" id="IamRoleUsage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage">[docs]</a><span class="k">class</span> <span class="nc">IamRoleUsage</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+<div class="viewcode-block" id="IamRoleUsage.service_role_usage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.service_role_usage">[docs]</a>    <span class="k">def</span> <span class="nf">service_role_usage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_lambda_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_ecs_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_asg_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_ec2_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="IamRoleUsage.instance_profile_usage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.instance_profile_usage">[docs]</a>    <span class="k">def</span> <span class="nf">instance_profile_usage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_asg_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scan_ec2_roles</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">result</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="IamRoleUsage.scan_lambda_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_lambda_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_lambda_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.resources.awslambda</span> <span class="k">import</span> <span class="n">AWSLambda</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">AWSLambda</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Role&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span> <span class="k">if</span> <span class="s1">&#39;Role&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="IamRoleUsage.scan_ecs_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_ecs_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_ecs_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_clusters</span><span class="p">()[</span><span class="s1">&#39;clusters&#39;</span><span class="p">]:</span>
+            <span class="n">svcs</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_services</span><span class="p">(</span><span class="n">cluster</span><span class="o">=</span><span class="n">cluster</span><span class="p">)[</span><span class="s1">&#39;serviceArns&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">svc</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_services</span><span class="p">(</span>
+                    <span class="n">cluster</span><span class="o">=</span><span class="n">cluster</span><span class="p">,</span> <span class="n">services</span><span class="o">=</span><span class="n">svcs</span><span class="p">)[</span><span class="s1">&#39;services&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="s1">&#39;roleArn&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">svc</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">svc</span><span class="p">[</span><span class="s1">&#39;roleArn&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="IamRoleUsage.scan_asg_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_asg_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_asg_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.resources.asg</span> <span class="k">import</span> <span class="n">LaunchConfig</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">LaunchConfig</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span>
+            <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;launch-config&#39;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;IamInstanceProfile&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+                <span class="k">if</span> <span class="s1">&#39;IamInstanceProfile&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="IamRoleUsage.scan_ec2_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_ec2_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_ec2_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.resources.ec2</span> <span class="k">import</span> <span class="n">EC2</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">EC2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">():</span>
+            <span class="k">if</span> <span class="s1">&#39;Instances&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="s1">&#39;IamInstanceProfile&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;IamInstanceProfile&#39;</span><span class="p">][</span><span class="s1">&#39;Arn&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="c1">###################</span>
+<span class="c1">#    IAM Roles    #</span>
+<span class="c1">###################</span>
+
+
+<span class="nd">@Role</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UsedIamRole"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamRole">[docs]</a><span class="k">class</span> <span class="nc">UsedIamRole</span><span class="p">(</span><span class="n">IamRoleUsage</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UsedIamRole.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamRole.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">roles</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_role_usage</span><span class="p">()</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">roles</span> <span class="ow">or</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;RoleName&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles currently used.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="nd">@Role</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UnusedIamRole"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamRole">[docs]</a><span class="k">class</span> <span class="nc">UnusedIamRole</span><span class="p">(</span><span class="n">IamRoleUsage</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UnusedIamRole.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamRole.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">roles</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_role_usage</span><span class="p">()</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">roles</span> <span class="ow">or</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;RoleName&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles not currently used.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="c1">######################</span>
+<span class="c1">#    IAM Policies    #</span>
+<span class="c1">######################</span>
+
+
+<span class="nd">@Policy</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UsedIamPolicies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamPolicies">[docs]</a><span class="k">class</span> <span class="nc">UsedIamPolicies</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UsedIamPolicies.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamPolicies.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachmentCount&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span></div></div>
+
+
+<span class="nd">@Policy</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UnusedIamPolicies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamPolicies">[docs]</a><span class="k">class</span> <span class="nc">UnusedIamPolicies</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UnusedIamPolicies.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamPolicies.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachmentCount&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span></div></div>
+
+
+<span class="c1">###############################</span>
+<span class="c1">#    IAM Instance Profiles    #</span>
+<span class="c1">###############################</span>
+
+
+<span class="nd">@InstanceProfile</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UsedInstanceProfiles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedInstanceProfiles">[docs]</a><span class="k">class</span> <span class="nc">UsedInstanceProfiles</span><span class="p">(</span><span class="n">IamRoleUsage</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UsedInstanceProfiles.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedInstanceProfiles.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">profiles</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instance_profile_usage</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="ow">or</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;InstanceProfileName&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instance profiles currently in use.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="nd">@InstanceProfile</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UnusedInstanceProfiles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedInstanceProfiles">[docs]</a><span class="k">class</span> <span class="nc">UnusedInstanceProfiles</span><span class="p">(</span><span class="n">IamRoleUsage</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UnusedInstanceProfiles.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedInstanceProfiles.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">profiles</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instance_profile_usage</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">profiles</span> <span class="ow">or</span>
+                        <span class="n">r</span><span class="p">[</span><span class="s1">&#39;InstanceProfileName&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instance profiles currently not in use.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="nd">@InstanceProfile</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;attached&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AttachedInstanceProfiles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.AttachedInstanceProfiles">[docs]</a><span class="k">class</span> <span class="nc">AttachedInstanceProfiles</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;attached&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AttachedInstanceProfiles.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.AttachedInstanceProfiles.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Roles&#39;</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instance profiles attached to a role.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="nd">@InstanceProfile</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unattached&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UnattachedInstanceProfiles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnattachedInstanceProfiles">[docs]</a><span class="k">class</span> <span class="nc">UnattachedInstanceProfiles</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unattached&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UnattachedInstanceProfiles.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnattachedInstanceProfiles.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Roles&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instance profiles not attached to a role.&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<span class="c1">###################</span>
+<span class="c1">#    IAM Users    #</span>
+<span class="c1">###################</span>
+
+
+<span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UserAttachedPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy">[docs]</a><span class="k">class</span> <span class="nc">UserAttachedPolicy</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="UserAttachedPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
@@ -198,7 +416,8 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;AttachedPolicies&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users policies&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users policies&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_user_policies</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
@@ -225,7 +444,8 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;AccessKeys&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; api keys&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; api keys&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_user_keys</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
@@ -257,7 +477,8 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;MFADevices&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; mfa devices&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; mfa devices&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_user_mfa_devices</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
@@ -281,7 +502,7 @@
         <span class="n">disable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">age</span><span class="p">:</span>
-            <span class="n">threshold_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">age</span><span class="p">)</span>
+            <span class="n">threshold_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">()</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">age</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="k">if</span> <span class="s1">&#39;AccessKeys&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
@@ -301,24 +522,6 @@
                     <span class="n">client</span><span class="o">.</span><span class="n">delete_access_key</span><span class="p">(</span>
                         <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span>
                         <span class="n">AccessKeyId</span><span class="o">=</span><span class="n">k</span><span class="p">[</span><span class="s1">&#39;AccessKeyId&#39;</span><span class="p">])</span></div></div>
-
-
-<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-policy&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="Policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.Policy">[docs]</a><span class="k">class</span> <span class="nc">Policy</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
-
-    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.policy&#39;</span></div>
-
-
-<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-profile&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="InstanceProfile"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.InstanceProfile">[docs]</a><span class="k">class</span> <span class="nc">InstanceProfile</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
-
-    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.instance-profile&#39;</span></div>
-
-
-<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-certificate&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="ServerCerficate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.ServerCerficate">[docs]</a><span class="k">class</span> <span class="nc">ServerCerficate</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
-
-    <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.iam.server-certificate&#39;</span></div>
 </pre></div>
 
            </div>
