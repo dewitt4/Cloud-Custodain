@@ -156,31 +156,145 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">,</span>
+    <span class="n">get_retry</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">snapshot_identifier</span><span class="p">)</span>
+
+<span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;emr.actions&#39;</span><span class="p">)</span>
 
 
-<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;emr-cluster&#39;</span><span class="p">)</span>
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;emr&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="EMRCluster"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.EMRCluster">[docs]</a><span class="k">class</span> <span class="nc">EMRCluster</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">EMRCluster</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queries</span> <span class="o">=</span> <span class="n">QueryFilter</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">,</span> <span class="p">[]))</span>
 
 <div class="viewcode-block" id="EMRCluster.Meta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.EMRCluster.Meta">[docs]</a>    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;emr&#39;</span>
-        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;emr-cluster&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;emr&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_clusters&#39;</span><span class="p">,</span> <span class="s1">&#39;Clusters&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;Name&#39;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;Id&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;ClusterId&#39;</span></div>
 
     <span class="n">resource_type</span> <span class="o">=</span> <span class="n">Meta</span>
-        
+
+<div class="viewcode-block" id="EMRCluster.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.EMRCluster.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">consolidate_query_filter</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">q</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">query</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">q</span><span class="p">)):</span>
+                <span class="n">query</span><span class="p">[</span><span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s1">&#39;Values&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">EMRCluster</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">query</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="EMRCluster.consolidate_query_filter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.EMRCluster.consolidate_query_filter">[docs]</a>    <span class="k">def</span> <span class="nf">consolidate_query_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="c1"># allow same name to be specified multiple times and append the queries</span>
+        <span class="c1"># under the same name</span>
+        <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queries</span><span class="p">:</span>
+            <span class="n">query_filter</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">query_filter</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">filt</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">query_filter</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">filt</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span>
+                        <span class="n">filt</span><span class="p">[</span><span class="s1">&#39;Values&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">query_filter</span><span class="p">[</span><span class="s1">&#39;Values&#39;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">query_filter</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">query_filter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
 <div class="viewcode-block" id="EMRCluster.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.EMRCluster.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="c1"># remap for cwmetrics</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
-        
 
-        
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Terminate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.Terminate">[docs]</a><span class="k">class</span> <span class="nc">Terminate</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Terminate.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.Terminate.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">emrs</span><span class="p">):</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;emr&#39;</span><span class="p">)</span>
+        <span class="n">cluster_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">emr</span> <span class="ow">in</span> <span class="n">emrs</span><span class="p">:</span>
+            <span class="n">cluster_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">emr</span><span class="p">[</span><span class="s1">&#39;ClusterId&#39;</span><span class="p">])</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">terminate_job_flows</span><span class="p">(</span><span class="n">JobFlowIds</span><span class="o">=</span><span class="n">cluster_ids</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted emrs: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">cluster_ids</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">emrs</span></div></div>
+
+
+<span class="c1"># Valid EMR Query Filters</span>
+<span class="n">EMR_VALID_FILTERS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;CreatedAfter&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="p">,</span>
+    <span class="s1">&#39;CreatedBefore&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="p">,</span>
+    <span class="s1">&#39;ClusterStates&#39;</span><span class="p">:</span> <span class="p">(</span>
+        <span class="s1">&#39;terminated&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;bootstrapping&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;running&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;waiting&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;terminating&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;terminated&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;terminated_with_errors&#39;</span><span class="p">)}</span>
+
+
+<div class="viewcode-block" id="QueryFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.QueryFilter">[docs]</a><span class="k">class</span> <span class="nc">QueryFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="QueryFilter.parse"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.QueryFilter.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;EMR Query Filter Invalid structure </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">d</span><span class="p">)</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cls</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">validate</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="QueryFilter.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.QueryFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;EMR Query Filter Invalid </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">EMR_VALID_FILTERS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span>
+                <span class="s1">&#39;tag:&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;EMR Query Filter invalid filter name </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;EMR Query Filters must have a value, use tag-key&quot;</span>
+                <span class="s2">&quot; w/ tag name as value for tag present checks&quot;</span>
+                <span class="s2">&quot; </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="QueryFilter.query"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.QueryFilter.query">[docs]</a>    <span class="k">def</span> <span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">basestring</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">}</span></div></div>
 </pre></div>
 
            </div>

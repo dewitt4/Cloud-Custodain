@@ -429,13 +429,9 @@
             <span class="n">r</span> <span class="o">=</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">:</span>
             <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
             <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;in&#39;</span><span class="p">,</span> <span class="s1">&#39;not-in&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">r</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="p">()</span>
 
         <span class="c1"># value type conversion</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -452,9 +448,13 @@
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">:</span>
             <span class="n">op</span> <span class="o">=</span> <span class="n">OPERATORS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">op</span><span class="p">]</span>
-            <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">op</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
         <span class="k">elif</span> <span class="n">r</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
+
         <span class="k">return</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="ValueFilter.process_value_type"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter.process_value_type">[docs]</a>    <span class="k">def</span> <span class="nf">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
@@ -478,7 +478,12 @@
                 <span class="n">sentinel</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">sentinel</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">datetime</span><span class="p">):</span>
-                <span class="n">value</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="c1"># EMR bug when testing ages in EMR. This is due to</span>
+                <span class="c1"># EMR not having more functionality.</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="c1"># Reverse the age comparison, we want to compare the value being</span>
             <span class="c1"># greater than the sentinel typically. Else the syntax for age</span>
             <span class="c1"># comparisons is intuitively wrong.</span>
