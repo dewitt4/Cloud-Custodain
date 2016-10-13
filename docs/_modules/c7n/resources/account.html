@@ -265,8 +265,9 @@
         <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;config_recorders&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">recorders</span>
         <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;config_channels&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">channels</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;global-resources&#39;</span><span class="p">):</span>
-            <span class="n">recorders</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">recorders</span>
-                         <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;recordingGroup&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;includeGlobalResources&#39;</span><span class="p">)]</span>
+            <span class="n">recorders</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">recorders</span>
+                <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;recordingGroup&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;includeGlobalResourceTypes&#39;</span><span class="p">)]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;all-resources&#39;</span><span class="p">):</span>
             <span class="n">recorders</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">recorders</span>
                          <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;recordingGroup&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;allSupported&#39;</span><span class="p">)]</span>
@@ -327,7 +328,7 @@
 <span class="sd">            &quot;UserPolicySizeQuota&quot;: 2048</span>
 <span class="sd">        }</span>
 
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">q    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;iam-summary&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
 
 <div class="viewcode-block" id="IAMSummary.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.IAMSummary.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -358,7 +359,44 @@
 
 <span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;service-limit&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ServiceLimit"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.ServiceLimit">[docs]</a><span class="k">class</span> <span class="nc">ServiceLimit</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Check if account&#39;s service limits are past a given threshold.&quot;&quot;&quot;</span>
+    <span class="sd">&quot;&quot;&quot;Check if account&#39;s service limits are past a given threshold.</span>
+
+<span class="sd">    Supported limits are per trusted advisor, which is variable based</span>
+<span class="sd">    on usage in the account and support level enabled on the account.</span>
+
+<span class="sd">      - service: AutoScaling limit: Auto Scaling groups</span>
+<span class="sd">      - service: AutoScaling limit: Launch configurations</span>
+<span class="sd">      - service: EBS limit: Active snapshots</span>
+<span class="sd">      - service: EBS limit: Active volumes</span>
+<span class="sd">      - service: EBS limit: General Purpose (SSD) volume storage (GiB)</span>
+<span class="sd">      - service: EBS limit: Magnetic volume storage (GiB)</span>
+<span class="sd">      - service: EBS limit: Provisioned IOPS</span>
+<span class="sd">      - service: EBS limit: Provisioned IOPS (SSD) storage (GiB)</span>
+<span class="sd">      - service: EC2 limit: Elastic IP addresses (EIPs)</span>
+
+<span class="sd">      # Note this is extant for each active instance type in the account</span>
+<span class="sd">      # however the total value is against sum of all instance types.</span>
+<span class="sd">      # see issue https://github.com/capitalone/cloud-custodian/issues/516</span>
+
+<span class="sd">      - service: EC2 limit: On-Demand instances - m3.medium</span>
+
+<span class="sd">      - service: EC2 limit: Reserved Instances - purchase limit (monthly)</span>
+<span class="sd">      - service: ELB limit: Active load balancers</span>
+<span class="sd">      - service: IAM limit: Groups</span>
+<span class="sd">      - service: IAM limit: Instance profiles</span>
+<span class="sd">      - service: IAM limit: Roles</span>
+<span class="sd">      - service: IAM limit: Server certificates</span>
+<span class="sd">      - service: IAM limit: Users</span>
+<span class="sd">      - service: RDS limit: DB instances</span>
+<span class="sd">      - service: RDS limit: DB parameter groups</span>
+<span class="sd">      - service: RDS limit: DB security groups</span>
+<span class="sd">      - service: RDS limit: DB snapshots per user</span>
+<span class="sd">      - service: RDS limit: Storage quota (GB)</span>
+<span class="sd">      - service: RDS limit: Internet gateways</span>
+<span class="sd">      - service: SES limit: Daily sending quota</span>
+<span class="sd">      - service: VPC limit: VPCs</span>
+<span class="sd">      - service: VPC limit: VPC Elastic IP addresses (EIPs)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;service-limit&#39;</span><span class="p">,</span>
@@ -388,7 +426,6 @@
         <span class="n">services</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;services&#39;</span><span class="p">)</span>
         <span class="n">limits</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;limits&#39;</span><span class="p">)</span>
         <span class="n">exceeded</span> <span class="o">=</span> <span class="p">[]</span>
-
 
         <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">checks</span><span class="p">[</span><span class="s1">&#39;flaggedResources&#39;</span><span class="p">]:</span>
             <span class="k">if</span> <span class="n">threshold</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ok&#39;</span><span class="p">:</span>
