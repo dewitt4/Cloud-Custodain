@@ -171,7 +171,7 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">worker</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.elb&#39;</span><span class="p">)</span>
 
@@ -291,6 +291,7 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_elb</span><span class="p">,</span> <span class="n">load_balancers</span><span class="p">))</span></div>
 
+    <span class="nd">@worker</span>
 <div class="viewcode-block" id="SetSslListenerPolicy.process_elb"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.SetSslListenerPolicy.process_elb">[docs]</a>    <span class="k">def</span> <span class="nf">process_elb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elb</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">is_ssl</span><span class="p">(</span><span class="n">elb</span><span class="p">):</span>
             <span class="k">return</span>
@@ -313,16 +314,26 @@
                 <span class="n">PolicyTypeName</span><span class="o">=</span><span class="s1">&#39;SSLNegotiationPolicyType&#39;</span><span class="p">,</span>
                 <span class="n">PolicyAttributes</span><span class="o">=</span><span class="n">policy_attributes</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;DuplicatePolicyName&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span>
+                    <span class="s1">&#39;DuplicatePolicyName&#39;</span><span class="p">,</span> <span class="s1">&#39;DuplicationPolicyNameException&#39;</span><span class="p">):</span>
                 <span class="k">raise</span>
 
         <span class="c1"># Apply it to all SSL listeners.</span>
+        <span class="n">ssl_policies</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;c7n.ssl-policies&#39;</span> <span class="ow">in</span> <span class="n">elb</span><span class="p">:</span>
+            <span class="n">ssl_policies</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">elb</span><span class="p">[</span><span class="s1">&#39;c7n.ssl-policies&#39;</span><span class="p">])</span>
+
         <span class="k">for</span> <span class="n">ld</span> <span class="ow">in</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;ListenerDescriptions&#39;</span><span class="p">]:</span>
             <span class="k">if</span> <span class="n">ld</span><span class="p">[</span><span class="s1">&#39;Listener&#39;</span><span class="p">][</span><span class="s1">&#39;Protocol&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;HTTPS&#39;</span><span class="p">,</span> <span class="s1">&#39;SSL&#39;</span><span class="p">):</span>
+                <span class="n">policy_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">policy_name</span><span class="p">]</span>
+                <span class="c1"># Preserve extant non-ssl listener policies</span>
+                <span class="k">if</span> <span class="n">ssl_policies</span><span class="p">:</span>
+                    <span class="n">policy_names</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                        <span class="n">ssl_policies</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">ld</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PolicyNames&#39;</span><span class="p">,</span> <span class="p">())))</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">set_load_balancer_policies_of_listener</span><span class="p">(</span>
                     <span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">lb_name</span><span class="p">,</span>
                     <span class="n">LoadBalancerPort</span><span class="o">=</span><span class="n">ld</span><span class="p">[</span><span class="s1">&#39;Listener&#39;</span><span class="p">][</span><span class="s1">&#39;LoadBalancerPort&#39;</span><span class="p">],</span>
-                    <span class="n">PolicyNames</span><span class="o">=</span><span class="p">[</span><span class="n">policy_name</span><span class="p">])</span></div></div>
+                    <span class="n">PolicyNames</span><span class="o">=</span><span class="n">policy_names</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="is_ssl"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.is_ssl">[docs]</a><span class="k">def</span> <span class="nf">is_ssl</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
@@ -485,7 +496,7 @@
 <span class="sd">        (myelb,[&#39;Protocol-SSLv1&#39;,&#39;Protocol-SSLv2&#39;])</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">active_policy_attribute_tuples</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">elb_policy_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">elb_policy_tuples</span><span class="p">,</span> <span class="mi">50</span><span class="p">):</span>
                 <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -502,6 +513,7 @@
 
         <span class="k">return</span> <span class="n">active_policy_attribute_tuples</span></div>
 
+    <span class="nd">@worker</span>
 <div class="viewcode-block" id="SSLPolicyFilter.process_elb_policy_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.SSLPolicyFilter.process_elb_policy_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_elb_policy_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elb_policy_set</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
@@ -518,15 +530,18 @@
                     <span class="k">continue</span>
                 <span class="k">raise</span>
             <span class="n">active_lb_policies</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">ssl_policies</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;PolicyTypeName&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;SSLNegotiationPolicyType&#39;</span><span class="p">:</span>
                     <span class="k">continue</span>
+                <span class="n">ssl_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;PolicyName&#39;</span><span class="p">])</span>
                 <span class="n">active_lb_policies</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
                     <span class="p">[</span><span class="n">policy_description</span><span class="p">[</span><span class="s1">&#39;AttributeName&#39;</span><span class="p">]</span>
                      <span class="k">for</span> <span class="n">policy_description</span> <span class="ow">in</span>
                      <span class="n">p</span><span class="p">[</span><span class="s1">&#39;PolicyAttributeDescriptions&#39;</span><span class="p">]</span>
                      <span class="k">if</span> <span class="n">policy_description</span><span class="p">[</span><span class="s1">&#39;AttributeValue&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">]</span>
                 <span class="p">)</span>
+            <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;c7n.ssl-policies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ssl_policies</span>
             <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">elb</span><span class="p">,</span> <span class="n">active_lb_policies</span><span class="p">))</span>
 
         <span class="k">return</span> <span class="n">results</span></div></div>
