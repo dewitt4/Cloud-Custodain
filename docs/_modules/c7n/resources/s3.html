@@ -203,7 +203,8 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">dumps</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">dumps</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">)</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">TODO:</span>
@@ -264,6 +265,8 @@
 
 <div class="viewcode-block" id="assemble_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.assemble_bucket">[docs]</a><span class="k">def</span> <span class="nf">assemble_bucket</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Assemble a document representing all the config state around a bucket.</span>
+
+<span class="sd">    TODO: Refactor this, the logic here feels quite muddled.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">factory</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">item</span>
     <span class="n">s</span> <span class="o">=</span> <span class="n">factory</span><span class="p">()</span>
@@ -303,8 +306,11 @@
         <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;Location&#39;</span> <span class="ow">and</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">b_location</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">)</span>
             <span class="c1"># Location == region for all cases but EU per https://goo.gl/iXdpnl</span>
-            <span class="k">if</span> <span class="n">b_location</span> <span class="o">==</span> <span class="s1">&#39;EU&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">b_location</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">b_location</span> <span class="o">=</span> <span class="s2">&quot;us-east-1&quot;</span>
+            <span class="k">elif</span> <span class="n">b_location</span> <span class="o">==</span> <span class="s1">&#39;EU&#39;</span><span class="p">:</span>
                 <span class="n">b_location</span> <span class="o">=</span> <span class="s2">&quot;eu-west-1&quot;</span>
+                <span class="n">v</span><span class="p">[</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;eu-west-1&#39;</span>
             <span class="k">if</span> <span class="n">v</span> <span class="ow">and</span> <span class="n">v</span> <span class="o">!=</span> <span class="n">c_location</span><span class="p">:</span>
                 <span class="n">c</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">b_location</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">c_location</span> <span class="o">!=</span> <span class="n">location</span><span class="p">:</span>
@@ -570,16 +576,30 @@
 <div class="viewcode-block" id="AttachLambdaEncrypt.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">LambdaManager</span>
         <span class="kn">from</span> <span class="nn">c7n.ufuncs.s3crypt</span> <span class="k">import</span> <span class="n">get_function</span>
+
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">account_id</span> <span class="o">=</span> <span class="n">get_account_id</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+
         <span class="n">func</span> <span class="o">=</span> <span class="n">get_function</span><span class="p">(</span>
-            <span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">))</span>
+            <span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">),</span>
+            <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">)</span>
+
+        <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
+            <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">:</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">})[</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
+
+        <span class="c1"># session managers by region</span>
+        <span class="n">region_sessions</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+            <span class="n">region_sessions</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="n">r</span><span class="p">)</span>
 
         <span class="c1"># Publish function to all of our buckets regions</span>
         <span class="n">region_funcs</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
-            <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">,</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
+
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
-            <span class="n">lambda_mgr</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span>
-                <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="n">r</span><span class="p">))</span>
+            <span class="n">lambda_mgr</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span><span class="n">region_sessions</span><span class="p">[</span><span class="n">r</span><span class="p">])</span>
             <span class="n">lambda_mgr</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
             <span class="n">region_funcs</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span>
 
@@ -587,11 +607,17 @@
             <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
+                <span class="n">region</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{</span>
+                    <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">:</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                        <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">)</span>
                 <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span>
-                        <span class="n">region_funcs</span><span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">,</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">)],</span>
-                        <span class="n">b</span><span class="p">))</span>
+                        <span class="n">region_funcs</span><span class="p">[</span><span class="n">region</span><span class="p">],</span>
+                        <span class="n">b</span><span class="p">,</span>
+                        <span class="n">account_id</span><span class="p">,</span>
+                        <span class="n">region_sessions</span><span class="p">[</span><span class="n">region</span><span class="p">]</span>
+                    <span class="p">))</span>
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
                     <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
@@ -599,10 +625,11 @@
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
             <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AttachLambdaEncrypt.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<div class="viewcode-block" id="AttachLambdaEncrypt.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">account_id</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
         <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">BucketNotification</span>
-        <span class="n">source</span> <span class="o">=</span> <span class="n">BucketNotification</span><span class="p">({},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">source</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div></div>
+        <span class="n">source</span> <span class="o">=</span> <span class="n">BucketNotification</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;account_s3&#39;</span><span class="p">:</span> <span class="n">account_id</span><span class="p">},</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">source</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;encryption-policy&#39;</span><span class="p">)</span>
