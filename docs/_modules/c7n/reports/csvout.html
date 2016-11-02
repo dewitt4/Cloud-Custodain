@@ -195,8 +195,10 @@
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
 <span class="kn">import</span> <span class="nn">gzip</span>
 <span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">jmespath</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">copy</span>
 
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">date_parse</span>
 
@@ -207,16 +209,18 @@
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.reports&#39;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="report"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.report">[docs]</a><span class="k">def</span> <span class="nf">report</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">output_fh</span><span class="p">,</span> <span class="n">raw_output_fh</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="report"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.report">[docs]</a><span class="k">def</span> <span class="nf">report</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">output_fh</span><span class="p">,</span> <span class="n">raw_output_fh</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Format a policy&#39;s extant records into a report.&quot;&quot;&quot;</span>
-    <span class="n">formatter</span> <span class="o">=</span> <span class="n">RECORD_TYPE_FORMATTERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
+    <span class="n">formatter_cls</span> <span class="o">=</span> <span class="n">RECORD_TYPE_FORMATTERS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
+    <span class="n">formatter</span> <span class="o">=</span> <span class="n">formatter_cls</span><span class="p">(</span>
+        <span class="n">extra_fields</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">field</span><span class="p">,</span> <span class="n">no_default_fields</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">no_default_fields</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">formatter</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;No formatter for resource type </span><span class="si">%s</span><span class="s2">, valid: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="s2">&quot;No formatter defined for resource type &#39;</span><span class="si">%s</span><span class="s2">&#39;, valid options: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                 <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">RECORD_TYPE_FORMATTERS</span><span class="p">)))</span>
 
-    <span class="k">if</span> <span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">use_s3</span><span class="p">():</span>
         <span class="n">records</span> <span class="o">=</span> <span class="n">record_set</span><span class="p">(</span>
             <span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
             <span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span>
@@ -236,9 +240,16 @@
 
 
 <div class="viewcode-block" id="Formatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter">[docs]</a><span class="k">class</span> <span class="nc">Formatter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">id_field</span><span class="p">,</span> <span class="n">headers</span><span class="p">):</span>
+    
+    <span class="n">tag_prefix</span> <span class="o">=</span> <span class="s1">&#39;tag:&#39;</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">id_field</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_id_field</span> <span class="o">=</span> <span class="n">id_field</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span> <span class="o">=</span> <span class="n">headers</span>
+
+        <span class="c1"># Make a copy because we modify the values when we strip off the header</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">extra_fields</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;extra_fields&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">no_default_fields</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;no_default_fields&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_headers</span><span class="p">(</span><span class="n">headers</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Formatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="sd">&#39;&#39;&#39;Must be implemented by subclass&#39;&#39;&#39;</span>
@@ -248,12 +259,37 @@
         <span class="sd">&#39;&#39;&#39;Override in subclass if filtering needed.&#39;&#39;&#39;</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
+<div class="viewcode-block" id="Formatter.set_headers"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter.set_headers">[docs]</a>    <span class="k">def</span> <span class="nf">set_headers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">headers</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_default_fields</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span> <span class="o">=</span> <span class="n">headers</span>
+
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extra_fields</span><span class="p">):</span>
+            <span class="n">header</span><span class="p">,</span> <span class="n">field_minus_header</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extra_fields</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">field_minus_header</span></div>
+
 <div class="viewcode-block" id="Formatter.headers"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter.headers">[docs]</a>    <span class="k">def</span> <span class="nf">headers</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_headers</span></div>
 
 <div class="viewcode-block" id="Formatter.extract_csv"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter.extract_csv">[docs]</a>    <span class="k">def</span> <span class="nf">extract_csv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
         <span class="n">tag_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">())}</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_fields</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">)</span></div>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">no_default_fields</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">csv_fields</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">)</span>
+            
+        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extra_fields</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_prefix</span><span class="p">):</span>
+                <span class="n">tag_field</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_prefix</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tag_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">tag_field</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">record</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="Formatter.uniq_by_id"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.Formatter.uniq_by_id">[docs]</a>    <span class="k">def</span> <span class="nf">uniq_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">records</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Only the first record for each id&quot;&quot;&quot;</span>
@@ -283,7 +319,7 @@
 
 <div class="viewcode-block" id="S3Formatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.S3Formatter">[docs]</a><span class="k">class</span> <span class="nc">S3Formatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">S3Formatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;Name&#39;</span><span class="p">,</span>
             <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span>
@@ -291,7 +327,8 @@
              <span class="s1">&#39;global-permissions&#39;</span><span class="p">,</span>
              <span class="s1">&#39;ownercontact&#39;</span><span class="p">,</span>
              <span class="s1">&#39;asv&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;env&#39;</span><span class="p">])</span>
+             <span class="s1">&#39;env&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="S3Formatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.S3Formatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -307,11 +344,12 @@
 
 
 <div class="viewcode-block" id="EC2Formatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EC2Formatter">[docs]</a><span class="k">class</span> <span class="nc">EC2Formatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">EC2Formatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span>
             <span class="p">[</span><span class="s1">&#39;action-date&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-type&#39;</span><span class="p">,</span> <span class="s1">&#39;launch&#39;</span><span class="p">,</span>
-             <span class="s1">&#39;vpc-id&#39;</span><span class="p">,</span> <span class="s1">&#39;ip-addr&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">])</span>
+             <span class="s1">&#39;vpc-id&#39;</span><span class="p">,</span> <span class="s1">&#39;ip-addr&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="EC2Formatter.filter_record"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EC2Formatter.filter_record">[docs]</a>    <span class="k">def</span> <span class="nf">filter_record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">record</span><span class="p">[</span><span class="s1">&#39;State&#39;</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;terminated&#39;</span></div>
@@ -332,10 +370,11 @@
 
 
 <div class="viewcode-block" id="ELBFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.ELBFormatter">[docs]</a><span class="k">class</span> <span class="nc">ELBFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ELBFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;DNSName&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;dns name&#39;</span><span class="p">,</span> <span class="s1">&#39;vpc-id&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;dns name&#39;</span><span class="p">,</span> <span class="s1">&#39;vpc-id&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="ELBFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.ELBFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -349,10 +388,11 @@
 
 
 <div class="viewcode-block" id="RDSFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.RDSFormatter">[docs]</a><span class="k">class</span> <span class="nc">RDSFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">RDSFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;instance id&#39;</span><span class="p">,</span> <span class="s1">&#39;db name&#39;</span><span class="p">,</span> <span class="s1">&#39;creation time&#39;</span><span class="p">,</span> <span class="s1">&#39;encrypted&#39;</span><span class="p">,</span> <span class="s1">&#39;publicly accessible&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;instance id&#39;</span><span class="p">,</span> <span class="s1">&#39;db name&#39;</span><span class="p">,</span> <span class="s1">&#39;creation time&#39;</span><span class="p">,</span> <span class="s1">&#39;encrypted&#39;</span><span class="p">,</span> <span class="s1">&#39;publicly accessible&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="RDSFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.RDSFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -367,10 +407,11 @@
 
 
 <div class="viewcode-block" id="ASGFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.ASGFormatter">[docs]</a><span class="k">class</span> <span class="nc">ASGFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ASGFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-count&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-count&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="ASGFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.ASGFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -383,10 +424,11 @@
 
 
 <div class="viewcode-block" id="AMIFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.AMIFormatter">[docs]</a><span class="k">class</span> <span class="nc">AMIFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">AMIFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;ImageId&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="AMIFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.AMIFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -396,10 +438,11 @@
 
 
 <div class="viewcode-block" id="EBSFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EBSFormatter">[docs]</a><span class="k">class</span> <span class="nc">EBSFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">EBSFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;VolumeId&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-id&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">,</span> <span class="s1">&#39;instance-id&#39;</span><span class="p">,</span> <span class="s1">&#39;asv&#39;</span><span class="p">,</span> <span class="s1">&#39;env&#39;</span><span class="p">,</span> <span class="s1">&#39;owner&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="EBSFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EBSFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="n">instance_id</span> <span class="o">=</span> <span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">if</span>
@@ -413,10 +456,11 @@
         <span class="p">]</span></div></div>
 
 <div class="viewcode-block" id="EBSSnapshotFormatter"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EBSSnapshotFormatter">[docs]</a><span class="k">class</span> <span class="nc">EBSSnapshotFormatter</span><span class="p">(</span><span class="n">Formatter</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">EBSSnapshotFormatter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span>
             <span class="s1">&#39;SnapshotId&#39;</span><span class="p">,</span>
-            <span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">,</span> <span class="s1">&#39;VolumeId&#39;</span><span class="p">,</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span> <span class="s1">&#39;VolumeSize&#39;</span><span class="p">,</span> <span class="s1">&#39;StartTime&#39;</span><span class="p">,</span> <span class="s1">&#39;State&#39;</span><span class="p">])</span>
+            <span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">,</span> <span class="s1">&#39;VolumeId&#39;</span><span class="p">,</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span> <span class="s1">&#39;VolumeSize&#39;</span><span class="p">,</span> <span class="s1">&#39;StartTime&#39;</span><span class="p">,</span> <span class="s1">&#39;State&#39;</span><span class="p">],</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="EBSSnapshotFormatter.csv_fields"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.EBSSnapshotFormatter.csv_fields">[docs]</a>    <span class="k">def</span> <span class="nf">csv_fields</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">,</span> <span class="n">tag_map</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span>
@@ -430,14 +474,14 @@
 
 <span class="c1"># FIXME: Should we use a PluginRegistry instead?</span>
 <span class="n">RECORD_TYPE_FORMATTERS</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s1">&#39;ami&#39;</span><span class="p">:</span> <span class="n">AMIFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;asg&#39;</span><span class="p">:</span> <span class="n">ASGFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;ebs&#39;</span><span class="p">:</span> <span class="n">EBSFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;ebs-snapshot&#39;</span><span class="p">:</span> <span class="n">EBSSnapshotFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;ec2&#39;</span><span class="p">:</span> <span class="n">EC2Formatter</span><span class="p">(),</span>
-    <span class="s1">&#39;elb&#39;</span><span class="p">:</span> <span class="n">ELBFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;rds&#39;</span><span class="p">:</span> <span class="n">RDSFormatter</span><span class="p">(),</span>
-    <span class="s1">&#39;s3&#39;</span><span class="p">:</span> <span class="n">S3Formatter</span><span class="p">()</span>
+    <span class="s1">&#39;ami&#39;</span><span class="p">:</span> <span class="n">AMIFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;asg&#39;</span><span class="p">:</span> <span class="n">ASGFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;ebs&#39;</span><span class="p">:</span> <span class="n">EBSFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;ebs-snapshot&#39;</span><span class="p">:</span> <span class="n">EBSSnapshotFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;ec2&#39;</span><span class="p">:</span> <span class="n">EC2Formatter</span><span class="p">,</span>
+    <span class="s1">&#39;elb&#39;</span><span class="p">:</span> <span class="n">ELBFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;rds&#39;</span><span class="p">:</span> <span class="n">RDSFormatter</span><span class="p">,</span>
+    <span class="s1">&#39;s3&#39;</span><span class="p">:</span> <span class="n">S3Formatter</span><span class="p">,</span>
 <span class="p">}</span>
 
 
