@@ -159,11 +159,14 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+
+<span class="kn">from</span> <span class="nn">c7n.resources.ec2</span> <span class="k">import</span> <span class="n">EC2</span>
+<span class="kn">from</span> <span class="nn">c7n.resources.asg</span> <span class="k">import</span> <span class="n">ASG</span><span class="p">,</span> <span class="n">LaunchConfig</span>
 
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.ami&#39;</span><span class="p">)</span>
@@ -219,6 +222,32 @@
         <span class="s1">&#39;image-age&#39;</span><span class="p">,</span>
         <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()},</span>
         <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">})</span></div>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ImageUnusedFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.ImageUnusedFilter">[docs]</a><span class="k">class</span> <span class="nc">ImageUnusedFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+    <span class="k">def</span> <span class="nf">_pull_asg_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">asg_manager</span> <span class="o">=</span> <span class="n">ASG</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">asgs</span> <span class="o">=</span> <span class="n">asg_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">lcfgs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span><span class="p">)</span>
+
+        <span class="n">lcfg_mgr</span> <span class="o">=</span> <span class="n">LaunchConfig</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">([</span>
+            <span class="n">lcfg</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">lcfg</span> <span class="ow">in</span> <span class="n">lcfg_mgr</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">lcfg</span><span class="p">[</span><span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">lcfgs</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">_pull_ec2_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">ec2_manager</span> <span class="o">=</span> <span class="n">EC2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">([</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ec2_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()])</span>
+
+<div class="viewcode-block" id="ImageUnusedFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.ImageUnusedFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pull_ec2_images</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pull_asg_images</span><span class="p">())</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">images</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">images</span><span class="p">]</span></div></div>
 </pre></div>
 
            </div>
