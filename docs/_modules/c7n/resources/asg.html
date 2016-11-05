@@ -180,7 +180,7 @@
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">,</span> <span class="n">TagCountFilter</span><span class="p">,</span> <span class="n">TagTrim</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">local_session</span><span class="p">,</span> <span class="n">query_instances</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">)</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">query_instances</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">worker</span><span class="p">)</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.asg&#39;</span><span class="p">)</span>
 
@@ -356,9 +356,9 @@
             <span class="k">if</span> <span class="n">elb</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">elbs</span><span class="p">:</span>
                 <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;invalid-elb&#39;</span><span class="p">,</span> <span class="n">elb</span><span class="p">))</span>
 
-        <span class="k">for</span> <span class="n">appelb_target_group</span> <span class="ow">in</span> <span class="n">asg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;TargetGroupARNs&#39;</span><span class="p">,</span> <span class="p">[]):</span>
-            <span class="k">if</span> <span class="n">appelb_target_group</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">appelb_target_groups</span><span class="p">:</span>
-                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;invalid-appelb-target-group&#39;</span><span class="p">,</span> <span class="n">elb</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">appelb_target</span> <span class="ow">in</span> <span class="n">asg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;TargetGroupARNs&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">appelb_target</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">appelb_target_groups</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;invalid-appelb-target-group&#39;</span><span class="p">,</span> <span class="n">appelb_target</span><span class="p">))</span>
 
         <span class="n">cfg_id</span> <span class="o">=</span> <span class="n">asg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
             <span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">,</span> <span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">])</span>
@@ -1091,9 +1091,10 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
 
 <div class="viewcode-block" id="Delete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Delete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_asg</span><span class="p">,</span> <span class="n">asgs</span><span class="p">))</span></div>
 
+    <span class="nd">@worker</span>
 <div class="viewcode-block" id="Delete.process_asg"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Delete.process_asg">[docs]</a>    <span class="k">def</span> <span class="nf">process_asg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asg</span><span class="p">):</span>
         <span class="n">force_delete</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">force_delete</span><span class="p">:</span>
@@ -1140,14 +1141,7 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="UnusedLaunchConfig.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.UnusedLaunchConfig.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">configs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">asgs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
-             <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;asg&#39;</span><span class="p">})</span>
-        <span class="k">if</span> <span class="n">asgs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                <span class="s2">&quot;Querying asgs to determine unused launch configs&quot;</span><span class="p">)</span>
-            <span class="n">asg_manager</span> <span class="o">=</span> <span class="n">ASG</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
-            <span class="n">asgs</span> <span class="o">=</span> <span class="n">asg_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">asgs</span> <span class="o">=</span> <span class="n">ASG</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">used</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
             <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">])</span>
             <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span><span class="p">])</span>
@@ -1166,6 +1160,7 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_config</span><span class="p">,</span> <span class="n">configs</span><span class="p">))</span></div>
 
+    <span class="nd">@worker</span>
 <div class="viewcode-block" id="LaunchConfigDelete.process_config"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.LaunchConfigDelete.process_config">[docs]</a>    <span class="k">def</span> <span class="nf">process_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;autoscaling&#39;</span><span class="p">)</span>
@@ -1176,7 +1171,8 @@
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="c1"># Catch already deleted</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ValidationError&#39;</span><span class="p">:</span>
-                <span class="k">return</span></div></div>
+                <span class="k">return</span>
+            <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
