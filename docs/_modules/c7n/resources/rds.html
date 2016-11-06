@@ -190,7 +190,6 @@
 <span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">re</span>
-<span class="kn">import</span> <span class="nn">operator</span>
 
 <span class="kn">from</span> <span class="nn">distutils.version</span> <span class="k">import</span> <span class="n">LooseVersion</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
@@ -290,8 +289,10 @@
             <span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is not in available state&quot;</span><span class="p">,</span>
             <span class="n">db_instance_id</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span>
-    <span class="c1"># The specified DB Instance is a member of a cluster and its backup retention should not be modified directly.</span>
-    <span class="c1">#   Instead, modify the backup retention of the cluster using the ModifyDbCluster API</span>
+    <span class="c1"># The specified DB Instance is a member of a cluster and its</span>
+    <span class="c1">#   backup retention should not be modified directly.  Instead,</span>
+    <span class="c1">#   modify the backup retention of the cluster using the</span>
+    <span class="c1">#   ModifyDbCluster API</span>
     <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
         <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
             <span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a cluster member&quot;</span><span class="p">,</span>
@@ -727,7 +728,8 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
                 <span class="n">generate_arn</span><span class="p">,</span> <span class="s1">&#39;rds&#39;</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
-                <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="s1">&#39;snapshot&#39;</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
+                <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="s1">&#39;snapshot&#39;</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span>
 
 <div class="viewcode-block" id="RDSSnapshot.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshot.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snaps</span><span class="p">):</span>
@@ -747,7 +749,8 @@
         <span class="n">arn</span> <span class="o">=</span> <span class="n">generator</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
         <span class="n">tag_list</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">tag_list</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">list_tags_for_resource</span><span class="p">,</span> <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">)[</span><span class="s1">&#39;TagList&#39;</span><span class="p">]</span>
+            <span class="n">tag_list</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">list_tags_for_resource</span><span class="p">,</span> <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">)[</span><span class="s1">&#39;TagList&#39;</span><span class="p">]</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;DBSnapshotNotFound&#39;</span><span class="p">]:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Exception getting rds snapshot tags  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
@@ -837,6 +840,22 @@
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots_set</span><span class="p">:</span>
             <span class="n">c</span><span class="o">.</span><span class="n">delete_db_snapshot</span><span class="p">(</span>
                 <span class="n">DBSnapshotIdentifier</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span></div></div>
+
+
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rds-subnet-group&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RDSSubnetGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSubnetGroup">[docs]</a><span class="k">class</span> <span class="nc">RDSSubnetGroup</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;RDS subnet group.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="RDSSubnetGroup.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSubnetGroup.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;rds&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;rds-subnet-group&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;DBSubnetGroupName&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;describe_db_subnet_groups&#39;</span><span class="p">,</span> <span class="s1">&#39;DBSubnetGroups&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;DBSubnetGroupName&#39;</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;scalar&#39;</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span></div></div>
 
 </pre></div>
 

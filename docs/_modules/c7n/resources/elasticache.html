@@ -181,8 +181,9 @@
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;elasticache.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;elasticache.actions&#39;</span><span class="p">)</span>
+
 <span class="c1">#registered marked-for-op filter</span>
-<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span> 
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
 
 <span class="n">TTYPE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;cache.t&#39;</span><span class="p">)</span>
 
@@ -229,12 +230,32 @@
     <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;SecurityGroups[].SecurityGroupId&quot;</span></div>
 
 
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="SubnetFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.SubnetFilter">[docs]</a><span class="k">class</span> <span class="nc">SubnetFilter</span><span class="p">(</span><span class="n">net_filters</span><span class="o">.</span><span class="n">SubnetFilter</span><span class="p">):</span>
+
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="SubnetFilter.get_related_ids"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.SubnetFilter.get_related_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_related_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">group_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">group_ids</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SubnetIdentifier&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;CacheSubnetGroupName&#39;</span><span class="p">]][</span><span class="s1">&#39;Subnets&#39;</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">group_ids</span></div>
+
+<div class="viewcode-block" id="SubnetFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.SubnetFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;CacheSubnetGroupName&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span>
+            <span class="n">ElastiCacheSubnetGroup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">resources</span><span class="p">()}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SubnetFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div></div>
+
+
 <span class="c1"># added mark-for-op</span>
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
-    
+
     <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">1</span>
-    
+
 <div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
             <span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
@@ -257,7 +278,7 @@
         <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">remove_tags_from_resource</span><span class="p">(</span>
-                <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span>            </div></div>
+                <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
@@ -268,7 +289,8 @@
 
 <div class="viewcode-block" id="DeleteElastiCacheCluster.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.DeleteElastiCacheCluster.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">):</span>
         <span class="n">skip</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skip-snapshot&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
 
         <span class="n">clusters_to_delete</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">replication_groups_to_delete</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
@@ -283,9 +305,11 @@
             <span class="k">if</span> <span class="n">_cluster_eligible_for_snapshot</span><span class="p">(</span><span class="n">cluster</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">skip</span><span class="p">:</span>
                 <span class="n">params</span><span class="p">[</span><span class="s1">&#39;FinalSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snapshot_identifier</span><span class="p">(</span>
                     <span class="s1">&#39;Final&#39;</span><span class="p">,</span> <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Taking final snapshot of </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Taking final snapshot of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Skipping final snapshot of </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                    <span class="s2">&quot;Skipping final snapshot of </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">delete_cache_cluster</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s1">&#39;Deleted ElastiCache cluster: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
@@ -320,7 +344,7 @@
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                        <span class="s2">&quot;Exception creating ElastiCache cluster snapshot  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;Exception creating cache cluster snapshot </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                         <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
         <span class="k">return</span> <span class="n">clusters</span></div>
 
@@ -345,7 +369,7 @@
     <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;aws.elasticache.snapshot&#39;</span>
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;elasticache-snapshot.filters&#39;</span><span class="p">)</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;elasticache-snapshot.actions&#39;</span><span class="p">)</span>
-    <span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span> 
+    <span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
     <span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">_account_id</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span>
 
@@ -422,17 +446,20 @@
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots_set</span><span class="p">:</span>
             <span class="n">c</span><span class="o">.</span><span class="n">delete_snapshot</span><span class="p">(</span><span class="n">SnapshotName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span></div></div>
 
+
 <span class="c1"># added mark-for-op</span>
 <span class="nd">@ElastiCacheSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ElastiCacheSnapshotTagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.ElastiCacheSnapshotTagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">ElastiCacheSnapshotTagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
-    
+
     <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">1</span>
-    
+
 <div class="viewcode-block" id="ElastiCacheSnapshotTagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.ElastiCacheSnapshotTagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">snapshot</span> <span class="ow">in</span> <span class="n">snapshots</span><span class="p">:</span>
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
 
 <span class="c1"># added unmark</span>
 <span class="nd">@ElastiCacheSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
@@ -449,6 +476,7 @@
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">remove_tags_from_resource</span><span class="p">(</span>
                 <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
+
 
 <span class="k">def</span> <span class="nf">_elasticache_cluster_tags</span><span class="p">(</span>
         <span class="n">model</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">generator</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
@@ -495,7 +523,7 @@
 <span class="k">def</span> <span class="nf">_cluster_eligible_for_snapshot</span><span class="p">(</span><span class="n">cluster</span><span class="p">):</span>
     <span class="c1"># added regex search to filter unsupported cachenode types</span>
     <span class="k">return</span> <span class="p">(</span>
-        <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;Engine&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;memcached&#39;</span> <span class="ow">and</span> <span class="ow">not</span> 
+        <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;Engine&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;memcached&#39;</span> <span class="ow">and</span> <span class="ow">not</span>
         <span class="n">TTYPE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheNodeType&#39;</span><span class="p">])</span>
         <span class="p">)</span>
 </pre></div>

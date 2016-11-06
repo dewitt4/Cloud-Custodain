@@ -227,8 +227,23 @@
     <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VpcSecurityGroups[].VpcSecurityGroupId&quot;</span></div>
 
 
-<span class="c1"># TODO: Subnet Filter, need to deref cluster security group to components, and</span>
-<span class="c1"># then filter by cluster zone to get relevant subnets</span>
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="SubnetFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.SubnetFilter">[docs]</a><span class="k">class</span> <span class="nc">SubnetFilter</span><span class="p">(</span><span class="n">net_filters</span><span class="o">.</span><span class="n">SubnetFilter</span><span class="p">):</span>
+
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="SubnetFilter.get_related_ids"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.SubnetFilter.get_related_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_related_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">group_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">group_ids</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SubnetIdentifier&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterSubnetGroupName&#39;</span><span class="p">]][</span><span class="s1">&#39;Subnets&#39;</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">group_ids</span></div>
+
+<div class="viewcode-block" id="SubnetFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.SubnetFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterSubnetGroupName&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span>
+                       <span class="n">RedshiftSubnetGroup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">resources</span><span class="p">()}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SubnetFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;param&#39;</span><span class="p">)</span>
@@ -303,7 +318,8 @@
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;InvalidClusterState&quot;</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                        <span class="s2">&quot;Cannot delete cluster when not in &#39;Available&#39; state: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span><span class="n">db</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">])</span>
+                        <span class="s2">&quot;Cannot delete cluster when not &#39;Available&#39; state: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">db</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">])</span>
                     <span class="k">continue</span>
                 <span class="k">raise</span></div></div>
 
@@ -424,6 +440,22 @@
         <span class="n">client</span><span class="o">.</span><span class="n">delete_tags</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">candidates</span><span class="p">)</span></div></div>
 
 
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;redshift-subnet-group&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RedshiftSubnetGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSubnetGroup">[docs]</a><span class="k">class</span> <span class="nc">RedshiftSubnetGroup</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Redshift subnet group.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="RedshiftSubnetGroup.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSubnetGroup.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;redshift&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;redshift-subnet-group&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ClusterSubnetGroupName&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;describe_cluster_subnet_groups&#39;</span><span class="p">,</span> <span class="s1">&#39;ClusterSubnetGroups&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;ClusterSubnetGroupName&#39;</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;scalar&#39;</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;redshift-snapshot&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RedshiftSnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshot">[docs]</a><span class="k">class</span> <span class="nc">RedshiftSnapshot</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Resource manager for Redshift snapshots.</span>
@@ -452,7 +484,7 @@
                 <span class="n">separator</span><span class="o">=</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span>
 
-<div class="viewcode-block" id="RedshiftSnapshot.Meta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshot.Meta">[docs]</a>    <span class="k">class</span> <span class="nc">Meta</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="RedshiftSnapshot.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshot.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;redshift&#39;</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;redshift-snapshot&#39;</span>
@@ -461,9 +493,8 @@
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">filter_type</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;SnapshotCreateTime&#39;</span></div>
+        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;SnapshotCreateTime&#39;</span></div></div>
 
-    <span class="n">resource_type</span> <span class="o">=</span> <span class="n">Meta</span></div>
 
 <span class="nd">@RedshiftSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RedshiftSnapshotAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshotAge">[docs]</a><span class="k">class</span> <span class="nc">RedshiftSnapshotAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
@@ -498,7 +529,8 @@
             <span class="n">c</span><span class="o">.</span><span class="n">delete_cluster_snapshot</span><span class="p">(</span>
                 <span class="n">SnapshotIdentifier</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotIdentifier&#39;</span><span class="p">],</span>
                 <span class="n">SnapshotClusterIdentifier</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">])</span></div></div>
-            
+
+
 <span class="nd">@RedshiftSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RedshiftSnapshotTagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshotTagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">RedshiftSnapshotTagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
 
@@ -507,7 +539,8 @@
 <div class="viewcode-block" id="RedshiftSnapshotTagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.RedshiftSnapshotTagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;redshift&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/&#39;</span> <span class="o">+</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;SnapshotIdentifier&#39;</span><span class="p">])</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/&#39;</span> <span class="o">+</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;SnapshotIdentifier&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
 
@@ -522,6 +555,7 @@
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;SnapshotIdentifer&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
 
 <span class="nd">@RedshiftSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">)</span>
 <span class="nd">@RedshiftSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
