@@ -156,13 +156,14 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
@@ -181,6 +182,50 @@
 <div class="viewcode-block" id="SubnetFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.SubnetFilter">[docs]</a><span class="k">class</span> <span class="nc">SubnetFilter</span><span class="p">(</span><span class="n">net_filters</span><span class="o">.</span><span class="n">SubnetFilter</span><span class="p">):</span>
 
     <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VpcConfig.SubnetIds[]&quot;</span></div>
+
+
+<span class="nd">@AWSLambda</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;event-source&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="LambdaEventSource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.LambdaEventSource">[docs]</a><span class="k">class</span> <span class="nc">LambdaEventSource</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">annotation_key</span> <span class="o">=</span> <span class="s2">&quot;c7n.EventSources&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;event-source&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LambdaEventSource.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.LambdaEventSource.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">_augment</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s1">&#39;c7n.Policy&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n.Policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_policy</span><span class="p">(</span>
+                    <span class="n">FunctionName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span>
+                <span class="k">return</span> <span class="n">r</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Access denied getting policy lambda:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">r</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;fetching policy for </span><span class="si">%d</span><span class="s2"> lambdas&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">resources</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_augment</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">LambdaEventSource</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;c7n.Policy&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">sources</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n.Policy&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Effect&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;Allow&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="s1">&#39;Service&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]:</span>
+                <span class="n">sources</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">][</span><span class="s1">&#39;Service&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">sources</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="p">)</span></div>
 
 
 <span class="nd">@AWSLambda</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
