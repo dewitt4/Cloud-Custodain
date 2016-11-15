@@ -390,6 +390,38 @@
             <span class="n">ClusterIdentifier</span><span class="o">=</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">])</span></div></div>
 
 
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;enable-vpc-routing&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="EnhancedVpcRoutine"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.EnhancedVpcRoutine">[docs]</a><span class="k">class</span> <span class="nc">EnhancedVpcRoutine</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;enable-vpc-routing&#39;</span><span class="p">,</span>
+        <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="EnhancedVpcRoutine.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.EnhancedVpcRoutine.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">process_vpc_routing</span><span class="p">,</span>
+                    <span class="n">cluster</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception changing Redshift VPC routing  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">clusters</span></div>
+
+<div class="viewcode-block" id="EnhancedVpcRoutine.process_vpc_routing"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.EnhancedVpcRoutine.process_vpc_routing">[docs]</a>    <span class="k">def</span> <span class="nf">process_vpc_routing</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">):</span>
+        <span class="n">current_routing</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">cluster</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EnhancedVpcRouting&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+        <span class="n">new_routing</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">current_routing</span> <span class="o">!=</span> <span class="n">new_routing</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;redshift&#39;</span><span class="p">)</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">modify_cluster</span><span class="p">(</span>
+                <span class="n">ClusterIdentifier</span><span class="o">=</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;ClusterIdentifier&#39;</span><span class="p">],</span>
+                <span class="n">EnhancedVpcRouting</span><span class="o">=</span><span class="n">new_routing</span><span class="p">)</span></div></div>
+
+
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.redshift.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
 
