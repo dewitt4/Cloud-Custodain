@@ -160,6 +160,8 @@
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
@@ -395,6 +397,44 @@
 
 <div class="viewcode-block" id="KmsKeyAlias.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.KmsKeyAlias.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_matching_aliases</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;fault-tolerant&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="FaultTolerantSnapshots"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.FaultTolerantSnapshots">[docs]</a><span class="k">class</span> <span class="nc">FaultTolerantSnapshots</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This filter will return any EBS volume that does/does not have a</span>
+<span class="sd">    snapshot within the last 7 days. &#39;Fault-Tolerance&#39; in this instance</span>
+<span class="sd">    means that, in the event of a failure, the volume can be restored</span>
+<span class="sd">    from a snapshot with (reasonable) data loss</span>
+
+<span class="sd">    - name: ebs-volume-tolerance</span>
+<span class="sd">    - resource: ebs</span>
+<span class="sd">    - filters: [{</span>
+<span class="sd">        &#39;type&#39;: &#39;fault-tolerant&#39;,</span>
+<span class="sd">        &#39;tolerant&#39;: True}]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;fault-tolerant&#39;</span><span class="p">,</span>
+        <span class="n">tolerant</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+    <span class="n">check_id</span> <span class="o">=</span> <span class="s1">&#39;H7IgTzjTYb&#39;</span>
+
+<div class="viewcode-block" id="FaultTolerantSnapshots.pull_check_results"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.FaultTolerantSnapshots.pull_check_results">[docs]</a>    <span class="k">def</span> <span class="nf">pull_check_results</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;support&#39;</span><span class="p">)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">refresh_trusted_advisor_check</span><span class="p">(</span><span class="n">checkId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_id</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trusted_advisor_check_result</span><span class="p">(</span>
+            <span class="n">checkId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">check_id</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s1">&#39;en&#39;</span><span class="p">)[</span><span class="s1">&#39;result&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;flaggedResources&#39;</span><span class="p">]:</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">update</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;metadata&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+<div class="viewcode-block" id="FaultTolerantSnapshots.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.FaultTolerantSnapshots.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">flagged</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pull_check_results</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tolerant&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">]</span></div></div>
+
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;copy-instance-tags&#39;</span><span class="p">)</span>
