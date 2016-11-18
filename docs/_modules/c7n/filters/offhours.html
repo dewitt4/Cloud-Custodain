@@ -375,8 +375,8 @@
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
         <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tag_value</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-        <span class="c1"># Sigh delayed init, due to circle dep, process/init would be better but</span>
-        <span class="c1"># unit testing is calling this direct.</span>
+        <span class="c1"># Sigh delayed init, due to circle dep, process/init would be better</span>
+        <span class="c1"># but unit testing is calling this direct.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s1">&#39;InstanceId&#39;</span>
@@ -413,9 +413,10 @@
             <span class="c1"># respect timezone from tag</span>
             <span class="n">raw_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">raw_data</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
             <span class="k">if</span> <span class="s1">&#39;tz&#39;</span> <span class="ow">in</span> <span class="n">raw_data</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">default_tz</span> <span class="o">=</span> <span class="n">raw_data</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_default_schedule</span><span class="p">()</span>
-            <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span>
+                <span class="n">schedule</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span><span class="p">)</span>
+                <span class="n">schedule</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_data</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">schedule</span> <span class="o">=</span> <span class="kc">None</span>
 
@@ -451,13 +452,14 @@
         <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
             <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span><span class="p">:</span>
                 <span class="n">found</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span>
+                <span class="k">break</span>
         <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="c1"># utf8, or do translate tables via unicode ord mapping</span>
         <span class="n">value</span> <span class="o">=</span> <span class="n">found</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;utf8&#39;</span><span class="p">)</span>
         <span class="c1"># Some folks seem to be interpreting the docs quote marks as</span>
         <span class="c1"># literal for values.</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s1">&#39; &#39;</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">value</span></div>
 
     <span class="nd">@classmethod</span>
@@ -570,11 +572,15 @@
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ScheduleParser.raw_data"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.offhours.ScheduleParser.raw_data">[docs]</a>    <span class="k">def</span> <span class="nf">raw_data</span><span class="p">(</span><span class="n">tag_value</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;convert the tag to a dictionary, taking values as is&quot;&quot;&quot;</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="sd">&quot;&quot;&quot;convert the tag to a dictionary, taking values as is</span>
 
+<span class="sd">        This method name and purpose are opaque...  and not true.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">pieces</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">):</span>
+            <span class="n">pieces</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">))</span>
         <span class="c1"># parse components</span>
-        <span class="n">pieces</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">piece</span> <span class="ow">in</span> <span class="n">pieces</span><span class="p">:</span>
             <span class="n">kv</span> <span class="o">=</span> <span class="n">piece</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
             <span class="c1"># components must by key=value</span>
