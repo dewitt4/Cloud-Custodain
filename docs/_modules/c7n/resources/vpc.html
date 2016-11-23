@@ -354,13 +354,14 @@
 
 
 <div class="viewcode-block" id="SGPermission"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission">[docs]</a><span class="k">class</span> <span class="nc">SGPermission</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Base class for verifying security group permissions</span>
+    <span class="sd">&quot;&quot;&quot;Filter for verifying security group ingress and egress permissions</span>
 
 <span class="sd">    All attributes of a security group permission are available as</span>
 <span class="sd">    value filters.</span>
 
 <span class="sd">    If multiple attributes are specified the permission must satisfy</span>
-<span class="sd">    all of them.</span>
+<span class="sd">    all of them. Note that within an attribute match against a list value</span>
+<span class="sd">    of a permission we default to or.</span>
 
 <span class="sd">    If a group has any permissions that match all conditions, then it</span>
 <span class="sd">    matches the filter.</span>
@@ -368,21 +369,41 @@
 <span class="sd">    Permissions that match on the group are annotated onto the group and</span>
 <span class="sd">    can subsequently be used by the remove-permission action.</span>
 
-<span class="sd">    An example::</span>
+<span class="sd">    We have specialized handling for matching `Ports` in ingress/egress</span>
+<span class="sd">    permission From/To range. The following example matches on ingress</span>
+<span class="sd">    rules which allow for a range that includes all of the given ports.</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">      - type: ingress</span>
+<span class="sd">        Ports: [22, 443, 80]</span>
+
+<span class="sd">    As well for verifying that a rule only allows for a specific set of ports</span>
+<span class="sd">    as in the following example. The delta between this and the previous</span>
+<span class="sd">    example is that if the permission allows for any ports not specified here,</span>
+<span class="sd">    then the rule will match. ie. OnlyPorts is a negative assertion match,</span>
+<span class="sd">    it matches when a permission includes ports outside of the specified set.</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">      - type: ingress</span>
+<span class="sd">        OnlyPorts: [22]</span>
+
+<span class="sd">    For simplifying ipranges handling which is specified as a list on a rule</span>
+<span class="sd">    we provide a `Cidr` key which can be used as a value type filter evaluated</span>
+<span class="sd">    against each of the rules. If any iprange cidr match then the permission</span>
+<span class="sd">    matches.</span>
+
+<span class="sd">    .. code-block: yaml</span>
 
 <span class="sd">      - type: ingress</span>
 <span class="sd">        IpProtocol: -1</span>
 <span class="sd">        FromPort: 445</span>
 
-<span class="sd">    We have specialized handling for matching Ports in ingress/egress</span>
-<span class="sd">    permission From/To range::</span>
-
-<span class="sd">      - type: ingress</span>
-<span class="sd">        Ports: [22, 443, 80]</span>
-
 <span class="sd">    As well for assertions that a ingress/egress permission only matches</span>
-<span class="sd">    a given set of ports, *note* onlyports is an inverse match, it matches</span>
-<span class="sd">    when a permission includes ports outside of the specified set::</span>
+<span class="sd">    a given set of ports, *note* onlyports is an inverse match.</span>
+
+<span class="sd">    .. code-block: yaml</span>
 
 <span class="sd">      - type: egress</span>
 <span class="sd">        OnlyPorts: [22, 443, 80]</span>
@@ -392,6 +413,7 @@
 <span class="sd">          - value_type: cidr</span>
 <span class="sd">          - op: in</span>
 <span class="sd">          - value: x.y.z</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">perm_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
@@ -425,23 +447,23 @@
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SGPermission</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SGPermission.process_ports"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.process_ports">[docs]</a>    <span class="k">def</span> <span class="nf">process_ports</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">):</span>
-        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="s1">&#39;FromPort&#39;</span> <span class="ow">in</span> <span class="n">perm</span> <span class="ow">and</span> <span class="s1">&#39;ToPort&#39;</span> <span class="ow">in</span> <span class="n">perm</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">port</span> <span class="o">&gt;=</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;FromPort&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">&lt;=</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;ToPort&#39;</span><span class="p">]:</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="k">break</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="n">only_found</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">port</span> <span class="o">==</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;FromPort&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">==</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;ToPort&#39;</span><span class="p">]:</span>
                     <span class="n">only_found</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">only_found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="n">found</span></div>
 
 <div class="viewcode-block" id="SGPermission.process_cidrs"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.process_cidrs">[docs]</a>    <span class="k">def</span> <span class="nf">process_cidrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">):</span>
-        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="s1">&#39;IpRanges&#39;</span> <span class="ow">in</span> <span class="n">perm</span> <span class="ow">and</span> <span class="s1">&#39;Cidr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
             <span class="n">match_range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;Cidr&#39;</span><span class="p">]</span>
             <span class="n">match_range</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;CidrIp&#39;</span>
@@ -451,21 +473,30 @@
                 <span class="n">found</span> <span class="o">=</span> <span class="n">vf</span><span class="p">(</span><span class="n">ip_range</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
                     <span class="k">break</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="n">found</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">perm</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]:</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">f</span><span class="p">(</span><span class="n">perm</span><span class="p">):</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
                     <span class="k">break</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_ports</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_cidrs</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
-
+            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">port_found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_ports</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">port_found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">port_found</span> <span class="o">&amp;</span> <span class="n">found</span> <span class="ow">or</span> <span class="n">port_found</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">cidr_found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_cidrs</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cidr_found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cidr_found</span> <span class="o">&amp;</span> <span class="n">found</span> <span class="ow">or</span> <span class="n">cidr_found</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
                 <span class="k">continue</span>
             <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
