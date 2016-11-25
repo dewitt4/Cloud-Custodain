@@ -173,12 +173,18 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">from</span> <span class="nn">cStringIO</span> <span class="k">import</span> <span class="n">StringIO</span>
+<span class="kn">import</span> <span class="nn">csv</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ResourceQuery</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -433,6 +439,192 @@
 <span class="c1">###################</span>
 <span class="c1">#    IAM Users    #</span>
 <span class="c1">###################</span>
+
+<span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;credential&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UserCredentialReport"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport">[docs]</a><span class="k">class</span> <span class="nc">UserCredentialReport</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Use IAM Credential report to filter users.</span>
+
+<span class="sd">    The IAM Credential report ( https://goo.gl/sbEPtM ) aggregates</span>
+<span class="sd">    multiple pieces of information on iam users. This makes it highly</span>
+<span class="sd">    efficient for querying multiple aspects of a user that would</span>
+<span class="sd">    otherwise require per user api calls.</span>
+
+<span class="sd">    For example if we wanted to retrieve all users with mfa who have</span>
+<span class="sd">    never used their password but have active access keys from the</span>
+<span class="sd">    last month</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">     - name: iam-mfa-active-keys-no-login</span>
+<span class="sd">       resource: iam-user</span>
+<span class="sd">       filters:</span>
+<span class="sd">         - type: credential</span>
+<span class="sd">           key: mfa_active</span>
+<span class="sd">           value: true</span>
+<span class="sd">         - type: credential</span>
+<span class="sd">           key: password_last_used</span>
+<span class="sd">           value: absent</span>
+<span class="sd">         - type: credential</span>
+<span class="sd">           key: access_keys.last_used</span>
+<span class="sd">           value_type: age</span>
+<span class="sd">           value: 30</span>
+<span class="sd">           op: less-than</span>
+
+<span class="sd">    Credential Report Transforms</span>
+
+<span class="sd">    We perform some default transformations from the raw</span>
+<span class="sd">    credential report. Sub-objects (access_key_1, cert_2)</span>
+<span class="sd">    are turned into array of dictionaries for matching</span>
+<span class="sd">    purposes with their common prefixes stripped.</span>
+<span class="sd">    N/A values are turned into None, TRUE/FALSE are turned</span>
+<span class="sd">    into boolean values.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;credential&#39;</span><span class="p">,</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="s1">&#39;expiration&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">,</span> <span class="s1">&#39;regex&#39;</span><span class="p">]},</span>
+
+        <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;report key to search&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
+                 <span class="s1">&#39;user&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;arn&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;user_creation_time&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;password_enabled&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;password_last_used&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;password_last_changed&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;password_next_rotation&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;mfa_active&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys.active&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys.last_used_date&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys.last_used_region&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys.last_used_service&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;access_keys.last_rotated&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;certs&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;certs.active&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;certs.last_rotated&#39;</span><span class="p">,</span>
+                 <span class="p">]},</span>
+        <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">}]},</span>
+        <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()},</span>
+        <span class="n">report_generate</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;Generate a report if none is present.&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">report_delay</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of seconds to wait for report generation.&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span>
+        <span class="n">report_max_age</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of seconds to consider a report valid.&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">60</span> <span class="o">*</span> <span class="mi">24</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">})</span>
+
+    <span class="n">list_sub_objects</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="p">(</span><span class="s1">&#39;access_key_1_&#39;</span><span class="p">,</span> <span class="s1">&#39;access_keys&#39;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s1">&#39;access_key_2_&#39;</span><span class="p">,</span> <span class="s1">&#39;access_keys&#39;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s1">&#39;cert_1_&#39;</span><span class="p">,</span> <span class="s1">&#39;certs&#39;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s1">&#39;cert_2_&#39;</span><span class="p">,</span> <span class="s1">&#39;certs&#39;</span><span class="p">))</span>
+
+<div class="viewcode-block" id="UserCredentialReport.get_value_or_schema_default"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.get_value_or_schema_default">[docs]</a>    <span class="k">def</span> <span class="nf">get_value_or_schema_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">schema</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;default&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="UserCredentialReport.get_credential_report"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.get_credential_report">[docs]</a>    <span class="k">def</span> <span class="nf">get_credential_report</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;iam-credential-report&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">report</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">report</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fetch_credential_report</span><span class="p">()</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">reader</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="n">reader</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">reader</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">headers</span><span class="p">,</span> <span class="n">line</span><span class="p">))</span>
+            <span class="n">report</span><span class="p">[</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;user&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_user_record</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s1">&#39;iam-credential-report&#39;</span><span class="p">,</span> <span class="n">report</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">report</span></div>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="UserCredentialReport.process_user_record"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.process_user_record">[docs]</a>    <span class="k">def</span> <span class="nf">process_user_record</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">info</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Type convert the csv record, modifies in place.&quot;&quot;&quot;</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="c1"># Value conversion</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;N/A&#39;</span><span class="p">,</span> <span class="s1">&#39;no_information&#39;</span><span class="p">):</span>
+                <span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;false&#39;</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="c1"># Object conversion</span>
+        <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">list_sub_objects</span><span class="p">:</span>
+            <span class="n">obj</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">k</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">):],</span> <span class="n">info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+                        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">p</span><span class="p">)])</span>
+            <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;active&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                <span class="n">info</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">info</span></div>
+
+<div class="viewcode-block" id="UserCredentialReport.fetch_credential_report"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.fetch_credential_report">[docs]</a>    <span class="k">def</span> <span class="nf">fetch_credential_report</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">report</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_credential_report</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ReportNotPresent&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="n">report</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">report</span><span class="p">:</span>
+            <span class="n">threshold</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span>
+                <span class="n">seconds</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_value_or_schema_default</span><span class="p">(</span>
+                    <span class="s1">&#39;report_max_age&#39;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">report</span><span class="p">[</span><span class="s1">&#39;GeneratedTime&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">tzinfo</span><span class="p">:</span>
+                <span class="n">threshold</span> <span class="o">=</span> <span class="n">threshold</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">report</span><span class="p">[</span><span class="s1">&#39;GeneratedTime&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">threshold</span><span class="p">:</span>
+                <span class="n">report</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_value_or_schema_default</span><span class="p">(</span><span class="s1">&#39;report_generate&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Credential Report Not Present&quot;</span><span class="p">)</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">generate_credential_report</span><span class="p">()</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_value_or_schema_default</span><span class="p">(</span><span class="s1">&#39;report_delay&#39;</span><span class="p">))</span>
+            <span class="n">report</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_credential_report</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">report</span><span class="p">[</span><span class="s1">&#39;Content&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="UserCredentialReport.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;.&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">matcher_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">matcher_config</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_credential_report</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:credential-report&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="UserCredentialReport.match"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.match">[docs]</a>    <span class="k">def</span> <span class="nf">match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">info</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;.&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">k</span><span class="p">:</span>
+            <span class="n">vf</span> <span class="o">=</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">vf</span><span class="o">.</span><span class="n">annotate</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="n">vf</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+
+        <span class="n">prefix</span><span class="p">,</span> <span class="n">sk</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">vf</span> <span class="o">=</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">matcher_config</span><span class="p">)</span>
+        <span class="n">vf</span><span class="o">.</span><span class="n">annotate</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">if</span> <span class="n">vf</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span></div></div>
 
 
 <span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
