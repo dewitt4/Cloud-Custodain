@@ -342,6 +342,41 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unused</span><span class="p">]</span></div></div>
 
 
+<span class="nd">@SecurityGroup</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;stale&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Stale"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Stale">[docs]</a><span class="k">class</span> <span class="nc">Stale</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter to find security groups that contain stale references</span>
+<span class="sd">    to other groups that are either no longer present or traverse</span>
+<span class="sd">    a broken vpc peering connection. Note this applies to VPC</span>
+<span class="sd">    Security groups only and will implicitly filter security groups.</span>
+
+<span class="sd">    AWS Docs - https://goo.gl/nSj7VG</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stale&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Stale.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Stale.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">vpc_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;VpcId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;VpcId&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">])</span>
+        <span class="n">group_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> vpc for stale refs&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">vpc_ids</span><span class="p">))</span>
+        <span class="n">stale_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">vpc_id</span> <span class="ow">in</span> <span class="n">vpc_ids</span><span class="p">:</span>
+            <span class="n">stale_groups</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_stale_security_groups</span><span class="p">(</span>
+                <span class="n">VpcId</span><span class="o">=</span><span class="n">vpc_id</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;StaleSecurityGroupSet&#39;</span><span class="p">,</span> <span class="p">())</span>
+            <span class="n">stale_count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">stale_groups</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">stale_groups</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">group_map</span><span class="p">:</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">group_map</span><span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]]</span>
+                    <span class="k">if</span> <span class="s1">&#39;StaleIpPermissions&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+                        <span class="n">r</span><span class="p">[</span><span class="s1">&#39;MatchedIpPermissions&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;StaleIpPermissions&#39;</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="s1">&#39;StaleIpPermissionsEgress&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+                        <span class="n">r</span><span class="p">[</span><span class="s1">&#39;MatchedIpPermissionsEgress&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span>
+                            <span class="s1">&#39;StaleIpPermissionsEgress&#39;</span><span class="p">]</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Found </span><span class="si">%d</span><span class="s2"> stale security groups&quot;</span><span class="p">,</span> <span class="n">stale_count</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
 <span class="nd">@SecurityGroup</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default-vpc&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="SGDefaultVpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGDefaultVpc">[docs]</a><span class="k">class</span> <span class="nc">SGDefaultVpc</span><span class="p">(</span><span class="n">DefaultVpcBase</span><span class="p">):</span>
 
