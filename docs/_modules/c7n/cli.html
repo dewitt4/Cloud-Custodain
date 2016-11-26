@@ -172,14 +172,14 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">importlib</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">pdb</span>
 <span class="kn">import</span> <span class="nn">sys</span>
 <span class="kn">import</span> <span class="nn">traceback</span>
-<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">date_parse</span>
 
-<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">commands</span><span class="p">,</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">date_parse</span>
 
 <span class="n">DEFAULT_REGION</span> <span class="o">=</span> <span class="s1">&#39;us-east-1&#39;</span>
 
@@ -190,50 +190,58 @@
 <span class="sd">    `blacklist` is a list of options to exclude from the default set.</span>
 <span class="sd">    e.g.: [&#39;region&#39;, &#39;log-group&#39;]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">provider</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">add_argument_group</span><span class="p">(</span>
+        <span class="s2">&quot;provider&quot;</span><span class="p">,</span> <span class="s2">&quot;AWS account information, defaults per the aws cli&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="s1">&#39;region&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">blacklist</span><span class="p">:</span>
-        <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="n">provider</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
             <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="s2">&quot;--region&quot;</span><span class="p">,</span>
             <span class="n">default</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;AWS_DEFAULT_REGION&#39;</span><span class="p">,</span> <span class="n">DEFAULT_REGION</span><span class="p">),</span>
             <span class="n">help</span><span class="o">=</span><span class="s2">&quot;AWS Region to target (Default: </span><span class="si">%(default)s</span><span class="s2">)&quot;</span><span class="p">)</span>
-
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+    <span class="n">provider</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;--profile&quot;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s2">&quot;AWS Account Config File Profile to utilize&quot;</span><span class="p">)</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--assume&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;assume_role&quot;</span><span class="p">,</span>
-                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Role to assume&quot;</span><span class="p">)</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;--config&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Policy Configuration File&quot;</span><span class="p">)</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-p&quot;</span><span class="p">,</span> <span class="s2">&quot;--policies&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;policy_filter&#39;</span><span class="p">,</span>
-                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Only execute named/matched policies&quot;</span><span class="p">)</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-t&quot;</span><span class="p">,</span> <span class="s2">&quot;--resource&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;resource_type&#39;</span><span class="p">,</span>
-                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Only execute policies with the given resource type&quot;</span><span class="p">)</span>
+    <span class="n">provider</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--assume&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;assume_role&quot;</span><span class="p">,</span>
+                          <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Role to assume&quot;</span><span class="p">)</span>
+
+    <span class="n">config</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">add_argument_group</span><span class="p">(</span>
+        <span class="s2">&quot;config&quot;</span><span class="p">,</span> <span class="s2">&quot;Policy config file and policy selector&quot;</span><span class="p">)</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;--config&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Policy Configuration File&quot;</span><span class="p">)</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-p&quot;</span><span class="p">,</span> <span class="s2">&quot;--policies&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;policy_filter&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Only use named/matched policies&quot;</span><span class="p">)</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-t&quot;</span><span class="p">,</span> <span class="s2">&quot;--resource&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;resource_type&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Only use policies with the given resource type&quot;</span><span class="p">)</span>
 
     <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-v&quot;</span><span class="p">,</span> <span class="s2">&quot;--verbose&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
-                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Verbose Logging&quot;</span><span class="p">)</span>
-
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--debug&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
+                   <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Verbose logging&quot;</span><span class="p">)</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--debug&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">,</span>
+                   <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="s1">&#39;log-group&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">blacklist</span><span class="p">:</span>
         <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
             <span class="s2">&quot;-l&quot;</span><span class="p">,</span> <span class="s2">&quot;--log-group&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
             <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Cloudwatch Log Group to send policy logs&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--log-group&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="s1">&#39;output-dir&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">blacklist</span><span class="p">:</span>
         <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-s&quot;</span><span class="p">,</span> <span class="s2">&quot;--output-dir&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                       <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory or S3 URL For Policy Output&quot;</span><span class="p">)</span>
+                       <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory or S3 URL For policy output&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="s1">&#39;cache&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">blacklist</span><span class="p">:</span>
         <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
-            <span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="s2">&quot;--cache&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;~/.cache/cloud-custodian.cache&quot;</span><span class="p">)</span>
+            <span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="s2">&quot;--cache&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;~/.cache/cloud-custodian.cache&quot;</span><span class="p">,</span>
+            <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Cache file (default </span><span class="si">%(default)s</span><span class="s2">)&quot;</span><span class="p">)</span>
         <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
-            <span class="s2">&quot;--cache-period&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
-            <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Cache validity in seconds (Default </span><span class="si">%(default)i</span><span class="s2">)&quot;</span><span class="p">)</span>
+            <span class="s2">&quot;--cache-period&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+            <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Cache validity in minutes (default </span><span class="si">%(default)i</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--cache&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
 
 
 <span class="k">def</span> <span class="nf">_report_options</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Add options specific to the report subcommand. &quot;&quot;&quot;</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">report</span><span class="p">)</span>
-    <span class="n">_default_options</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">blacklist</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;region&#39;</span><span class="p">])</span>
+    <span class="n">_default_options</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">blacklist</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;region&#39;</span><span class="p">,</span> <span class="s1">&#39;cache&#39;</span><span class="p">,</span> <span class="s1">&#39;log-group&#39;</span><span class="p">])</span>
     <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s1">&#39;--days&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of days of history to consider&quot;</span><span class="p">)</span>
@@ -267,11 +275,6 @@
         <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Number of days of history to consider (default: </span><span class="si">%(default)i</span><span class="s1">)&#39;</span><span class="p">)</span>
     <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--period&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">60</span><span class="o">*</span><span class="mi">24</span><span class="o">*</span><span class="mi">24</span><span class="p">)</span>
 
-    <span class="c1"># The original tools/policymetrics.py set these to None, so I am adding them</span>
-    <span class="c1"># as hidden options so they are always None.</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--log-group&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
-    <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--cache&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
-
 
 <span class="k">def</span> <span class="nf">_schema_options</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Add options specific to schema subcommand. &quot;&quot;&quot;</span>
@@ -304,64 +307,78 @@
 
 
 <div class="viewcode-block" id="setup_parser"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.setup_parser">[docs]</a><span class="k">def</span> <span class="nf">setup_parser</span><span class="p">():</span>
-    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+    <span class="n">c7n_desc</span> <span class="o">=</span> <span class="s2">&quot;Cloud fleet management&quot;</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">c7n_desc</span><span class="p">)</span>
 
     <span class="c1"># Setting `dest` means we capture which subparser was used.  We&#39;ll use it</span>
     <span class="c1"># later on when doing post-parsing validation.</span>
     <span class="n">subs</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s1">&#39;subparser&#39;</span><span class="p">)</span>
 
-    <span class="n">report</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;report&quot;</span><span class="p">)</span>
+    <span class="n">report_desc</span> <span class="o">=</span> <span class="s2">&quot;CSV report of resources that a policy matched/ran on&quot;</span>
+    <span class="n">report</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s2">&quot;report&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">report_desc</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">report_desc</span><span class="p">)</span>
+    <span class="n">report</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.report&quot;</span><span class="p">)</span>
     <span class="n">_report_options</span><span class="p">(</span><span class="n">report</span><span class="p">)</span>
 
-    <span class="n">logs</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
-    <span class="n">logs</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">logs</span><span class="p">)</span>
-    <span class="n">_default_options</span><span class="p">(</span><span class="n">logs</span><span class="p">)</span>
+    <span class="n">logs_desc</span> <span class="o">=</span> <span class="s2">&quot;Get policy execution logs from s3 or cloud watch logs&quot;</span>
+    <span class="n">logs</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s1">&#39;logs&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">logs_desc</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">logs_desc</span><span class="p">)</span>
+    <span class="n">logs</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.logs&quot;</span><span class="p">)</span>
+    <span class="n">_default_options</span><span class="p">(</span><span class="n">logs</span><span class="p">,</span> <span class="n">blacklist</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;cache&#39;</span><span class="p">])</span>
 
-    <span class="n">metrics</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
-    <span class="n">metrics</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">metrics_cmd</span><span class="p">)</span>
+    <span class="n">metrics_desc</span> <span class="o">=</span> <span class="s2">&quot;Retrieve metrics for policies from CloudWatch Metrics&quot;</span>
+    <span class="n">metrics</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s1">&#39;metrics&#39;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">metrics_desc</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">metrics_desc</span><span class="p">)</span>
+    <span class="n">metrics</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.metrics_cmd&quot;</span><span class="p">)</span>
     <span class="n">_metrics_options</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
 
-    <span class="n">version</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;version&#39;</span><span class="p">)</span>
-    <span class="n">version</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">cmd_version</span><span class="p">)</span>
+    <span class="n">version</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s1">&#39;version&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Display installed version of custodian&quot;</span><span class="p">)</span>
+    <span class="n">version</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">cmd_version</span><span class="p">)</span>
     <span class="n">version</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;-v&quot;</span><span class="p">,</span> <span class="s2">&quot;--verbose&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Verbose Logging&quot;</span><span class="p">)</span>
 
-    <span class="n">validate</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;validate&#39;</span><span class="p">)</span>
-    <span class="n">validate</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">validate</span><span class="p">)</span>
+    <span class="n">validate_desc</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;Validate config files against the custodian jsonschema&quot;</span><span class="p">)</span>
+    <span class="n">validate</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s1">&#39;validate&#39;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">validate_desc</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">validate_desc</span><span class="p">)</span>
+    <span class="n">validate</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.validate&quot;</span><span class="p">)</span>
     <span class="n">validate</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;-c&quot;</span><span class="p">,</span> <span class="s2">&quot;--config&quot;</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Policy Configuration File (old; use configs instead)&quot;</span>
-    <span class="p">)</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Policy Configuration File (old; use configs instead)&quot;</span><span class="p">)</span>
     <span class="n">validate</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;configs&quot;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">,</span>
                           <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Policy Configuration File(s)&quot;</span><span class="p">)</span>
     <span class="n">validate</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;-v&quot;</span><span class="p">,</span> <span class="s2">&quot;--verbose&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
                           <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Verbose Logging&quot;</span><span class="p">)</span>
     <span class="n">validate</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--debug&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
 
-    <span class="n">schema_desc</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;Browse the available resources, as well as actions and &quot;</span>
-                   <span class="s2">&quot;filters available for each resource type. The selector &quot;</span>
-                   <span class="s2">&quot;can be passed in the form of RESOURCE[.CATEGORY[.ITEM]], &quot;</span>
-                   <span class="s2">&quot;e.g.: s3, ebs.actions, or ec2.filters.instance-age&quot;</span><span class="p">)</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;schema&#39;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">schema_desc</span><span class="p">)</span>
-    <span class="n">schema</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">schema_cmd</span><span class="p">)</span>
+    <span class="n">schema_desc</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;Browse the available vocabularies (resources, filters, and &quot;</span>
+                   <span class="s2">&quot;actions) for policy construction. The selector &quot;</span>
+                   <span class="s2">&quot;is specified with RESOURCE[.CATEGORY[.ITEM]] &quot;</span>
+                   <span class="s2">&quot;examples: s3, ebs.actions, or ec2.filters.instance-age&quot;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span>
+        <span class="s1">&#39;schema&#39;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">schema_desc</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Interactive cli docs for policy authors&quot;</span><span class="p">)</span>
+    <span class="n">schema</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.schema_cmd&quot;</span><span class="p">)</span>
     <span class="n">_schema_options</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
 
-    <span class="c1">#resources = subs.add_parser(&#39;resources&#39;)</span>
-    <span class="c1">#resources.set_defaults(command=commands.resources)</span>
-    <span class="c1">#_default_options(resources)</span>
-    <span class="c1">#resources.add_argument(&#39;--all&#39;, default=True, action=&quot;store_false&quot;)</span>
-
-    <span class="n">run</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;run&quot;</span><span class="p">)</span>
-    <span class="n">run</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="n">commands</span><span class="o">.</span><span class="n">run</span><span class="p">)</span>
+    <span class="n">run_desc</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;Execute the policies in a config file&quot;</span><span class="p">)</span>
+    <span class="n">run</span> <span class="o">=</span> <span class="n">subs</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;run&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="n">run_desc</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">run_desc</span><span class="p">)</span>
+    <span class="n">run</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">command</span><span class="o">=</span><span class="s2">&quot;c7n.commands.run&quot;</span><span class="p">)</span>
     <span class="n">_default_options</span><span class="p">(</span><span class="n">run</span><span class="p">)</span>
     <span class="n">_dryrun_option</span><span class="p">(</span><span class="n">run</span><span class="p">)</span>
     <span class="n">run</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;-m&quot;</span><span class="p">,</span> <span class="s2">&quot;--metrics-enabled&quot;</span><span class="p">,</span>
         <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
-        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Emit Metrics&quot;</span><span class="p">)</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Emit metrics to CloudWatch Metrics&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">parser</span></div>
+
+
+<div class="viewcode-block" id="cmd_version"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.cmd_version">[docs]</a><span class="k">def</span> <span class="nf">cmd_version</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">c7n.version</span> <span class="k">import</span> <span class="n">version</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">version</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="main"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
@@ -376,8 +393,12 @@
     <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;s3transfer&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">resources</span><span class="o">.</span><span class="n">load_resources</span><span class="p">()</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">command</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+        <span class="n">command</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">command</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">callable</span><span class="p">(</span><span class="n">command</span><span class="p">):</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+                <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">command</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]),</span>
+                <span class="n">command</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">command</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
             <span class="k">raise</span>
