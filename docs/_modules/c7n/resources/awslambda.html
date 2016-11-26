@@ -175,14 +175,13 @@
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
-<span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;lambda.actions&#39;</span><span class="p">)</span>
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="AWSLambda"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.AWSLambda">[docs]</a><span class="k">class</span> <span class="nc">AWSLambda</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
@@ -271,36 +270,23 @@
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">LambdaCrossAccountAccessFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span>
             <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div></div>
 
-<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="Delete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.Delete">[docs]</a><span class="k">class</span> <span class="nc">Delete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;delete&#39;</span><span class="p">],</span>
-                     <span class="s1">&#39;qualifier&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}</span>
-            <span class="p">}</span>
-        <span class="p">}</span>
+<span class="nd">@AWSLambda</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Delete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.Delete">[docs]</a><span class="k">class</span> <span class="nc">Delete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete a lambda function (including aliases and older versions).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Delete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.Delete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">functions</span><span class="p">):</span>
-        <span class="n">qualifier</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;qualifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-
-        <span class="c1"># Concurrency feels like overkill here.</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">function</span> <span class="ow">in</span> <span class="n">functions</span><span class="p">:</span>
-            <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
-                <span class="n">FunctionName</span><span class="o">=</span><span class="n">function</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span>
-            <span class="k">if</span> <span class="n">qualifier</span><span class="p">:</span>
-                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Qualifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">qualifier</span>
-
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">delete_function</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_function</span><span class="p">(</span><span class="n">FunctionName</span><span class="o">=</span><span class="n">function</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;ResourceNotFoundException&quot;</span><span class="p">:</span>
                     <span class="k">continue</span>
                 <span class="k">raise</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Deleted function: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">function</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span></div></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Deleted </span><span class="si">%d</span><span class="s2"> functions&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">functions</span><span class="p">))</span></div></div>
 </pre></div>
 
            </div>
