@@ -196,6 +196,7 @@
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
     <span class="kn">import</span> <span class="nn">queue</span> <span class="k">as</span> <span class="nn">Queue</span>
 
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">get_retry</span>
 
 <span class="n">FLUSH_MARKER</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
 <span class="n">SHUTDOWN_MARKER</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
@@ -241,9 +242,15 @@
         <span class="c1"># cleanup atexit, custodian is a bit more explicitly scoping shutdown to</span>
         <span class="c1"># each policy, so use a sentinel value to avoid deadlocks.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">shutdown</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;ThrottlingException&#39;</span><span class="p">,))</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
-                <span class="s1">&#39;logs&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">create_log_group</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">)</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
+            <span class="n">logs</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_log_groups</span><span class="p">,</span>
+                <span class="n">logGroupNamePrefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">)[</span><span class="s1">&#39;logGroups&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="p">[</span><span class="n">l</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span> <span class="k">if</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">]:</span>
+                <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">create_log_group</span><span class="p">,</span>
+                      <span class="n">logGroupName</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">log_group</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">Error</span><span class="o">.</span><span class="n">code</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="o">!=</span> <span class="n">Error</span><span class="o">.</span><span class="n">ResourceExists</span><span class="p">:</span>
                 <span class="k">raise</span>
