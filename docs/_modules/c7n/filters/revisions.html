@@ -169,14 +169,11 @@
 <span class="sd">Custodian support for diffing and patching across multiple versions</span>
 <span class="sd">of a resource.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">import</span> <span class="nn">json</span>
-
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
-<span class="kn">from</span> <span class="nn">botocore.parsers</span> <span class="k">import</span> <span class="n">BaseJSONParser</span>
-
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
+
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">camelResource</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <span class="n">ErrNotFound</span> <span class="o">=</span> <span class="s2">&quot;ResourceNotDiscoveredException&quot;</span>
@@ -229,15 +226,14 @@
 <div class="viewcode-block" id="Diff.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Diff.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">config</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">)</span>
-
         <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">ConfigResourceParser</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">resource_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_shape</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
 
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">revisions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_revisions</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
             <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:previous-revision&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">select_revision</span><span class="p">(</span><span class="n">revisions</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rev</span><span class="p">:</span>
+                <span class="k">continue</span>
             <span class="n">delta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">rev</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">],</span> <span class="n">r</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">delta</span><span class="p">:</span>
                 <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:diff&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">delta</span>
@@ -290,54 +286,7 @@
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsibility&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Diff.diff"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Diff.diff">[docs]</a>    <span class="k">def</span> <span class="nf">diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">target</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Subclass responsibility&quot;</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="Diff.get_resource_shape"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Diff.get_resource_shape">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">):</span>
-        <span class="n">resource_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
-        <span class="n">service</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="n">resource_model</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
-        <span class="n">shape_name</span> <span class="o">=</span> <span class="n">resource_model</span><span class="o">.</span><span class="n">config_type</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;::&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">service</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">service_model</span><span class="o">.</span><span class="n">shape_for</span><span class="p">(</span><span class="n">shape_name</span><span class="p">)</span></div></div>
-
-
-<div class="viewcode-block" id="ConfigResourceParser"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.ConfigResourceParser">[docs]</a><span class="k">class</span> <span class="nc">ConfigResourceParser</span><span class="p">(</span><span class="n">BaseJSONParser</span><span class="p">):</span>
-
-<div class="viewcode-block" id="ConfigResourceParser.parse"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.ConfigResourceParser.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_do_parse</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span></div>
-
-    <span class="k">def</span> <span class="nf">_do_parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span></div>
-
-
-
-<span class="c1"># TODO List</span>
-
-<span class="n">Action</span> <span class="o">=</span> <span class="nb">object</span>
-
-
-<div class="viewcode-block" id="Locked"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Locked">[docs]</a><span class="k">class</span> <span class="nc">Locked</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Has the resource been locked.&quot;&quot;&quot;</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
-        <span class="s1">&#39;locked&#39;</span><span class="p">,</span>
-        <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
-        <span class="n">api_endpoint</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span></div>
-
-
-<div class="viewcode-block" id="Lock"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Lock">[docs]</a><span class="k">class</span> <span class="nc">Lock</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Lock a resource from further modifications.</span>
-
-<span class="sd">    Get current revision of given object. We may have an inflight</span>
-<span class="sd">    snapshotDelivery coming.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;lock&#39;</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="Unlock"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Unlock">[docs]</a><span class="k">class</span> <span class="nc">Unlock</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Unlock a resource for further modifications.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="Revert"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.revisions.Revert">[docs]</a><span class="k">class</span> <span class="nc">Revert</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Restore a resource to a previous version.&quot;&quot;&quot;</span></div>
-
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Subclass responsibility&quot;</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
