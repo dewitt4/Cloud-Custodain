@@ -199,7 +199,8 @@
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;untag&#39;</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">)</span>
-    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rename-tag&#39;</span><span class="p">,</span> <span class="n">RenameTag</span><span class="p">)</span></div>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rename-tag&#39;</span><span class="p">,</span> <span class="n">RenameTag</span><span class="p">)</span>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;normalize-tag&#39;</span><span class="p">,</span> <span class="n">NormalizeTag</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="TagTrim"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.TagTrim">[docs]</a><span class="k">class</span> <span class="nc">TagTrim</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
@@ -678,6 +679,123 @@
             <span class="n">Resources</span><span class="o">=</span><span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">],</span>
             <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span></div></div>
+
+<div class="viewcode-block" id="NormalizeTag"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag">[docs]</a><span class="k">class</span> <span class="nc">NormalizeTag</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Transform the value of a tag.</span>
+<span class="sd">    Set the tag value to uppercase, title, lowercase. Strip text from a tag key.</span>
+
+<span class="sd">    .. code-block :: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-service-transform-lower</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            comment: |</span>
+<span class="sd">              ec2-service-tag-value-to-lower</span>
+<span class="sd">            query:</span>
+<span class="sd">              - instance-state-name: running</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - &quot;tag:testing8882&quot;: present</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: normalize-tag</span>
+<span class="sd">                key: lower_key</span>
+<span class="sd">                action: lower</span>
+
+<span class="sd">          - name: ec2-service-strip</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            comment: |</span>
+<span class="sd">              ec2-service-tag-strip-blah</span>
+<span class="sd">            query:</span>
+<span class="sd">              - instance-state-name: running</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - &quot;tag:testing8882&quot;: present</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: normalize-tag</span>
+<span class="sd">                key: strip_key</span>
+<span class="sd">                action: strip</span>
+<span class="sd">                value: blah</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;normalize-tag&#39;</span><span class="p">,</span>
+        <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">action</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;upper&#39;</span><span class="p">,</span> <span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="s1">&#39;title&#39;</span> <span class="s1">&#39;strip&#39;</span><span class="p">,</span> <span class="s1">&#39;replace&#39;</span><span class="p">]}},</span>
+        <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="NormalizeTag.create_tag"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag.create_tag">[docs]</a>    <span class="k">def</span> <span class="nf">create_tag</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span>
+            <span class="n">Resources</span><span class="o">=</span><span class="n">ids</span><span class="p">,</span>
+            <span class="n">Tags</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">}])</span></div>
+
+<div class="viewcode-block" id="NormalizeTag.process_transform"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag.process_transform">[docs]</a>    <span class="k">def</span> <span class="nf">process_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tag_value</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Transform tag value</span>
+
+<span class="sd">        - Collect value from tag</span>
+<span class="sd">        - Transform Tag value</span>
+<span class="sd">        - Assign new value for key</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Transforming tag value on </span><span class="si">%s</span><span class="s2"> instances&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)))</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+
+        <span class="n">c</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;lower&#39;</span><span class="p">:</span>
+            <span class="n">new_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;upper&#39;</span><span class="p">:</span>
+            <span class="n">new_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;title&#39;</span><span class="p">:</span>
+            <span class="n">new_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">title</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;strip&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">):</span>
+            <span class="n">new_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> is an invalid action type&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">create_tag</span><span class="p">(</span>
+            <span class="n">c</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[]))</span> <span class="o">&lt;</span> <span class="mi">50</span><span class="p">],</span>
+            <span class="n">key</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="NormalizeTag.create_set"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag.create_set">[docs]</a>    <span class="k">def</span> <span class="nf">create_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">resource_set</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+            <span class="k">if</span> <span class="n">tags</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+                <span class="n">resource_set</span><span class="p">[</span><span class="n">tags</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">resource_set</span><span class="p">[</span><span class="n">tags</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resource_set</span></div>
+
+<div class="viewcode-block" id="NormalizeTag.filter_resources"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag.filter_resources">[docs]</a>    <span class="k">def</span> <span class="nf">filter_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">tags</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">resources</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">res</span><span class="p">)</span>
+            <span class="n">res</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="NormalizeTag.process"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.NormalizeTag.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Filtered from </span><span class="si">%s</span><span class="s2"> resources to </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">count</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span>
+        <span class="n">resource_set</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_set</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_transform</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">[</span><span class="n">r</span><span class="p">]))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception renaming tag set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 </pre></div>
 
            </div>
