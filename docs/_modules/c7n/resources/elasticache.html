@@ -182,7 +182,7 @@
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -457,6 +457,29 @@
                 <span class="s1">&#39;Backup&#39;</span><span class="p">,</span>
                 <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]),</span>
             <span class="n">CacheClusterId</span><span class="o">=</span><span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">])</span></div></div>
+
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-security-groups&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ElasticacheClusterModifyVpcSecurityGroups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.ElasticacheClusterModifyVpcSecurityGroups">[docs]</a><span class="k">class</span> <span class="nc">ElasticacheClusterModifyVpcSecurityGroups</span><span class="p">(</span><span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Modify security groups on an Elasticache cluster.</span>
+
+<span class="sd">    Looks at the individual clusters and modifies the Replication Group&#39;s configuration</span>
+<span class="sd">    for Security groups so all nodes get affected equally</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ElasticacheClusterModifyVpcSecurityGroups.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.ElasticacheClusterModifyVpcSecurityGroups.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">):</span>
+        <span class="n">replication_group_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ElasticacheClusterModifyVpcSecurityGroups</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_groups</span><span class="p">(</span><span class="n">clusters</span><span class="p">,</span> <span class="n">metadata_key</span><span class="o">=</span><span class="s1">&#39;SecurityGroupId&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">clusters</span><span class="p">):</span>
+            <span class="c1"># build map of Replication Groups to Security Groups</span>
+            <span class="n">replication_group_map</span><span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s1">&#39;ReplicationGroupId&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">replication_group_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_replication_group</span><span class="p">(</span>
+                <span class="n">ReplicationGroupId</span><span class="o">=</span><span class="n">r</span><span class="p">,</span>
+                <span class="n">SecurityGroupIds</span><span class="o">=</span><span class="n">replication_group_map</span><span class="p">[</span><span class="n">r</span><span class="p">]</span>
+            <span class="p">)</span></div></div>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cache-subnet-group&#39;</span><span class="p">)</span>

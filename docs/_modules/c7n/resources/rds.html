@@ -211,7 +211,7 @@
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -1123,6 +1123,32 @@
                 <span class="n">DBSnapshotIdentifier</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span></div></div>
 
 
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-security-groups&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RDSModifyVpcSecurityGroups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSModifyVpcSecurityGroups">[docs]</a><span class="k">class</span> <span class="nc">RDSModifyVpcSecurityGroups</span><span class="p">(</span><span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RDSModifyVpcSecurityGroups.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSModifyVpcSecurityGroups.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rds_instances</span><span class="p">):</span>
+        <span class="n">replication_group_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">RDSModifyVpcSecurityGroups</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_groups</span><span class="p">(</span><span class="n">rds_instances</span><span class="p">,</span> <span class="n">metadata_key</span><span class="o">=</span><span class="s1">&#39;VpcSecurityGroupId&#39;</span><span class="p">)</span>
+
+        <span class="c1"># either build map for DB cluster or modify DB instance directly</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rds_instances</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">):</span>
+                <span class="c1"># build map of Replication Groups to Security Groups</span>
+                <span class="n">replication_group_map</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
+                    <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+                    <span class="n">VpcSecurityGroupIds</span><span class="o">=</span><span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+
+        <span class="c1"># handle DB cluster, if necessary</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">replication_group_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_db_cluster</span><span class="p">(</span>
+                <span class="n">DBClusterIdentifier</span><span class="o">=</span><span class="n">r</span><span class="p">,</span>
+                <span class="n">VpcSecurityGroupIds</span><span class="o">=</span><span class="n">replication_group_map</span><span class="p">[</span><span class="n">r</span><span class="p">]</span>
+            <span class="p">)</span></div></div>
+
+
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rds-subnet-group&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RDSSubnetGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSubnetGroup">[docs]</a><span class="k">class</span> <span class="nc">RDSSubnetGroup</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;RDS subnet group.&quot;&quot;&quot;</span>
@@ -1137,6 +1163,7 @@
         <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;scalar&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
 </pre></div>
 
            </div>
