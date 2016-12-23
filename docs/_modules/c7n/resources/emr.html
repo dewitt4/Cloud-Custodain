@@ -172,6 +172,7 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
@@ -245,19 +246,17 @@
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Terminate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.Terminate">[docs]</a><span class="k">class</span> <span class="nc">Terminate</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">delay</span> <span class="o">=</span> <span class="mi">5</span>
 
 <div class="viewcode-block" id="Terminate.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.emr.Terminate.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">emrs</span><span class="p">):</span>
-
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;emr&#39;</span><span class="p">)</span>
-        <span class="n">cluster_ids</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">emr</span> <span class="ow">in</span> <span class="n">emrs</span><span class="p">:</span>
-            <span class="n">cluster_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">emr</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">terminate_job_flows</span><span class="p">(</span><span class="n">JobFlowIds</span><span class="o">=</span><span class="n">cluster_ids</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">raise</span>
-
+        <span class="n">cluster_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">emr</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">emr</span> <span class="ow">in</span> <span class="n">emrs</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">set_termination_protection</span><span class="p">(</span>
+                <span class="n">JobFlowIds</span><span class="o">=</span><span class="n">cluster_ids</span><span class="p">,</span> <span class="n">TerminationProtected</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">terminate_job_flows</span><span class="p">(</span><span class="n">JobFlowIds</span><span class="o">=</span><span class="n">cluster_ids</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted emrs: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">cluster_ids</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">emrs</span></div></div>
 
