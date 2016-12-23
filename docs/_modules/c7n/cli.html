@@ -180,6 +180,8 @@
 
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">date_parse</span>
 
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">read_aws_config_file</span>
+
 <span class="n">DEFAULT_REGION</span> <span class="o">=</span> <span class="s1">&#39;us-east-1&#39;</span>
 
 
@@ -191,10 +193,11 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">provider</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">add_argument_group</span><span class="p">(</span>
         <span class="s2">&quot;provider&quot;</span><span class="p">,</span> <span class="s2">&quot;AWS account information, defaults per the aws cli&quot;</span><span class="p">)</span>
+
+    <span class="n">default_region</span> <span class="o">=</span> <span class="n">determine_default_region</span><span class="p">()</span>
     <span class="k">if</span> <span class="s1">&#39;region&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">blacklist</span><span class="p">:</span>
         <span class="n">provider</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
-            <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="s2">&quot;--region&quot;</span><span class="p">,</span>
-            <span class="n">default</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;AWS_DEFAULT_REGION&#39;</span><span class="p">,</span> <span class="n">DEFAULT_REGION</span><span class="p">),</span>
+            <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="s2">&quot;--region&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">default_region</span><span class="p">,</span>
             <span class="n">help</span><span class="o">=</span><span class="s2">&quot;AWS Region to target (Default: </span><span class="si">%(default)s</span><span class="s2">)&quot;</span><span class="p">)</span>
     <span class="n">provider</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;--profile&quot;</span><span class="p">,</span>
@@ -373,6 +376,28 @@
         <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Emit metrics to CloudWatch Metrics&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">parser</span></div>
+
+
+<div class="viewcode-block" id="determine_default_region"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.determine_default_region">[docs]</a><span class="k">def</span> <span class="nf">determine_default_region</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot; Return the default region</span>
+<span class="sd">    </span>
+<span class="sd">    If the region is not specified on the command line we will use a default.</span>
+
+<span class="sd">    The priority order for determining this is:</span>
+<span class="sd">     - AWS_DEFAULT_REGION environment variable</span>
+<span class="sd">     - region defined in the file pointed to by AWS_CONFIG_FILE env variable</span>
+<span class="sd">       (the default for this file is ~/.aws/config)</span>
+<span class="sd">     - The DEFAULT_REGION defined at the top of this file</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">env_key</span> <span class="o">=</span> <span class="s1">&#39;AWS_DEFAULT_REGION&#39;</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">env_key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="n">env_key</span><span class="p">]</span>
+
+    <span class="n">config</span> <span class="o">=</span> <span class="n">read_aws_config_file</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="s1">&#39;region&#39;</span><span class="p">,</span> <span class="n">fallback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">][</span><span class="s1">&#39;region&#39;</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="n">DEFAULT_REGION</span></div>
 
 
 <div class="viewcode-block" id="cmd_version"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.cmd_version">[docs]</a><span class="k">def</span> <span class="nf">cmd_version</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
