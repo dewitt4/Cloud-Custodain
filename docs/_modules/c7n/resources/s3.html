@@ -650,7 +650,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
-        <span class="s1">&#39;enable-versioning&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;toggle-versioning&#39;</span><span class="p">,</span>
         <span class="n">enabled</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
 
     <span class="c1"># mfa delete enablement looks like it needs the serial and a current token.</span>
@@ -1059,6 +1059,8 @@
 <span class="sd">                resource: s3</span>
 <span class="sd">                actions:</span>
 <span class="sd">                  - type: encrypt-keys</span>
+<span class="sd">                    crypto: aws:kms</span>
+<span class="sd">                    key-id: 9c3983be-c6cf-11e6-9d9d-cec0c932ce01</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
@@ -1070,14 +1072,24 @@
 
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;additonalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;pattern&#39;</span><span class="p">:</span> <span class="s1">&#39;encrypt-keys&#39;</span><span class="p">},</span>
             <span class="s1">&#39;report-only&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;glacier&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;large&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]}</span>
+            <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;key-id&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+            <span class="p">},</span>
+        <span class="s1">&#39;dependencies&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;key-id&#39;</span><span class="p">:</span> <span class="p">{</span>
+              <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;pattern&#39;</span><span class="p">:</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">}</span>
+              <span class="p">},</span>
+              <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;crypto&#39;</span><span class="p">]</span>
             <span class="p">}</span>
         <span class="p">}</span>
+    <span class="p">}</span>
 
     <span class="n">metrics</span> <span class="o">=</span> <span class="p">[</span>
         <span class="p">(</span><span class="s1">&#39;Total Keys&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Scope&#39;</span><span class="p">:</span> <span class="s1">&#39;Account&#39;</span><span class="p">}),</span>
@@ -1157,6 +1169,7 @@
             <span class="n">storage_class</span> <span class="o">==</span> <span class="s1">&#39;STANDARD&#39;</span>
 
         <span class="n">crypto_method</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)</span>
+        <span class="n">key_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key-id&#39;</span><span class="p">)</span>
         <span class="c1"># Note on copy we lose individual object acl grants</span>
         <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">bucket_name</span><span class="p">,</span>
                   <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span>
@@ -1164,6 +1177,9 @@
                   <span class="s1">&#39;MetadataDirective&#39;</span><span class="p">:</span> <span class="s1">&#39;COPY&#39;</span><span class="p">,</span>
                   <span class="s1">&#39;StorageClass&#39;</span><span class="p">:</span> <span class="n">storage_class</span><span class="p">,</span>
                   <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="n">crypto_method</span><span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">key_id</span> <span class="ow">and</span> <span class="n">crypto_method</span> <span class="ow">is</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SSEKMSKeyId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">key_id</span>
 
         <span class="k">if</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;ContentLength&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">MAX_COPY_SIZE</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
                 <span class="s1">&#39;large&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
