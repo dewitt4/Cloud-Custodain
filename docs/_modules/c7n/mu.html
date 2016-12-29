@@ -30,6 +30,8 @@
   
 
   
+    <link rel="stylesheet" href="../../_static/css/expand.css" type="text/css" />
+  
 
   
         <link rel="index" title="Index"
@@ -198,6 +200,7 @@
 
 <span class="c1"># Static event mapping to help simplify cwe rules creation</span>
 <span class="kn">from</span> <span class="nn">c7n.cwe</span> <span class="k">import</span> <span class="n">CloudWatchEvents</span>
+<span class="kn">from</span> <span class="nn">c7n.logs_support</span> <span class="k">import</span> <span class="n">_timestamp_from_string</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">local_session</span>
 
 
@@ -351,7 +354,7 @@
     <span class="sd">&quot;&quot;&quot;Create a lambda code archive for running custodian.&quot;&quot;&quot;</span>
 
     <span class="c1"># Some aggressive shrinking</span>
-    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;concurrent&quot;</span><span class="p">,</span> <span class="s2">&quot;yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;pkg_resources&quot;</span><span class="p">,</span> <span class="s2">&quot;skew&quot;</span><span class="p">,</span> <span class="s2">&quot;ipaddress.py&quot;</span><span class="p">]</span>
+    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pkg_resources&quot;</span><span class="p">,</span> <span class="s2">&quot;ipaddress.py&quot;</span><span class="p">]</span>
     <span class="n">host_platform</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">uname</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
 
     <span class="k">def</span> <span class="nf">lib_filter</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">):</span>
@@ -445,7 +448,7 @@
                     <span class="n">f</span><span class="p">[</span><span class="s1">&#39;Metrics&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
         <span class="k">return</span> <span class="n">results</span></div>
 
-<div class="viewcode-block" id="LambdaManager.logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.logs">[docs]</a>    <span class="k">def</span> <span class="nf">logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+<div class="viewcode-block" id="LambdaManager.logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.logs">[docs]</a>    <span class="k">def</span> <span class="nf">logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
         <span class="n">logs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
         <span class="n">group_name</span> <span class="o">=</span> <span class="s2">&quot;/aws/lambda/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fetching logs from group: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">group_name</span><span class="p">)</span>
@@ -464,9 +467,15 @@
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                 <span class="k">return</span>
             <span class="k">raise</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">_timestamp_from_string</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">_timestamp_from_string</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">log_streams</span><span class="p">[</span><span class="s1">&#39;logStreams&#39;</span><span class="p">]):</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">logs</span><span class="o">.</span><span class="n">get_log_events</span><span class="p">(</span>
-                <span class="n">logGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span> <span class="n">logStreamName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;logStreamName&#39;</span><span class="p">])</span>
+                <span class="n">logGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span>
+                <span class="n">logStreamName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;logStreamName&#39;</span><span class="p">],</span>
+                <span class="n">startTime</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
+                <span class="n">endTime</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]:</span>
                 <span class="k">yield</span> <span class="n">e</span></div>
 
@@ -1281,6 +1290,7 @@
       <script type="text/javascript" src="../../_static/jquery.js"></script>
       <script type="text/javascript" src="../../_static/underscore.js"></script>
       <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../_static/js/expand.js"></script>
 
   
 

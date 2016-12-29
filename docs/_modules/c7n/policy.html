@@ -30,6 +30,8 @@
   
 
   
+    <link rel="stylesheet" href="../../_static/css/expand.css" type="text/css" />
+  
 
   
         <link rel="index" title="Index"
@@ -184,7 +186,14 @@
 <span class="kn">from</span> <span class="nn">c7n.credentials</span> <span class="k">import</span> <span class="n">SessionFactory</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">DEFAULT_NAMESPACE</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">mu</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">c7n.logs_support</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">normalized_log_entries</span><span class="p">,</span>
+    <span class="n">log_entries_in_range</span><span class="p">,</span>
+    <span class="n">log_entries_from_s3</span><span class="p">,</span>
+    <span class="n">log_entries_from_group</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.version</span> <span class="k">import</span> <span class="n">version</span>
 
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
@@ -255,9 +264,9 @@
 <div class="viewcode-block" id="PolicyExecutionMode.provision"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyExecutionMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Provision any resources needed for the policy.&quot;&quot;&quot;</span></div>
 
-<div class="viewcode-block" id="PolicyExecutionMode.get_logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyExecutionMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">):</span>
+<div class="viewcode-block" id="PolicyExecutionMode.get_logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyExecutionMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Retrieve logs for the policy&quot;&quot;&quot;</span>
-        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;not yet&quot;</span><span class="p">)</span></div>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsibility&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="PolicyExecutionMode.get_metrics"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyExecutionMode.get_metrics">[docs]</a>    <span class="k">def</span> <span class="nf">get_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Retrieve any associated metrics for the policy.&quot;&quot;&quot;</span>
@@ -363,7 +372,42 @@
                     <span class="s2">&quot;action-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">a</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
                 <span class="s2">&quot;ActionTime&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">at</span><span class="p">,</span> <span class="s2">&quot;Seconds&quot;</span><span class="p">,</span> <span class="n">Scope</span><span class="o">=</span><span class="s2">&quot;Policy&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">resources</span></div></div>
+            <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="PullMode.get_logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PullMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+        <span class="n">log_source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output</span>
+        <span class="n">log_gen</span> <span class="o">=</span> <span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">session</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+            <span class="n">log_gen</span> <span class="o">=</span> <span class="n">log_entries_from_group</span><span class="p">(</span>
+                <span class="n">session</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">,</span>
+                <span class="n">start</span><span class="p">,</span>
+                <span class="n">end</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">log_source</span><span class="o">.</span><span class="n">use_s3</span><span class="p">():</span>
+            <span class="n">raw_entries</span> <span class="o">=</span> <span class="n">log_entries_from_s3</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
+                <span class="n">log_source</span><span class="p">,</span>
+                <span class="n">start</span><span class="p">,</span>
+                <span class="n">end</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># log files can be downloaded out of order, so sort on timestamp</span>
+            <span class="c1"># log_gen isn&#39;t really a generator once we do this, but oh well</span>
+            <span class="n">log_gen</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+                <span class="n">normalized_log_entries</span><span class="p">(</span><span class="n">raw_entries</span><span class="p">),</span>
+                <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;timestamp&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">log_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">log_source</span><span class="o">.</span><span class="n">root_dir</span><span class="p">,</span> <span class="s1">&#39;custodian-run.log&#39;</span><span class="p">)</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">log_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">log_fh</span><span class="p">:</span>
+                <span class="n">raw_entries</span> <span class="o">=</span> <span class="n">log_fh</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+                <span class="n">log_gen</span> <span class="o">=</span> <span class="n">normalized_log_entries</span><span class="p">(</span><span class="n">raw_entries</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">log_entries_in_range</span><span class="p">(</span>
+            <span class="n">log_gen</span><span class="p">,</span>
+            <span class="n">start</span><span class="p">,</span>
+            <span class="n">end</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="LambdaMode"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.LambdaMode">[docs]</a><span class="k">class</span> <span class="nc">LambdaMode</span><span class="p">(</span><span class="n">PolicyExecutionMode</span><span class="p">):</span>
@@ -456,7 +500,16 @@
                     <span class="k">lambda</span> <span class="n">assume</span><span class="o">=</span><span class="kc">False</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span><span class="n">assume</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">manager</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
                 <span class="n">PolicyLambda</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">),</span> <span class="s1">&#39;current&#39;</span><span class="p">,</span>
-                <span class="n">role</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">)</span></div></div>
+                <span class="n">role</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="LambdaMode.get_logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.LambdaMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="n">mu</span><span class="o">.</span><span class="n">LambdaManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">log_gen</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">logs</span><span class="p">(</span><span class="n">mu</span><span class="o">.</span><span class="n">PolicyLambda</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">),</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">log_entries_in_range</span><span class="p">(</span>
+            <span class="n">log_gen</span><span class="p">,</span>
+            <span class="n">start</span><span class="p">,</span>
+            <span class="n">end</span><span class="p">,</span>
+        <span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="PeriodicMode"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PeriodicMode">[docs]</a><span class="k">class</span> <span class="nc">PeriodicMode</span><span class="p">(</span><span class="n">LambdaMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">):</span>
@@ -607,6 +660,10 @@
         <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_execution_mode</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">mode</span><span class="o">.</span><span class="n">run</span><span class="p">()</span></div>
 
+<div class="viewcode-block" id="Policy.get_logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_execution_mode</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">mode</span><span class="o">.</span><span class="n">get_logs</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="Policy.get_metrics"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.get_metrics">[docs]</a>    <span class="k">def</span> <span class="nf">get_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">):</span>
         <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_execution_mode</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">mode</span><span class="o">.</span><span class="n">get_metrics</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="p">)</span></div>
@@ -676,6 +733,7 @@
       <script type="text/javascript" src="../../_static/jquery.js"></script>
       <script type="text/javascript" src="../../_static/underscore.js"></script>
       <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="../../_static/js/expand.js"></script>
 
   
 
