@@ -419,21 +419,29 @@
     <span class="k">return</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">-</span><span class="si">%s</span><span class="s1">-</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">db_identifier</span><span class="p">,</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">))</span></div>
 
 
-<div class="viewcode-block" id="get_retry"><a class="viewcode-back" href="../../generated/c7n.html#c7n.utils.get_retry">[docs]</a><span class="k">def</span> <span class="nf">get_retry</span><span class="p">(</span><span class="n">codes</span><span class="o">=</span><span class="p">(),</span> <span class="n">max_attempts</span><span class="o">=</span><span class="mi">8</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Retry a boto3 api call on transient errors.</span>
+<div class="viewcode-block" id="get_retry"><a class="viewcode-back" href="../../generated/c7n.html#c7n.utils.get_retry">[docs]</a><span class="k">def</span> <span class="nf">get_retry</span><span class="p">(</span><span class="n">codes</span><span class="o">=</span><span class="p">(),</span> <span class="n">max_attempts</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">min_delay</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">log_retries</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Decorator for retry boto3 api call on transient errors.</span>
 
 <span class="sd">    https://www.awsarchitectureblog.com/2015/03/backoff.html</span>
 <span class="sd">    https://en.wikipedia.org/wiki/Exponential_backoff</span>
 
-<span class="sd">    :param codes: A sequence of retryable error codes</span>
+<span class="sd">    :param codes: A sequence of retryable error codes.</span>
+<span class="sd">    :param max_attempts: The max number of retries, by default the delay</span>
+<span class="sd">           time is proportional to the max number of attempts.</span>
+<span class="sd">    :param log_retries: Whether we should log retries, if specified</span>
+<span class="sd">           specifies the level at which the retry should be logged.</span>
+<span class="sd">    :param _max_delay: The maximum delay for any retry interval *note*</span>
+<span class="sd">           this parameter is only exposed for unit testing, as its</span>
+<span class="sd">           derived from the number of attempts.</span>
 
-<span class="sd">    returns a function for invoking aws client calls that</span>
+<span class="sd">    Returns a function for invoking aws client calls that</span>
 <span class="sd">    retries on retryable error codes.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">max_delay</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">**</span> <span class="n">max_attempts</span>
+    <span class="n">max_delay</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">min_delay</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="n">max_attempts</span>
 
     <span class="k">def</span> <span class="nf">_retry</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">delay</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">backoff_delays</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_delay</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="kc">True</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">delay</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+                <span class="n">backoff_delays</span><span class="p">(</span><span class="n">min_delay</span><span class="p">,</span> <span class="n">max_delay</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="kc">True</span><span class="p">)):</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -441,6 +449,11 @@
                     <span class="k">raise</span>
                 <span class="k">elif</span> <span class="n">idx</span> <span class="o">==</span> <span class="n">max_attempts</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                     <span class="k">raise</span>
+                <span class="k">if</span> <span class="n">log_retries</span><span class="p">:</span>
+                    <span class="n">worker_log</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
+                        <span class="n">log_retries</span><span class="p">,</span>
+                        <span class="s2">&quot;retrying </span><span class="si">%s</span><span class="s2"> on error:</span><span class="si">%s</span><span class="s2"> attempt:</span><span class="si">%d</span><span class="s2"> last delay:</span><span class="si">%0.2f</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">func</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">],</span> <span class="n">idx</span><span class="p">,</span> <span class="n">delay</span><span class="p">)</span>
             <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_retry</span></div>
 

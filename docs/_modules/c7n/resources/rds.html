@@ -203,16 +203,20 @@
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">re</span>
-
 
 <span class="kn">from</span> <span class="nn">distutils.version</span> <span class="k">import</span> <span class="n">LooseVersion</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">)</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -488,11 +492,11 @@
 <div class="viewcode-block" id="TagDelayedAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dbs</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">dbs</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dbs</span><span class="p">,</span> <span class="n">ts</span><span class="p">):</span>
+<div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dbs</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">db</span> <span class="ow">in</span> <span class="n">dbs</span><span class="p">:</span>
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">db</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">ts</span><span class="p">)</span></div></div>
+            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-patch&#39;</span><span class="p">)</span>
@@ -959,6 +963,25 @@
         <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">snaps</span><span class="p">)))</span>
 
 
+<span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;latest&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="LatestSnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.LatestSnapshot">[docs]</a><span class="k">class</span> <span class="nc">LatestSnapshot</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Return the latest snapshot for each database.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;latest&#39;</span><span class="p">,</span> <span class="n">automatic</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="LatestSnapshot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.LatestSnapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;automatic&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">resources</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;SnapshotType&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;manual&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">db_identifier</span><span class="p">,</span> <span class="n">snapshots</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span>
+                <span class="n">resources</span><span class="p">,</span> <span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">)):</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="nb">sorted</span><span class="p">(</span><span class="n">snapshots</span><span class="p">,</span>
+                       <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s1">&#39;SnapshotCreateTime&#39;</span><span class="p">))[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+
 <span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;age&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="RDSSnapshotAge"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotAge">[docs]</a><span class="k">class</span> <span class="nc">RDSSnapshotAge</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters RDS snapshots based on age (in days)</span>
@@ -1081,6 +1104,115 @@
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">remove_tags_from_resource</span><span class="p">(</span>
                 <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;region-copy&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RegionCopySnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RegionCopySnapshot">[docs]</a><span class="k">class</span> <span class="nc">RegionCopySnapshot</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Copy a snapshot across regions.</span>
+
+<span class="sd">    Note there is a max in flight for cross region rds snapshots</span>
+<span class="sd">    of 5 per region. This action will attempt to retry automatically</span>
+<span class="sd">    for an hr.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">      - name: copy-encrypted-snapshots</span>
+<span class="sd">        description: |</span>
+<span class="sd">          copy snapshots under 1 day old to dr region with kms</span>
+<span class="sd">        resource: rdb-snapshot</span>
+<span class="sd">        region: us-east-1</span>
+<span class="sd">        filters:</span>
+<span class="sd">         - Status: available</span>
+<span class="sd">         - type: value</span>
+<span class="sd">           key: SnapshotCreateTime</span>
+<span class="sd">           value_type: age</span>
+<span class="sd">           value: 1</span>
+<span class="sd">           op: less-than</span>
+<span class="sd">        actions:</span>
+<span class="sd">          - type: region-copy</span>
+<span class="sd">            target_region: us-east-2</span>
+<span class="sd">            target_key: arn:aws:kms:us-east-2:0000:key/cb291f53-c9cf61</span>
+<span class="sd">            copy_tags: true</span>
+<span class="sd">            tags:</span>
+<span class="sd">              - OriginRegion: us-east-1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;copy&#39;</span><span class="p">,</span>
+        <span class="n">target_region</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">target_key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">copy_tags</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;target_region&#39;</span><span class="p">,))</span>
+
+    <span class="n">min_delay</span> <span class="o">=</span> <span class="mi">120</span>
+    <span class="n">max_attempts</span> <span class="o">=</span> <span class="mi">30</span>
+
+<div class="viewcode-block" id="RegionCopySnapshot.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RegionCopySnapshot.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_region&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;cross region snapshot may require waiting for &quot;</span>
+                <span class="s2">&quot;longer then lambda runtime allows&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="RegionCopySnapshot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RegionCopySnapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;target_region&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Source and destination region are the same, skipping copy&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="RegionCopySnapshot.process_resource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RegionCopySnapshot.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">tags</span><span class="p">,</span> <span class="n">snapshot</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">key</span><span class="p">:</span>
+            <span class="n">p</span><span class="p">[</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">key</span>
+        <span class="n">p</span><span class="p">[</span><span class="s1">&#39;TargetDBSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snapshot</span><span class="p">[</span>
+            <span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span>
+        <span class="n">p</span><span class="p">[</span><span class="s1">&#39;SourceRegion&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span>
+        <span class="n">p</span><span class="p">[</span><span class="s1">&#39;SourceDBSnapshotIdentifier&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;DBSnapshotArn&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;copy_tags&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">p</span><span class="p">[</span><span class="s1">&#39;CopyTags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="n">p</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tags</span>
+
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">(</span>
+            <span class="p">(</span><span class="s1">&#39;SnapshotQuotaExceeded&#39;</span><span class="p">,),</span>
+            <span class="c1"># TODO make this configurable, class defaults to 1hr</span>
+            <span class="n">min_delay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">min_delay</span><span class="p">,</span>
+            <span class="n">max_attempts</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_attempts</span><span class="p">,</span>
+            <span class="n">log_retries</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">copy_db_snapshot</span><span class="p">,</span> <span class="o">**</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;DBSnapshotAlreadyExists&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Snapshot </span><span class="si">%s</span><span class="s2"> already exists in target region&quot;</span><span class="p">,</span>
+                    <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
+                <span class="k">return</span>
+            <span class="k">raise</span>
+        <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;c7n:CopiedSnapshot&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span>
+            <span class="s1">&#39;DBSnapshot&#39;</span><span class="p">][</span><span class="s1">&#39;DBSnapshotArn&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="RegionCopySnapshot.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RegionCopySnapshot.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="n">target_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span>
+            <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;target_region&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">target_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_key&#39;</span><span class="p">)</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span>
+                <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">()]</span>
+        <span class="n">source_client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">snapshot_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resource_set</span><span class="p">,</span> <span class="mi">5</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">snapshot_set</span><span class="p">:</span>
+                <span class="c1"># If tags are supplied, copy tags are ignored, and</span>
+                <span class="c1"># we need to augment the tag set with the original</span>
+                <span class="c1"># resource tags to preserve the common case.</span>
+                <span class="n">rtags</span> <span class="o">=</span> <span class="n">tags</span> <span class="ow">and</span> <span class="nb">list</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="n">tags</span><span class="p">:</span>
+                    <span class="n">rtags</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">(</span><span class="n">target_client</span><span class="p">,</span> <span class="n">target_key</span><span class="p">,</span> <span class="n">rtags</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span></div></div>
 
 
 <span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
