@@ -672,6 +672,57 @@
                     <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
                     <span class="n">VersioningConfiguration</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">})</span></div></div>
 
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;toggle-logging&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ToggleLogging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleLogging">[docs]</a><span class="k">class</span> <span class="nc">ToggleLogging</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to enable/disable logging on a S3 bucket.</span>
+<span class="sd">    Target bucket ACL must allow for WRITE and READ_ACP Permissions</span>
+<span class="sd">    Not specifying a target_prefix will default to the current bucket name.</span>
+<span class="sd">    http://goo.gl/PiWWU2</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-enable-logging</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                filter:</span>
+<span class="sd">                  - &quot;tag:Testing&quot;: present</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: toggle-logging</span>
+<span class="sd">                    target_bucket: log-bucket</span>
+<span class="sd">                    target_prefix: logs123</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;toggle-logging&#39;</span><span class="p">,</span>
+        <span class="n">enabled</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">target_bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">target_prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="ToggleLogging.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleLogging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">target_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_prefix&#39;</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="s1">&#39;TargetBucket&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Disabled&#39;</span><span class="p">}</span>
+            <span class="k">if</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Disabled&#39;</span><span class="p">):</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_logging</span><span class="p">(</span>
+                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+                    <span class="n">BucketLoggingStatus</span><span class="o">=</span><span class="p">{</span>
+                        <span class="s1">&#39;LoggingEnabled&#39;</span><span class="p">:</span> <span class="p">{</span>
+                            <span class="s1">&#39;TargetBucket&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_bucket&#39;</span><span class="p">),</span>
+                            <span class="s1">&#39;TargetPrefix&#39;</span><span class="p">:</span> <span class="n">target_prefix</span><span class="p">}})</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_logging</span><span class="p">(</span>
+                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+                    <span class="n">BucketLoggingStatus</span><span class="o">=</span><span class="p">{})</span>
+                <span class="k">continue</span></div></div>
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;attach-encrypt&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="AttachLambdaEncrypt"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt">[docs]</a><span class="k">class</span> <span class="nc">AttachLambdaEncrypt</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
