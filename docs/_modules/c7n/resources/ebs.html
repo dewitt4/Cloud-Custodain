@@ -180,8 +180,8 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">ANNOTATION_KEY</span><span class="p">,</span>
-    <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
+    <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span>
+    <span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.resources.kms</span> <span class="k">import</span> <span class="n">ResourceKmsKeyAlias</span>
@@ -268,6 +268,43 @@
         <span class="k">if</span> <span class="n">snap</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ami_snaps</span><span class="p">:</span>
             <span class="n">matches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">snap</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">matches</span>
+
+
+<span class="nd">@Snapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="SnapshotCrossAccountAccess"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.SnapshotCrossAccountAccess">[docs]</a><span class="k">class</span> <span class="nc">SnapshotCrossAccountAccess</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
+
+<div class="viewcode-block" id="SnapshotCrossAccountAccess.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.SnapshotCrossAccountAccess.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">accounts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_accounts</span><span class="p">()</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">50</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception checking cross account access </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
+                    <span class="k">continue</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="SnapshotCrossAccountAccess.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.SnapshotCrossAccountAccess.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+            <span class="n">attrs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_snapshot_attribute</span><span class="p">,</span>
+                <span class="n">SnapshotId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">],</span>
+                <span class="n">Attribute</span><span class="o">=</span><span class="s1">&#39;createVolumePermission&#39;</span><span class="p">)[</span><span class="s1">&#39;CreateVolumePermissions&#39;</span><span class="p">]</span>
+            <span class="n">shared_accounts</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Group&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;UserId&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">}</span>
+            <span class="n">delta_accounts</span> <span class="o">=</span> <span class="n">shared_accounts</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">accounts</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">delta_accounts</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:CrossAccountViolations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">delta_accounts</span><span class="p">)</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 
 
 <span class="nd">@Snapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;skip-ami-snapshots&#39;</span><span class="p">)</span>
