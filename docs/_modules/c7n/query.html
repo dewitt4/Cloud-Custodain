@@ -182,6 +182,7 @@
 <span class="sd">   - aws.cloudformation.stack -&gt; stack resources</span>
 <span class="sd">   - aws.dymanodb.table -&gt;</span>
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">jmespath</span>
 
 <span class="kn">from</span> <span class="nn">botocore.client</span> <span class="k">import</span> <span class="n">ClientError</span>
@@ -189,7 +190,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">MetricsFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">register_tags</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">chunks</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">ResourceManager</span>
 
 
@@ -288,6 +289,8 @@
     <span class="n">id_field</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">report_fields</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">retry</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">max_workers</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">20</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
@@ -357,7 +360,35 @@
 <span class="sd">        ie. we want tags by default (rds, elb), and policy, location, acl for</span>
 <span class="sd">        s3 buckets.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">resources</span></div>
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="n">detail_spec</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s1">&#39;detail_spec&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">detail_spec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resources</span>
+        <span class="n">detail_op</span><span class="p">,</span> <span class="n">param_name</span><span class="p">,</span> <span class="n">param_key</span><span class="p">,</span> <span class="n">detail_path</span> <span class="o">=</span> <span class="n">detail_spec</span>
+
+        <span class="k">def</span> <span class="nf">_augment</span><span class="p">(</span><span class="n">resource_set</span><span class="p">):</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
+            <span class="n">op</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">detail_op</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">:</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="n">op</span>
+                <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">()</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+                <span class="n">kw</span> <span class="o">=</span> <span class="p">{</span><span class="n">param_name</span><span class="p">:</span> <span class="n">param_key</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="n">param_key</span><span class="p">]</span> <span class="ow">or</span> <span class="n">r</span><span class="p">}</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)[</span><span class="n">detail_path</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">param_key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">response</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">response</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">r</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">results</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_augment</span><span class="p">,</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">))))</span></div>
 
 <div class="viewcode-block" id="QueryResourceManager.filter_record"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.QueryResourceManager.filter_record">[docs]</a>    <span class="k">def</span> <span class="nf">filter_record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
         <span class="sd">&#39;&#39;&#39;Filters records for report formatters&#39;&#39;&#39;</span>
