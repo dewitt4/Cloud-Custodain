@@ -1239,6 +1239,8 @@
 <div class="viewcode-block" id="Suspend"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Suspend">[docs]</a><span class="k">class</span> <span class="nc">Suspend</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to suspend ASG processes and instances</span>
 
+<span class="sd">    AWS ASG suspend/resume and process docs https://goo.gl/XYtKQ8</span>
+
 <span class="sd">    :example:</span>
 
 <span class="sd">        .. code-block: yaml</span>
@@ -1252,7 +1254,24 @@
 <span class="sd">                  - type: suspend</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;suspend&#39;</span><span class="p">)</span>
+    <span class="n">ASG_PROCESSES</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;Launch&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Terminate&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;HealthCheck&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ReplaceUnhealthy&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;AZRebalance&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;AlarmNotification&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ScheduledActions&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;AddToLoadBalancer&quot;</span><span class="p">]</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;suspend&#39;</span><span class="p">,</span>
+        <span class="n">exclude</span><span class="o">=</span><span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;ASG Processes to not suspend&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">ASG_PROCESSES</span><span class="p">}})</span>
+
+    <span class="n">ASG_PROCESSES</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">ASG_PROCESSES</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Suspend.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Suspend.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">):</span>
         <span class="n">original_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">asgs</span><span class="p">)</span>
@@ -1270,9 +1289,13 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">asg_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;autoscaling&#39;</span><span class="p">)</span>
+        <span class="n">processes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ASG_PROCESSES</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;exclude&#39;</span><span class="p">,</span> <span class="p">())))</span>
+
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
                 <span class="n">asg_client</span><span class="o">.</span><span class="n">suspend_processes</span><span class="p">,</span>
+                <span class="n">ScalingProcesses</span><span class="o">=</span><span class="n">processes</span><span class="p">,</span>
                 <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">asg</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">])</span>
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ValidationError&#39;</span><span class="p">:</span>
