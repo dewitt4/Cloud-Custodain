@@ -316,8 +316,8 @@
                 <span class="k">continue</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                    <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> unable to invoke method:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
-                        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]))</span>
+                    <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> unable to invoke method:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2"> &quot;</span><span class="p">,</span>
+                        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
                 <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># As soon as we learn location (which generally works)</span>
         <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;Location&#39;</span> <span class="ow">and</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -627,7 +627,9 @@
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;toggle-versioning&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ToggleVersioning"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleVersioning">[docs]</a><span class="k">class</span> <span class="nc">ToggleVersioning</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Action to enable/disable versioning on a S3 bucket</span>
+    <span class="sd">&quot;&quot;&quot;Action to enable/suspend versioning on a S3 bucket</span>
+
+<span class="sd">    Note versioning can never be disabled only suspended.</span>
 
 <span class="sd">    :example:</span>
 
@@ -639,7 +641,7 @@
 <span class="sd">                filter:</span>
 <span class="sd">                  - type: value</span>
 <span class="sd">                    key: Versioning</span>
-<span class="sd">                    value: Disabled</span>
+<span class="sd">                    value: Suspended</span>
 <span class="sd">                actions:</span>
 <span class="sd">                  - type: toggle-versioning</span>
 <span class="sd">                    enabled: true</span>
@@ -671,6 +673,7 @@
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;toggle-logging&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ToggleLogging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleLogging">[docs]</a><span class="k">class</span> <span class="nc">ToggleLogging</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to enable/disable logging on a S3 bucket.</span>
+
 <span class="sd">    Target bucket ACL must allow for WRITE and READ_ACP Permissions</span>
 <span class="sd">    Not specifying a target_prefix will default to the current bucket name.</span>
 <span class="sd">    http://goo.gl/PiWWU2</span>
@@ -1628,6 +1631,10 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
 
+        <span class="c1"># Stop replication so we can suspend versioning</span>
+        <span class="k">if</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Replication&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_bucket_replication</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+
         <span class="c1"># Suspend versioning, so we don&#39;t get new delete markers</span>
         <span class="c1"># as we walk and delete versions</span>
         <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_bucket_style</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;versioned&#39;</span>
@@ -1636,6 +1643,7 @@
             <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_versioning</span><span class="p">(</span>
                 <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
                 <span class="n">VersioningConfiguration</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">})</span>
+
         <span class="c1"># Clear our multi-part uploads</span>
         <span class="n">uploads</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;list_multipart_uploads&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">uploads</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]):</span>
@@ -1647,10 +1655,10 @@
 
 <div class="viewcode-block" id="DeleteBucket.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteBucket.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="c1"># might be worth sanity checking all our permissions</span>
-        <span class="c1"># on the bucket up front before disabling versioning.</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_delete_enablement</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span>
+        <span class="c1"># on the bucket up front before disabling versioning/replication.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;remove-contents&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_delete_enablement</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">empty_buckets</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delete_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
