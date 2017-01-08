@@ -175,6 +175,7 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">zlib</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
@@ -342,6 +343,13 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;patch&#39;</span><span class="p">)</span>
 
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:AuthorizeSecurityGroupIngress&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:AuthorizeSecurityGroupEgress&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:RevokeSecurityGroupIngress&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:RevokeSecurityGroupEgress&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:CreateTags&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:DeleteTags&#39;</span><span class="p">)</span>
+
 <div class="viewcode-block" id="SecurityGroupApplyPatch.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroupApplyPatch.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">diff_filters</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filters</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span>
             <span class="n">n</span><span class="p">,</span> <span class="n">SecurityGroupDiffFilter</span><span class="p">)]</span>
@@ -420,6 +428,12 @@
 
 
 <div class="viewcode-block" id="SGUsage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGUsage">[docs]</a><span class="k">class</span> <span class="nc">SGUsage</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+<div class="viewcode-block" id="SGUsage.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGUsage.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span>
+             <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span>
+             <span class="p">[</span><span class="s1">&#39;lambda&#39;</span><span class="p">,</span> <span class="s1">&#39;eni&#39;</span><span class="p">,</span> <span class="s1">&#39;launch-config&#39;</span><span class="p">,</span> <span class="s1">&#39;security-group&#39;</span><span class="p">]]))</span></div>
 
 <div class="viewcode-block" id="SGUsage.filter_peered_refs"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGUsage.filter_peered_refs">[docs]</a>    <span class="k">def</span> <span class="nf">filter_peered_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
@@ -574,6 +588,7 @@
 <span class="sd">                  - stale</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stale&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeStaleSecurityGroups&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="Stale.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Stale.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
@@ -904,6 +919,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DeleteSecurityGroup&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="Delete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Delete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
@@ -936,6 +952,9 @@
         <span class="s1">&#39;remove-permissions&#39;</span><span class="p">,</span>
         <span class="n">ingress</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">,</span> <span class="s1">&#39;all&#39;</span><span class="p">]},</span>
         <span class="n">egress</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">,</span> <span class="s1">&#39;all&#39;</span><span class="p">]})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:RevokeSecurityGroupIngress&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ec2:RevokeSecurityGroupEgress&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="RemovePermissions.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.RemovePermissions.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">i_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ingress&#39;</span><span class="p">,</span> <span class="s1">&#39;matched&#39;</span><span class="p">)</span>
@@ -1049,6 +1068,7 @@
 <span class="sd">                    groups: matched</span>
 <span class="sd">                    isolation-group: sg-01ab23c4</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:ModifyNetworkInterfaceAttribute&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="InterfaceModifyVpcSecurityGroups.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.InterfaceModifyVpcSecurityGroups.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>

@@ -179,6 +179,7 @@
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
@@ -283,6 +284,13 @@
 
 <div class="viewcode-block" id="IamRoleUsage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage">[docs]</a><span class="k">class</span> <span class="nc">IamRoleUsage</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
 
+<div class="viewcode-block" id="IamRoleUsage.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">([</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;lambda&#39;</span><span class="p">,</span> <span class="s1">&#39;launch-config&#39;</span><span class="p">,</span> <span class="s1">&#39;ec2&#39;</span><span class="p">]]))</span>
+        <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s1">&#39;ecs:DescribeClusters&#39;</span><span class="p">,</span> <span class="s1">&#39;ecs:DescribeServices&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
 <div class="viewcode-block" id="IamRoleUsage.service_role_usage"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.service_role_usage">[docs]</a>    <span class="k">def</span> <span class="nf">service_role_usage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
         <span class="n">results</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scan_lambda_roles</span><span class="p">())</span>
@@ -298,8 +306,7 @@
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="IamRoleUsage.scan_lambda_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_lambda_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_lambda_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="kn">from</span> <span class="nn">c7n.resources.awslambda</span> <span class="k">import</span> <span class="n">AWSLambda</span>
-        <span class="n">manager</span> <span class="o">=</span> <span class="n">AWSLambda</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Role&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span> <span class="k">if</span> <span class="s1">&#39;Role&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="IamRoleUsage.scan_ecs_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_ecs_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_ecs_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -315,16 +322,12 @@
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="IamRoleUsage.scan_asg_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_asg_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_asg_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="kn">from</span> <span class="nn">c7n.resources.asg</span> <span class="k">import</span> <span class="n">LaunchConfig</span>
-        <span class="n">manager</span> <span class="o">=</span> <span class="n">LaunchConfig</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span>
-            <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="s1">&#39;launch-config&#39;</span><span class="p">})</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;launch-config&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;IamInstanceProfile&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
                 <span class="k">if</span> <span class="s1">&#39;IamInstanceProfile&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="IamRoleUsage.scan_ec2_roles"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleUsage.scan_ec2_roles">[docs]</a>    <span class="k">def</span> <span class="nf">scan_ec2_roles</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="kn">from</span> <span class="nn">c7n.resources.ec2</span> <span class="k">import</span> <span class="n">EC2</span>
-        <span class="n">manager</span> <span class="o">=</span> <span class="n">EC2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span>
-
+        <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">():</span>
             <span class="k">if</span> <span class="s1">&#39;Instances&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">e</span><span class="p">:</span>
@@ -352,8 +355,8 @@
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">roles</span> <span class="ow">or</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;RoleName&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles currently used.&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles currently used.&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -368,8 +371,8 @@
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">roles</span> <span class="ow">or</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;RoleName&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles not currently used.&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam roles not currently used.&quot;</span><span class="p">,</span>
+                      <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -381,7 +384,9 @@
 <span class="sd">        True: Filter roles that have an inline-policy</span>
 <span class="sd">        False: Filter roles that do not have an inline-policy</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;has-inline-policy&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListRolePolicies&#39;</span><span class="p">,)</span>
 
     <span class="k">def</span> <span class="nf">_inline_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">list_role_policies</span><span class="p">(</span>
@@ -403,6 +408,7 @@
 <div class="viewcode-block" id="UsedIamPolicies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamPolicies">[docs]</a><span class="k">class</span> <span class="nc">UsedIamPolicies</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;used&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListPolicies&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="UsedIamPolicies.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UsedIamPolicies.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachmentCount&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span></div></div>
@@ -412,6 +418,7 @@
 <div class="viewcode-block" id="UnusedIamPolicies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamPolicies">[docs]</a><span class="k">class</span> <span class="nc">UnusedIamPolicies</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;unused&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListPolicies&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="UnusedIamPolicies.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamPolicies.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachmentCount&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span></div></div>
@@ -552,6 +559,9 @@
         <span class="p">(</span><span class="s1">&#39;cert_1_&#39;</span><span class="p">,</span> <span class="s1">&#39;certs&#39;</span><span class="p">),</span>
         <span class="p">(</span><span class="s1">&#39;cert_2_&#39;</span><span class="p">,</span> <span class="s1">&#39;certs&#39;</span><span class="p">))</span>
 
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:GenerateCredentialReport&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;iam:GetCredentialReport&#39;</span><span class="p">)</span>
+
 <div class="viewcode-block" id="UserCredentialReport.get_value_or_schema_default"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.get_value_or_schema_default">[docs]</a>    <span class="k">def</span> <span class="nf">get_value_or_schema_default</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
@@ -652,6 +662,7 @@
 <div class="viewcode-block" id="UserAttachedPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy">[docs]</a><span class="k">class</span> <span class="nc">UserAttachedPolicy</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListAttachedUserPolicies&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="UserAttachedPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
@@ -680,6 +691,7 @@
 <div class="viewcode-block" id="UserAccessKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAccessKey">[docs]</a><span class="k">class</span> <span class="nc">UserAccessKey</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;access-key&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListAccessKeys&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="UserAccessKey.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAccessKey.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
@@ -709,6 +721,7 @@
 <div class="viewcode-block" id="UserMfaDevice"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserMfaDevice">[docs]</a><span class="k">class</span> <span class="nc">UserMfaDevice</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;mfa-device&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListMfaDevices&#39;</span><span class="p">,)</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">UserMfaDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
@@ -741,6 +754,8 @@
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;remove-keys&#39;</span><span class="p">,</span> <span class="n">age</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span> <span class="n">disable</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListAccessKeys&#39;</span><span class="p">,</span> <span class="s1">&#39;iam:UpdateAccessKey&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;iam:DeleteAccssKey&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="UserRemoveAccessKey.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserRemoveAccessKey.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
@@ -785,6 +800,7 @@
 <span class="sd">        False: Filter all IAM groups without any users assigned to it</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;has-users&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:GetGroup&#39;</span><span class="p">,)</span>
 
     <span class="k">def</span> <span class="nf">_user_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">get_group</span><span class="p">(</span><span class="n">GroupName</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;GroupName&#39;</span><span class="p">])[</span><span class="s1">&#39;Users&#39;</span><span class="p">])</span>
@@ -806,6 +822,7 @@
 <span class="sd">        False: Filter all groups that do not have an inline-policy attached</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;has-inline-policy&#39;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListGroupPolicies&#39;</span><span class="p">,)</span>
 
     <span class="k">def</span> <span class="nf">_inline_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">list_group_policies</span><span class="p">(</span>
