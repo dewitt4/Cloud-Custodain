@@ -424,6 +424,77 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachmentCount&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span></div></div>
 
 
+<span class="nd">@Policy</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;has-allow-all&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AllowAllIamPolicies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.AllowAllIamPolicies">[docs]</a><span class="k">class</span> <span class="nc">AllowAllIamPolicies</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if IAM policy resource(s) have allow-all IAM policy statement block.</span>
+
+<span class="sd">    This allows users to implement CIS AWS check 1.24 which states that no</span>
+<span class="sd">    policy must exist with the following requirements.</span>
+
+<span class="sd">    Policy must have &#39;Action&#39; and Resource = &#39;*&#39; with &#39;Effect&#39; = &#39;Allow&#39;</span>
+
+<span class="sd">    The policy will trigger on the following IAM policy (statement).</span>
+<span class="sd">    For example:</span>
+
+<span class="sd">    .. code-block: json</span>
+<span class="sd">     {</span>
+<span class="sd">         &#39;Version&#39;: &#39;2012-10-17&#39;,</span>
+<span class="sd">         &#39;Statement&#39;: [{</span>
+<span class="sd">             &#39;Action&#39;: &#39;*&#39;,</span>
+<span class="sd">             &#39;Resource&#39;: &#39;*&#39;,</span>
+<span class="sd">             &#39;Effect&#39;: &#39;Allow&#39;</span>
+<span class="sd">         }]</span>
+<span class="sd">     }</span>
+
+<span class="sd">    Additionally, the policy checks if the statement has no &#39;Condition&#39; or</span>
+<span class="sd">    &#39;NotAction&#39;</span>
+
+<span class="sd">    For example, if the user wants to check all used policies and filter on</span>
+<span class="sd">    allow all:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">     - name: iam-no-used-all-all-policy</span>
+<span class="sd">       resource: iam-policy</span>
+<span class="sd">       filters:</span>
+<span class="sd">         - type: used</span>
+<span class="sd">         - type: has-allow-all</span>
+
+<span class="sd">    Note that scanning and getting all policies and all statements can take</span>
+<span class="sd">    a while. Use it sparingly or combine it with filters such as &#39;used&#39; as</span>
+<span class="sd">    above.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;has-allow-all&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListPolicies&#39;</span><span class="p">,</span> <span class="s1">&#39;iam:ListPolicyVersions&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AllowAllIamPolicies.has_allow_all_policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.AllowAllIamPolicies.has_allow_all_policy">[docs]</a>    <span class="k">def</span> <span class="nf">has_allow_all_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">statements</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_policy_version</span><span class="p">(</span>
+            <span class="n">PolicyArn</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">],</span>
+            <span class="n">VersionId</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DefaultVersionId&#39;</span><span class="p">]</span>
+        <span class="p">)[</span><span class="s1">&#39;PolicyVersion&#39;</span><span class="p">][</span><span class="s1">&#39;Document&#39;</span><span class="p">][</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">statements</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">statements</span> <span class="o">=</span> <span class="p">[</span><span class="n">statements</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">statements</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;Condition&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span> <span class="ow">and</span>
+                    <span class="s1">&#39;Action&#39;</span> <span class="ow">in</span> <span class="n">s</span> <span class="ow">and</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Action&#39;</span><span class="p">],</span> <span class="n">basestring</span><span class="p">)</span> <span class="ow">and</span>
+                    <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Action&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;*&quot;</span> <span class="ow">and</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Resource&#39;</span><span class="p">],</span> <span class="n">basestring</span><span class="p">)</span> <span class="ow">and</span>
+                    <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Resource&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;*&quot;</span> <span class="ow">and</span>
+                    <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Effect&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Allow&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="AllowAllIamPolicies.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.AllowAllIamPolicies.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_allow_all_policy</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">r</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> iam policies have allow all.&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
 <span class="c1">###############################</span>
 <span class="c1">#    IAM Instance Profiles    #</span>
 <span class="c1">###############################</span>
@@ -582,7 +653,7 @@
         <span class="k">return</span> <span class="n">report</span></div>
 
     <span class="nd">@classmethod</span>
-<div class="viewcode-block" id="UserCredentialReport.process_user_record"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.process_user_record">[docs]</a>    <span class="k">def</span> <span class="nf">process_user_record</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">info</span><span class="p">):</span>
+<div class="viewcode-block" id="UserCredentialReport.process_user_record"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserCredentialReport.process_user_record">[docs]</a>    <span class="k">def</span> <span class="nf">process_user_record</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">info</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Type convert the csv record, modifies in place.&quot;&quot;&quot;</span>
         <span class="n">keys</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
         <span class="c1"># Value conversion</span>
@@ -595,7 +666,7 @@
             <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
                 <span class="n">info</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="c1"># Object conversion</span>
-        <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">list_sub_objects</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">list_sub_objects</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">([(</span><span class="n">k</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">):],</span> <span class="n">info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
                         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">p</span><span class="p">)])</span>
             <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;active&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
@@ -724,7 +795,7 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListMfaDevices&#39;</span><span class="p">,)</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">UserMfaDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">UserMfaDevice</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MFADevices&#39;</span>
 
 <div class="viewcode-block" id="UserMfaDevice.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserMfaDevice.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
