@@ -651,7 +651,6 @@
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots_set</span><span class="p">:</span>
             <span class="n">c</span><span class="o">.</span><span class="n">delete_snapshot</span><span class="p">(</span><span class="n">SnapshotName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span></div></div>
 
-
 <span class="c1"># added mark-for-op</span>
 <span class="nd">@ElastiCacheSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="ElastiCacheSnapshotTagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.ElastiCacheSnapshotTagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">ElastiCacheSnapshotTagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
@@ -687,6 +686,62 @@
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
             <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
+
+<span class="nd">@ElastiCacheSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;copy-cluster-tags&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="CopyClusterTags"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.CopyClusterTags">[docs]</a><span class="k">class</span> <span class="nc">CopyClusterTags</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Copy specified tags from Elasticache cluster to Snapshot</span>
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            - name: elasticache-test</span>
+<span class="sd">              resource: cache-snapshot</span>
+<span class="sd">              filters:</span>
+<span class="sd">                 - type: value</span>
+<span class="sd">                   key: SnapshotName</span>
+<span class="sd">                   op: in</span>
+<span class="sd">                   value:</span>
+<span class="sd">                    - test-tags-backup</span>
+<span class="sd">              actions:</span>
+<span class="sd">                - type: copy-cluster-tags</span>
+<span class="sd">                  tags:</span>
+<span class="sd">                    - tag1</span>
+<span class="sd">                    - tag2</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;copy-cluster-tags&#39;</span><span class="p">,</span>
+        <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="s1">&#39;minItems&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+        <span class="n">required</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,))</span>
+
+<div class="viewcode-block" id="CopyClusterTags.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.CopyClusterTags.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cache-cluster&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span>
+        <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;elasticache:AddTagsToResource&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
+<div class="viewcode-block" id="CopyClusterTags.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.CopyClusterTags.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">):</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Modifying </span><span class="si">%d</span><span class="s2"> ElastiCache snapshots&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">snapshots</span><span class="p">))</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
+        <span class="n">clusters</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]:</span> <span class="n">cluster</span> <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span>
+            <span class="n">ElastiCacheCluster</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="p">}</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
+            <span class="n">tags_cluster</span> <span class="o">=</span> <span class="n">clusters</span><span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]][</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+            <span class="n">only_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">[])</span>  <span class="c1"># Specify tags to copy</span>
+            <span class="n">extant_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">())}</span>
+            <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags_cluster</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">only_tags</span> <span class="ow">and</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">extant_tags</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+                    <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">,</span> <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div></div>
 
 <span class="c1"># added unmark</span>
 <span class="nd">@ElastiCacheSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
