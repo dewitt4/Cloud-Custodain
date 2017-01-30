@@ -171,10 +171,12 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">print_function</span>
 
 <span class="kn">import</span> <span class="nn">argparse</span>
 <span class="kn">import</span> <span class="nn">importlib</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">pdb</span>
 <span class="kn">import</span> <span class="nn">sys</span>
 <span class="kn">import</span> <span class="nn">traceback</span>
@@ -355,6 +357,9 @@
     <span class="n">version</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
         <span class="s2">&quot;-v&quot;</span><span class="p">,</span> <span class="s2">&quot;--verbose&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
         <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Verbose Logging&quot;</span><span class="p">)</span>
+    <span class="n">version</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--debug&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Print info for bug reports&quot;</span><span class="p">)</span>
 
     <span class="n">validate_desc</span> <span class="o">=</span> <span class="p">(</span>
         <span class="s2">&quot;Validate config files against the custodian jsonschema&quot;</span><span class="p">)</span>
@@ -403,7 +408,27 @@
 
 <div class="viewcode-block" id="cmd_version"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.cmd_version">[docs]</a><span class="k">def</span> <span class="nf">cmd_version</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
     <span class="kn">from</span> <span class="nn">c7n.version</span> <span class="k">import</span> <span class="n">version</span>
-    <span class="nb">print</span><span class="p">(</span><span class="n">version</span><span class="p">)</span></div>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="n">indent</span> <span class="o">=</span> <span class="mi">13</span>
+    <span class="kn">import</span> <span class="nn">pprint</span>
+    <span class="n">pp</span> <span class="o">=</span> <span class="n">pprint</span><span class="o">.</span><span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="n">indent</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Please copy/paste the following info along with any bug reports:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Custodian:  &quot;</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+    <span class="n">pyversion</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">*</span><span class="n">indent</span><span class="p">)</span>  <span class="c1"># For readability</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Python:     &quot;</span><span class="p">,</span> <span class="n">pyversion</span><span class="p">)</span>
+    <span class="c1"># os.uname is only available on recent versions of Unix</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Platform:   &quot;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">uname</span><span class="p">())</span>
+    <span class="k">except</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Platform:  &quot;</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Using venv: &quot;</span><span class="p">,</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s1">&#39;real_prefix&#39;</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PYTHONPATH: &quot;</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">pprint</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="main"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
