@@ -173,15 +173,25 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">,</span><span class="n">get_retry</span><span class="p">,</span> 
+    <span class="n">chunks</span><span class="p">,</span> <span class="n">snapshot_identifier</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">TagDelayedAction</span><span class="p">,</span> <span class="n">RemoveTag</span>
 
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
+<span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;dynamodb-table.filters&#39;</span><span class="p">)</span>
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;dynamodb-table&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Table"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Table">[docs]</a><span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
@@ -195,9 +205,44 @@
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;TableName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreationDateTime&#39;</span>
-        <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;TableName&#39;</span></div></div>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;TableName&#39;</span></div>
+
+    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dynamodb:ListTagsOfResource&#39;</span><span class="p">)</span>
+    
+<div class="viewcode-block" id="Table.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Table.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tables</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">Table</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">_dynamodb_table_tags</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">(),</span>
+            <span class="n">resources</span><span class="p">,</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> 
+            <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">))</span></div></div>
 
 
+<span class="k">def</span> <span class="nf">_dynamodb_table_tags</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Augment DynamoDB tables with their respective tags</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">process_tags</span><span class="p">(</span><span class="n">table</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dynamodb&#39;</span><span class="p">)</span>
+        <span class="n">arn</span> <span class="o">=</span> <span class="n">table</span><span class="p">[</span><span class="s1">&#39;TableArn&#39;</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">tag_list</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">list_tags_of_resource</span><span class="p">,</span>
+                <span class="n">ResourceArn</span><span class="o">=</span><span class="n">arn</span><span class="p">)[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Exception getting DynamoDB tags  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">table</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tag_list</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">table</span>
+    
+    <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">tables</span><span class="p">))</span>
+    
+    
 <div class="viewcode-block" id="StatusFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.StatusFilter">[docs]</a><span class="k">class</span> <span class="nc">StatusFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter tables by status&quot;&quot;&quot;</span>
 
@@ -212,6 +257,69 @@
         <span class="k">return</span> <span class="n">result</span></div></div>
 
 
+<span class="nd">@Table</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to specify an action to occur at a later date</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: dynamo-mark-tag-compliance</span>
+<span class="sd">                resource: dynamodb-table</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:custodian_cleanup&quot;: absent</span>
+<span class="sd">                  - &quot;tag:OwnerName&quot;: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: mark-for-op</span>
+<span class="sd">                    tag: custodian_cleanup</span>
+<span class="sd">                    msg: &quot;Cluster does not have valid OwnerName tag: {op}@{action_date}&quot;</span>
+<span class="sd">                    op: delete</span>
+<span class="sd">                    days: 7</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permission</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dynamodb:TagResource&#39;</span><span class="p">,)</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">1</span>
+
+<div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;dynamodb&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TableArn&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">tag_resource</span><span class="p">(</span><span class="n">ResourceArn</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>    </div></div>
+
+
+<span class="nd">@Table</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="UntagTable"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.UntagTable">[docs]</a><span class="k">class</span> <span class="nc">UntagTable</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to remove tag(s) on a resource</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: dynamodb-remove-tag</span>
+<span class="sd">                resource: dynamodb-table</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:OutdatedTag&quot;: present</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: remove-tag</span>
+<span class="sd">                    tags: [&quot;OutdatedTag&quot;]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dynamodb:UntagResource&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="UntagTable.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.UntagTable.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dynamodb&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TableArn&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">untag_resource</span><span class="p">(</span>
+                <span class="n">ResourceArn</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
+            
+            
 <span class="nd">@Table</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="DeleteTable"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.DeleteTable">[docs]</a><span class="k">class</span> <span class="nc">DeleteTable</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StatusFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to delete dynamodb tables</span>
