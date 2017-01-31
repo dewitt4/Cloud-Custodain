@@ -39,7 +39,7 @@
         <link rel="search" title="Search" href="../search.html"/>
     <link rel="top" title="Cloud Custodian  documentation" href="../index.html"/>
         <link rel="next" title="Mu - Lambda Lifecycle Management" href="mu.html"/>
-        <link rel="prev" title="Tag Compliance Across Resources (EC2, ASG, ELB, S3, etc)" href="../usecases/usecases/tagcompliance.html"/> 
+        <link rel="prev" title="Tag Compliance Across Resources (EC2, ASG, ELB, S3, etc)" href="../usecases/tagcompliance.html"/> 
 
   
   <script src="../_static/js/modernizr.min.js"></script>
@@ -99,9 +99,12 @@
 <p class="caption"><span class="caption-text">Working with AWS Lambda</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Lambda Support</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#cloudwatch-events">CloudWatch Events</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#cloud-custodian-integration">Cloud Custodian Integration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cloudwatch-events">CloudWatch Events</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#cloud-custodian-integration">Cloud Custodian Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#config-rules">Config Rules</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="mu.html">Mu - Lambda Lifecycle Management</a></li>
@@ -178,9 +181,8 @@ realtime policies against any AWS product.</p>
 <p>Additionally, for EC2 instances we can provide mandatory policy
 compliance - this means the non-compliant resources never
 became available.</p>
-</div>
 <div class="section" id="cloud-custodian-integration">
-<h2>Cloud Custodian Integration<a class="headerlink" href="#cloud-custodian-integration" title="Permalink to this headline">¶</a></h2>
+<h3>Cloud Custodian Integration<a class="headerlink" href="#cloud-custodian-integration" title="Permalink to this headline">¶</a></h3>
 <p>Custodian provides for policy level execution against any CWE event
 stream. Each Custodian policy can be deployed as an independent Lambda
 function. The only difference between a Custodian policy that runs in
@@ -192,7 +194,7 @@ policy filters, and apply the policy actions to matching resources.</p>
 <p><a class="reference internal" href="mu.html#mu"><span class="std std-ref">Mu</span></a> is the letter after Lambda, Lambda is a keyword in python.</p>
 </div>
 <div class="section" id="configuration">
-<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
+<h3>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h3>
 <p>Examples</p>
 <div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
 
@@ -263,6 +265,52 @@ policy filters, and apply the policy actions to matching resources.</p>
 </div>
 </div>
 </div>
+<div class="section" id="config-rules">
+<h2>Config Rules<a class="headerlink" href="#config-rules" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="http://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules.html">AWS Config rules</a>
+allow you to invoke logic in response to configuration changes in your AWS
+environment, and Cloud Custodian is the easiest way to write and provision
+Config rules.</p>
+<p>In this section we&#8217;ll look at how we would deploy the <a class="reference internal" href="../quickstart/index.html#quickstart"><span class="std std-ref">quickstart</span></a> example using Config. Before you proceed, make sure you&#8217;ve
+removed the <code class="docutils literal"><span class="pre">Custodian</span></code> tag from any EC2 instance left over from the
+quickstart.</p>
+<p>First, modify <code class="docutils literal"><span class="pre">custodian.yml</span></code> to specify a mode type of <code class="docutils literal"><span class="pre">config-rule</span></code>.
+You&#8217;ll also need the ARN of an IAM role to assume when running the Lambda that
+Custodian is going to install for you.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">my-first-policy</span>
+    <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">config-rule</span>
+        <span class="l l-Scalar l-Scalar-Plain">role</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/some-role</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Custodian&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
+    <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
+</pre></div>
+</div>
+<p>Now deploy the policy:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>custodian run -c custodian.yml -s .
+</pre></div>
+</div>
+<p>That should give you log output like this:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="mi">2017</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">25</span> <span class="mi">05</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">01</span><span class="p">,</span><span class="mi">539</span><span class="p">:</span> <span class="n">custodian</span><span class="o">.</span><span class="n">policy</span><span class="p">:</span><span class="n">INFO</span> <span class="n">Provisioning</span> <span class="n">policy</span> <span class="k">lambda</span> <span class="n">my</span><span class="o">-</span><span class="n">first</span><span class="o">-</span><span class="n">policy</span>
+<span class="mi">2017</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">25</span> <span class="mi">05</span><span class="p">:</span><span class="mi">43</span><span class="p">:</span><span class="mi">04</span><span class="p">,</span><span class="mi">683</span><span class="p">:</span> <span class="n">custodian</span><span class="o">.</span><span class="k">lambda</span><span class="p">:</span><span class="n">INFO</span> <span class="n">Publishing</span> <span class="n">custodian</span> <span class="n">policy</span> <span class="k">lambda</span> <span class="n">function</span> <span class="n">custodian</span><span class="o">-</span><span class="n">my</span><span class="o">-</span><span class="n">first</span><span class="o">-</span><span class="n">policy</span>
+</pre></div>
+</div>
+<p>Go check the AWS console to see the Lambda as well as the Config rule that
+Custodian created. The Config rule should be listed as &#8220;Compliant&#8221; or &#8220;No
+results reported&#8221; (if not, be sure you removed the <code class="docutils literal"><span class="pre">Custodian</span></code> tag from any
+instance left over from the quickstart).</p>
+<p>Now for the fun part! With your new policy installed, go ahead and create an
+EC2 instance with a <code class="docutils literal"><span class="pre">Custodian</span></code> tag (any non-empty value), and wait (events
+from Config are effectively delayed 15m up to 6hrs on tag changes). If all goes
+well, you should eventually see that your new custom Config rule notices the
+EC2 instance with the <code class="docutils literal"><span class="pre">Custodian</span></code> tag, and stops it according to your policy.</p>
+<p>Congratulations! You have now installed your policy to run under Config rather
+than from your command line.</p>
+</div>
+</div>
 
 
            </div>
@@ -274,7 +322,7 @@ policy filters, and apply the policy actions to matching resources.</p>
         <a href="mu.html" class="btn btn-neutral float-right" title="Mu - Lambda Lifecycle Management" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../usecases/usecases/tagcompliance.html" class="btn btn-neutral" title="Tag Compliance Across Resources (EC2, ASG, ELB, S3, etc)" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../usecases/tagcompliance.html" class="btn btn-neutral" title="Tag Compliance Across Resources (EC2, ASG, ELB, S3, etc)" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
