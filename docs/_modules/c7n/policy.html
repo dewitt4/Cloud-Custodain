@@ -229,38 +229,54 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
 
-<div class="viewcode-block" id="PolicyCollection.policies"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.policies">[docs]</a>    <span class="k">def</span> <span class="nf">policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filters</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="c1"># self.options is the CLI options specified in cli.setup_parser()</span>
-        <span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># We store all the policies passed in so we can refilter later</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_all_policies</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[]):</span>
-            <span class="n">policy</span> <span class="o">=</span> <span class="n">Policy</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="n">session_factory</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test_session_factory</span><span class="p">())</span>
-            <span class="k">if</span> <span class="s1">&#39;resource_type&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
-                    <span class="n">policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_all_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">Policy</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">session_factory</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test_session_factory</span><span class="p">()))</span>
+        
+        <span class="c1"># Do an initial filtering</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;resource_type&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">policy_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;policy_filter&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policies</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">policy_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">filters</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">policies</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">unfiltered_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_all_policies</span>
 
-        <span class="k">return</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span> <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">filters</span><span class="p">)]</span></div>
+<div class="viewcode-block" id="PolicyCollection.filter"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.filter">[docs]</a>    <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">unfiltered_policies</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">resource_type</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span> <span class="o">!=</span> <span class="n">resource_type</span><span class="p">:</span>
+                    <span class="k">continue</span>
 
-    <span class="nb">filter</span> <span class="o">=</span> <span class="n">policies</span>
+            <span class="k">if</span> <span class="n">policy_name</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">):</span>
+                    <span class="k">continue</span>
 
+            <span class="n">policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">policies</span></div>
+    
     <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">())</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">__contains__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_name</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">policy_name</span> <span class="ow">in</span> <span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policies&#39;</span><span class="p">]]</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">policy_name</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
 
     <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">resource_types</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;resource types used by the collection.&quot;&quot;&quot;</span>
         <span class="n">rtypes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">:</span>
             <span class="n">rtypes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">rtypes</span>
 
