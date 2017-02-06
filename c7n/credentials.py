@@ -66,10 +66,14 @@ def assumed_session(role_arn, session_name, session=None, region=None, external_
     retry = get_retry(('Throttling',))
 
     def refresh():
+
+        parameters = {"RoleArn": role_arn, "RoleSessionName": session_name}
+
+        if not external_id is None:
+            parameters['ExternalId'] = external_id
+
         credentials = retry(
-            session.client('sts').assume_role,
-            RoleArn=role_arn,
-            RoleSessionName=session_name, ExternalId=external_id)['Credentials']
+            session.client('sts').assume_role, **parameters)['Credentials']
         return dict(
             access_key=credentials['AccessKeyId'],
             secret_key=credentials['SecretAccessKey'],
