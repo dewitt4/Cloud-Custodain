@@ -173,6 +173,7 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">print_function</span>
 
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">Counter</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span><span class="p">,</span> <span class="n">datetime</span>
 <span class="kn">from</span> <span class="nn">functools</span> <span class="k">import</span> <span class="n">wraps</span>
 <span class="kn">import</span> <span class="nn">inspect</span>
@@ -201,36 +202,67 @@
     <span class="nd">@wraps</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">_load_policies</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
         <span class="n">load_resources</span><span class="p">()</span>
-        <span class="n">policies</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
-        
-        <span class="k">if</span> <span class="n">policies</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: empty policy file.  Nothing to do.&#39;</span><span class="p">)</span>
+
+        <span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_policies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">collection</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
+                <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: policy file does not exist (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
+                <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: problem loading policy file (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
+                <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="k">if</span> <span class="n">collection</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contained no policies.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contains </span><span class="si">{}</span><span class="s1"> policies (after filtering)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">collection</span><span class="p">)))</span>
+                <span class="n">policies</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">policies</span><span class="p">)</span>
+                <span class="n">all_policies</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">unfiltered_policies</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">errors</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Found </span><span class="si">{}</span><span class="s1"> errors.  Exiting.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">errors</span><span class="p">))</span>
             <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Warning: no policies matched the filters provided.&quot;</span><span class="p">)</span>
-            
-            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Filters:&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">policy_filter</span><span class="p">:</span>
-                <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    Policy name filter (-p):&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">policy_filter</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
-                <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    Resource type filter (-t):&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
+            <span class="n">_print_no_policies_warning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">all_policies</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
-            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available policies:&quot;</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="n">policies</span><span class="o">.</span><span class="n">unfiltered_policies</span><span class="p">:</span>
-                <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    - </span><span class="si">{}</span><span class="s2"> (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">))</span>
-            <span class="n">eprint</span><span class="p">()</span>
+        <span class="c1"># Do not allow multiple policies with the same name, even across files</span>
+        <span class="n">counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">([</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">policy</span><span class="p">,</span> <span class="n">count</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: duplicate policy name &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="p">))</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="o">.</span><span class="n">policies</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_load_policies</span></div>
 
 
+<span class="k">def</span> <span class="nf">_print_no_policies_warning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">policy_filter</span> <span class="ow">or</span> <span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Warning: no policies matched the filters provided.&quot;</span><span class="p">)</span>
+
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Filters:&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">policy_filter</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    Policy name filter (-p):&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">policy_filter</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    Resource type filter (-t):&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">resource_type</span><span class="p">)</span>
+
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Available policies:&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    - </span><span class="si">{}</span><span class="s2"> (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">))</span>
+        <span class="n">eprint</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: empty policy file(s).  Nothing to do.&#39;</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="validate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.validate">[docs]</a><span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
     <span class="n">load_resources</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># support the old -c option</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
         <span class="c1"># no configs to test</span>
         <span class="c1"># We don&#39;t have the parser object, so fake ArgumentParser.error</span>
@@ -277,7 +309,7 @@
 
         <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Configuration invalid: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">config_file</span><span class="p">))</span>
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot; </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
 
@@ -312,10 +344,6 @@
 
 <span class="nd">@policy_command</span>
 <div class="viewcode-block" id="report"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.report">[docs]</a><span class="k">def</span> <span class="nf">report</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: No policy supplied&quot;</span><span class="p">)</span>
-        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
         <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Report subcommand can only operate on one policy&quot;</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
@@ -337,10 +365,6 @@
 
 <span class="nd">@policy_command</span>
 <div class="viewcode-block" id="logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.logs">[docs]</a><span class="k">def</span> <span class="nf">logs</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: No policy supplied&quot;</span><span class="p">)</span>
-        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
         <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Log subcommand can only operate on one policy&quot;</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
@@ -529,6 +553,30 @@
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Getting </span><span class="si">%s</span><span class="s1"> metrics&#39;</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
         <span class="n">data</span><span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get_metrics</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">dumps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="version_cmd"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.version_cmd">[docs]</a><span class="k">def</span> <span class="nf">version_cmd</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+    <span class="kn">from</span> <span class="nn">c7n.version</span> <span class="k">import</span> <span class="n">version</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="n">indent</span> <span class="o">=</span> <span class="mi">13</span>
+    <span class="n">pp</span> <span class="o">=</span> <span class="n">pprint</span><span class="o">.</span><span class="n">PrettyPrinter</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="n">indent</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Please copy/paste the following info along with any bug reports:</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Custodian:  &quot;</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span>
+    <span class="n">pyversion</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span><span class="o">*</span><span class="n">indent</span><span class="p">)</span>  <span class="c1"># For readability</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Python:     &quot;</span><span class="p">,</span> <span class="n">pyversion</span><span class="p">)</span>
+    <span class="c1"># os.uname is only available on recent versions of Unix</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Platform:   &quot;</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">uname</span><span class="p">())</span>
+    <span class="k">except</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Platform:  &quot;</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Using venv: &quot;</span><span class="p">,</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">sys</span><span class="p">,</span> <span class="s1">&#39;real_prefix&#39;</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PYTHONPATH: &quot;</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">pprint</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="eprint"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.eprint">[docs]</a><span class="k">def</span> <span class="nf">eprint</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
