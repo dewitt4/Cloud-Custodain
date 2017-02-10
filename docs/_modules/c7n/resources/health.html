@@ -174,26 +174,15 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
-<span class="p">)</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
-<span class="p">)</span>
-
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-
-<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">local_session</span>
-
-<span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;health.filters&#39;</span><span class="p">)</span>
-<span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;health.actions&#39;</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span>
 
 
-<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;health-events&#39;</span><span class="p">)</span>
+<span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;health-event&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="HealthEvents"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.health.HealthEvents">[docs]</a><span class="k">class</span> <span class="nc">HealthEvents</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Query resource manager for AWS health events&quot;&quot;&quot;</span>
+    <span class="sd">&quot;&quot;&quot;Query resource manager for AWS health events</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="HealthEvents.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.health.HealthEvents.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;health&#39;</span>
@@ -204,24 +193,25 @@
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">filter_type</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;startTime&#39;</span>
-        <span class="n">config_type</span> <span class="o">=</span> <span class="s1">&#39;AWS::Health::Event&#39;</span></div>
+        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;startTime&#39;</span></div>
 
-    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
-    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">actions</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;health:DescribeEvents&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;health:DescribeEventDetails&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;health:DescribeAffectedEntities&#39;</span><span class="p">)</span>
+
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">HealthEvents</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">queries</span> <span class="o">=</span> <span class="n">QueryFilter</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">,</span> <span class="p">[{</span><span class="s1">&#39;eventStatusCodes&#39;</span><span class="p">:</span> <span class="s1">&#39;open&#39;</span><span class="p">},{</span><span class="s1">&#39;eventTypeCategories&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;issue&#39;</span><span class="p">,</span> <span class="s1">&#39;accountNotification&#39;</span><span class="p">]}]))</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;health:DescribeEvents&#39;</span><span class="p">,)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">,</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s1">&#39;eventStatusCodes&#39;</span><span class="p">:</span> <span class="s1">&#39;open&#39;</span><span class="p">},</span>
+                <span class="p">{</span><span class="s1">&#39;eventTypeCategories&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;issue&#39;</span><span class="p">,</span> <span class="s1">&#39;accountNotification&#39;</span><span class="p">]}]))</span>
 
 <div class="viewcode-block" id="HealthEvents.resource_query"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.health.HealthEvents.resource_query">[docs]</a>    <span class="k">def</span> <span class="nf">resource_query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">qf</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queries</span><span class="p">:</span>
             <span class="n">qd</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
-            <span class="nb">print</span> <span class="n">qd</span>
             <span class="k">if</span> <span class="n">qd</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">qf</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">qv</span> <span class="ow">in</span> <span class="n">qf</span><span class="p">[</span><span class="n">qd</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]]:</span>
                     <span class="k">if</span> <span class="n">qv</span> <span class="ow">in</span> <span class="n">qf</span><span class="p">[</span><span class="n">qd</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]]:</span>
@@ -242,18 +232,29 @@
 
 <div class="viewcode-block" id="HealthEvents.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.health.HealthEvents.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;health&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;eventDescription&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_event_details</span><span class="p">(</span>
-                <span class="n">eventArns</span><span class="o">=</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]])[</span><span class="s1">&#39;successfulSet&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;eventDescription&#39;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;eventTypeCategory&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="sa">u</span><span class="s1">&#39;accountNotification&#39;</span><span class="p">:</span>
-                <span class="n">affectedEntities</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_affected_entities</span><span class="p">(</span>
-                    <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eventArns&#39;</span><span class="p">:[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]]})[</span><span class="s1">&#39;entities&#39;</span><span class="p">]</span>
-                <span class="k">del</span> <span class="n">affectedEntities</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;eventArn&#39;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">affectedEntities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;awsAccountId&#39;</span><span class="p">):</span>
-                    <span class="k">del</span> <span class="n">affectedEntities</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;awsAccountId&#39;</span><span class="p">]</span>
-                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;affectedEntities&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">affectedEntities</span>
+        <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
+            <span class="n">event_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">}</span>
+            <span class="n">event_details</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_event_details</span><span class="p">(</span>
+                <span class="n">eventArns</span><span class="o">=</span><span class="n">event_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="s1">&#39;successfulSet&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">event_details</span><span class="p">:</span>
+                <span class="n">event_map</span><span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;event&#39;</span><span class="p">][</span><span class="s1">&#39;arn&#39;</span><span class="p">]][</span>
+                    <span class="s1">&#39;Description&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;eventDescription&#39;</span><span class="p">][</span><span class="s1">&#39;latestDescription&#39;</span><span class="p">]</span>
+
+            <span class="n">event_arns</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span>
+                          <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;eventTypeCategory&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;accountNotification&#39;</span><span class="p">]</span>
+            
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">event_arns</span><span class="p">:</span>
+                <span class="k">continue</span>
+            
+            <span class="n">entities</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_affected_entities</span><span class="p">(</span>
+                <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eventArns&#39;</span><span class="p">:</span> <span class="n">event_arns</span><span class="p">})[</span><span class="s1">&#39;entities&#39;</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
+                <span class="n">event_map</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;eventArn&#39;</span><span class="p">)]</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                    <span class="s1">&#39;AffectedEntities&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">resources</span></div></div>
+
 
 <span class="n">HEALTH_VALID_FILTERS</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;availability-zone&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -261,7 +262,7 @@
     <span class="s1">&#39;regions&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;services&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;eventStatusCodes&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;closed&#39;</span><span class="p">,</span> <span class="s1">&#39;upcoming&#39;</span><span class="p">},</span>
-    <span class="s1">&#39;eventTypeCodes&#39;</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="s1">&#39;types&#39;</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">}</span>
 
 
