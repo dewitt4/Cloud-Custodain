@@ -187,7 +187,7 @@
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-group&#39;</span><span class="p">)</span>
@@ -742,60 +742,90 @@
 
 
 <span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
-<div class="viewcode-block" id="UserAttachedPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy">[docs]</a><span class="k">class</span> <span class="nc">UserAttachedPolicy</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+<div class="viewcode-block" id="UserPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserPolicy">[docs]</a><span class="k">class</span> <span class="nc">UserPolicy</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter IAM users based on attached policy values</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">)</span>
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: iam-users-with-admin-access</span>
+<span class="sd">                resource: iam-user</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: policy</span>
+<span class="sd">                    key: &#39;PolicyName&#39;</span>
+<span class="sd">                    value: &#39;AdministratorAccess&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;policy&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListAttachedUserPolicies&#39;</span><span class="p">,)</span>
 
-<div class="viewcode-block" id="UserAttachedPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAttachedPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="UserPolicy.user_policies"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserPolicy.user_policies">[docs]</a>    <span class="k">def</span> <span class="nf">user_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_set</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_set</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;c7n:Policies&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">u</span><span class="p">:</span>
+                <span class="n">u</span><span class="p">[</span><span class="s1">&#39;c7n:Policies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">aps</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_attached_user_policies</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">u</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;AttachedPolicies&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">ap</span> <span class="ow">in</span> <span class="n">aps</span><span class="p">:</span>
+                <span class="n">u</span><span class="p">[</span><span class="s1">&#39;c7n:Policies&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">get_policy</span><span class="p">(</span><span class="n">PolicyArn</span><span class="o">=</span><span class="n">ap</span><span class="p">[</span><span class="s1">&#39;PolicyArn&#39;</span><span class="p">])[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span></div>
 
-        <span class="k">def</span> <span class="nf">_user_policies</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
-            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;AttachedPolicies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_attached_user_policies</span><span class="p">(</span>
-                <span class="n">UserName</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;AttachedPolicies&#39;</span><span class="p">]</span>
-
+<div class="viewcode-block" id="UserPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">user_set</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;AttachedPolicies&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users policies&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_user_policies</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
+                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users policies&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">user_policies</span><span class="p">,</span> <span class="n">user_set</span><span class="p">))</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AttachedPolicies&#39;</span><span class="p">]:</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:Policies&#39;</span><span class="p">]:</span>
+                <span class="nb">print</span> <span class="n">p</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="ow">and</span> <span class="n">r</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">matched</span><span class="p">:</span>
                     <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-                    <span class="k">break</span>
         <span class="k">return</span> <span class="n">matched</span></div></div>
 
 
 <span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;access-key&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="UserAccessKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAccessKey">[docs]</a><span class="k">class</span> <span class="nc">UserAccessKey</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter IAM users based on access-key values</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: iam-users-with-active-keys</span>
+<span class="sd">                resource: iam-user</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: access-key</span>
+<span class="sd">                    key: &#39;Status&#39;</span>
+<span class="sd">                    value: &#39;Active&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;access-key&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListAccessKeys&#39;</span><span class="p">,)</span>
 
+<div class="viewcode-block" id="UserAccessKey.user_keys"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAccessKey.user_keys">[docs]</a>    <span class="k">def</span> <span class="nf">user_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_set</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_set</span><span class="p">:</span>
+            <span class="n">u</span><span class="p">[</span><span class="s1">&#39;c7n:AccessKeys&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_access_keys</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">u</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;AccessKeyMetadata&#39;</span><span class="p">]</span></div>
+
 <div class="viewcode-block" id="UserAccessKey.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserAccessKey.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-
-        <span class="k">def</span> <span class="nf">_user_keys</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
-            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;AccessKeys&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_access_keys</span><span class="p">(</span>
-                <span class="n">UserName</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;AccessKeyMetadata&#39;</span><span class="p">]</span>
-
+        <span class="n">user_set</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;AccessKeys&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; api keys&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_user_keys</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
+                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; api keys&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">user_keys</span><span class="p">,</span> <span class="n">user_set</span><span class="p">))</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AccessKeys&#39;</span><span class="p">]:</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:AccessKeys&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">k</span><span class="p">):</span>
                     <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-                    <span class="k">break</span>
         <span class="k">return</span> <span class="n">matched</span></div></div>
 
 
