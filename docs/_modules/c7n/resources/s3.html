@@ -521,8 +521,6 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">perms</span> <span class="ow">or</span> <span class="p">(</span><span class="n">perms</span> <span class="ow">and</span> <span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">perms</span><span class="p">):</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grant</span><span class="p">[</span><span class="s1">&#39;Permission&#39;</span><span class="p">])</span>
 
-        <span class="n">c</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
-
         <span class="k">if</span> <span class="n">results</span><span class="p">:</span>
             <span class="n">set_annotation</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="s1">&#39;GlobalPermissions&#39;</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">b</span></div></div>
@@ -1034,7 +1032,7 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ScanBucket</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
 
 <div class="viewcode-block" id="ScanBucket.get_bucket_style"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.get_bucket_style">[docs]</a>    <span class="k">def</span> <span class="nf">get_bucket_style</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">(</span>
@@ -1057,30 +1055,37 @@
         <span class="k">return</span> <span class="n">keys</span></div>
 
 <div class="viewcode-block" id="ScanBucket.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_with_futures</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_denied_buckets_file</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+    <span class="k">def</span> <span class="nf">_process_with_futures</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">helper</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
-                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">)]</span> <span class="o">=</span> <span class="n">b</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">helper</span><span class="p">,</span> <span class="n">b</span><span class="p">)]</span> <span class="o">=</span> <span class="n">b</span>
             <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="n">b</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
                         <span class="s2">&quot;Error on bucket:</span><span class="si">%s</span><span class="s2"> region:</span><span class="si">%s</span><span class="s2"> policy:</span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                         <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="s1">&#39;unknown&#39;</span><span class="p">),</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">),</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
                     <span class="k">continue</span>
                 <span class="n">result</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
                 <span class="k">if</span> <span class="n">result</span><span class="p">:</span>
                     <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span>
 
+<div class="viewcode-block" id="ScanBucket.write_denied_buckets_file"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.write_denied_buckets_file">[docs]</a>    <span class="k">def</span> <span class="nf">write_denied_buckets_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">:</span>
             <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
                     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;denied.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
-                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="p">,</span> <span class="n">fh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">return</span> <span class="n">results</span></div>
+                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="p">),</span> <span class="n">fh</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="ScanBucket.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ScanBucket.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
@@ -1108,7 +1113,7 @@
                     <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
                         <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                             <span class="s2">&quot;Access Denied Bucket:</span><span class="si">%s</span><span class="s2"> while scanning&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">denied_buckets</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
                         <span class="k">return</span>
                     <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
                         <span class="s2">&quot;Error processing bucket:</span><span class="si">%s</span><span class="s2"> paginator:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
@@ -1291,7 +1296,8 @@
                 <span class="k">return</span> <span class="kc">False</span>
             <span class="k">elif</span> <span class="ow">not</span> <span class="n">restore_complete</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;Restore&#39;</span><span class="p">]):</span>
                 <span class="k">return</span> <span class="kc">False</span>
-            <span class="n">storage_class</span> <span class="o">==</span> <span class="s1">&#39;STANDARD&#39;</span>
+
+            <span class="n">storage_class</span> <span class="o">=</span> <span class="s1">&#39;STANDARD&#39;</span>
 
         <span class="n">crypto_method</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)</span>
         <span class="n">key_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key-id&#39;</span><span class="p">)</span>
@@ -1350,7 +1356,6 @@
 
         <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="n">bucket_name</span><span class="p">,</span>
                   <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span>
-                  <span class="s1">&#39;CopySource&#39;</span><span class="p">:</span> <span class="s2">&quot;/</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]),</span>
                   <span class="s1">&#39;UploadId&#39;</span><span class="p">:</span> <span class="n">upload_id</span><span class="p">,</span>
                   <span class="s1">&#39;CopySource&#39;</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
                   <span class="s1">&#39;CopySourceIfMatch&#39;</span><span class="p">:</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">]}</span>
@@ -1463,7 +1468,6 @@
                 <span class="k">yield</span> <span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">],</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;S3KeyPrefix&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="LogTarget.get_elb_bucket_locations"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.LogTarget.get_elb_bucket_locations">[docs]</a>    <span class="k">def</span> <span class="nf">get_elb_bucket_locations</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">elbs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
         <span class="n">get_elb_attrs</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
             <span class="n">_query_elb_attrs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
@@ -1533,7 +1537,6 @@
             <span class="s1">&#39;grantees&#39;</span><span class="p">,</span> <span class="p">[</span>
                 <span class="n">GlobalGrantsFilter</span><span class="o">.</span><span class="n">AUTH_ALL</span><span class="p">,</span> <span class="n">GlobalGrantsFilter</span><span class="o">.</span><span class="n">GLOBAL_ALL</span><span class="p">])</span>
 
-        <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
 
         <span class="n">acl</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Acl&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Grants&#39;</span><span class="p">:</span> <span class="p">[]})</span>
@@ -1671,6 +1674,8 @@
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s1">&#39;remove-contents&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
 
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:*&#39;</span><span class="p">,)</span>
+
     <span class="n">bucket_ops</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;standard&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;iterator&#39;</span><span class="p">:</span> <span class="s1">&#39;list_objects&#39;</span><span class="p">,</span>
@@ -1721,12 +1726,12 @@
         <span class="c1"># might be worth sanity checking all our permissions</span>
         <span class="c1"># on the bucket up front before disabling versioning/replication.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;remove-contents&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-                <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_delete_enablement</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_process_with_futures</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_delete_enablement</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">empty_buckets</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delete_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
-            <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">))</span></div>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_with_futures</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delete_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_denied_buckets_file</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="DeleteBucket.delete_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteBucket.delete_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">delete_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(),</span> <span class="n">b</span><span class="p">)</span>
