@@ -179,7 +179,7 @@
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">local_session</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;alarm&#39;</span><span class="p">)</span>
@@ -194,7 +194,44 @@
         <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;list&#39;</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;AlarmName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;AlarmConfigurationUpdatedTimestamp&#39;</span>
-        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span></div>
+
+
+<span class="nd">@Alarm</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AlarmDelete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cw.AlarmDelete">[docs]</a><span class="k">class</span> <span class="nc">AlarmDelete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete a cloudwatch alarm.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: cloudwatch-delete-stale-alarms</span>
+<span class="sd">                resource: alarm</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: value</span>
+<span class="sd">                    value_type: age</span>
+<span class="sd">                    key: StateUpdatedTimestamp</span>
+<span class="sd">                    value: 30</span>
+<span class="sd">                    op: ge</span>
+<span class="sd">                  - StateValue: INSUFFICIENT_DATA</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudwatch:DeleteAlarms&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="AlarmDelete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cw.AlarmDelete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_alarms</span><span class="p">,</span>
+                <span class="n">AlarmNames</span><span class="o">=</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;AlarmName&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">])</span></div></div>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;event-rule&#39;</span><span class="p">)</span>
