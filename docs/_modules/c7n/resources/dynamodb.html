@@ -173,26 +173,20 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-<span class="kn">import</span> <span class="nn">functools</span>
-<span class="kn">import</span> <span class="nn">itertools</span>
-
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">)</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">OPERATORS</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">local_session</span><span class="p">,</span> <span class="n">get_account_id</span><span class="p">,</span><span class="n">get_retry</span><span class="p">,</span> 
-    <span class="n">chunks</span><span class="p">,</span> <span class="n">snapshot_identifier</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">TagDelayedAction</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">TagActionFilter</span>
 
-<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;dynamodb-table.filters&#39;</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
+
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;dynamodb-table&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="Table"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Table">[docs]</a><span class="k">class</span> <span class="nc">Table</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
@@ -219,11 +213,12 @@
             <span class="n">resources</span><span class="p">,</span> 
             <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> 
             <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">))</span></div></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">))</span></div></div>
 
 
 <span class="k">def</span> <span class="nf">_dynamodb_table_tags</span><span class="p">(</span>
-        <span class="n">model</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">,</span> <span class="n">log</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Augment DynamoDB tables with their respective tags</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
