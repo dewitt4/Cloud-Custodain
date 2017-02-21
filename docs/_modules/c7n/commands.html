@@ -212,9 +212,11 @@
             <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
                 <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: policy file does not exist (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
                 <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">continue</span>
             <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: problem loading policy file (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">message</span><span class="p">))</span>
                 <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">continue</span>
 
             <span class="k">if</span> <span class="n">collection</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contained no policies.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
@@ -229,7 +231,11 @@
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">_print_no_policies_warning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">all_policies</span><span class="p">)</span>
-            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="c1"># If we filtered out all the policies we want to exit with a</span>
+            <span class="c1"># non-zero status. But if the policy file is empty then continue</span>
+            <span class="c1"># on to the specific command to determine the exit status.</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_policies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="c1"># Do not allow multiple policies with the same name, even across files</span>
         <span class="n">counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">([</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">])</span>
@@ -258,16 +264,15 @@
             <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;    - </span><span class="si">{}</span><span class="s2"> (</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">))</span>
         <span class="n">eprint</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: empty policy file(s).  Nothing to do.&#39;</span><span class="p">)</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Empty policy file(s).  Nothing to do.&#39;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="validate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.validate">[docs]</a><span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
     <span class="n">load_resources</span><span class="p">()</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="c1"># no configs to test</span>
-        <span class="c1"># We don&#39;t have the parser object, so fake ArgumentParser.error</span>
         <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: no config files specified&#39;</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
     <span class="n">used_policy_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="n">schm</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
     <span class="n">errors</span> <span class="o">=</span> <span class="p">[]</span>
@@ -344,8 +349,8 @@
 
 <span class="nd">@policy_command</span>
 <div class="viewcode-block" id="report"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.report">[docs]</a><span class="k">def</span> <span class="nf">report</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Report subcommand can only operate on one policy&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Report subcommand requires exactly one policy&quot;</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
     
     <span class="n">policy</span> <span class="o">=</span> <span class="n">policies</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
@@ -365,8 +370,8 @@
 
 <span class="nd">@policy_command</span>
 <div class="viewcode-block" id="logs"><a class="viewcode-back" href="../../generated/c7n.html#c7n.commands.logs">[docs]</a><span class="k">def</span> <span class="nf">logs</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Log subcommand can only operate on one policy&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: Log subcommand requires exactly one policy&quot;</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="n">policy</span> <span class="o">=</span> <span class="n">policies</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
