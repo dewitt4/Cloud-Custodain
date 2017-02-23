@@ -200,6 +200,14 @@
 
 
 <div class="viewcode-block" id="MainThreadExecutor"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadExecutor">[docs]</a><span class="k">class</span> <span class="nc">MainThreadExecutor</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; For running tests.</span>
+
+<span class="sd">    async == True  -&gt; catch exceptions and store them in the future.</span>
+<span class="sd">    async == False -&gt; let exceptions bubble up.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="k">async</span> <span class="o">=</span> <span class="kc">True</span>
+
     <span class="c1"># For Dev/Unit Testing with concurrent.futures</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="n">args</span>
@@ -210,7 +218,12 @@
             <span class="k">yield</span> <span class="n">func</span><span class="p">(</span><span class="n">args</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="MainThreadExecutor.submit"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadExecutor.submit">[docs]</a>    <span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">MainThreadFuture</span><span class="p">(</span><span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">))</span></div>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">MainThreadFuture</span><span class="p">(</span><span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="k">async</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">MainThreadFuture</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">exception</span><span class="o">=</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">raise</span></div>
 
     <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span>
@@ -222,8 +235,9 @@
 <div class="viewcode-block" id="MainThreadFuture"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadFuture">[docs]</a><span class="k">class</span> <span class="nc">MainThreadFuture</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="c1"># For Dev/Unit Testing with concurrent.futures</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">exception</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exception</span> <span class="o">=</span> <span class="n">exception</span>
         <span class="c1"># Sigh concurrent.futures pokes at privates</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_state</span> <span class="o">=</span> <span class="s1">&#39;FINISHED&#39;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_waiters</span> <span class="o">=</span> <span class="p">[]</span>
@@ -236,12 +250,14 @@
         <span class="k">return</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="MainThreadFuture.exception"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadFuture.exception">[docs]</a>    <span class="k">def</span> <span class="nf">exception</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="kc">None</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exception</span></div>
 
 <div class="viewcode-block" id="MainThreadFuture.done"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadFuture.done">[docs]</a>    <span class="k">def</span> <span class="nf">done</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
 <div class="viewcode-block" id="MainThreadFuture.result"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadFuture.result">[docs]</a>    <span class="k">def</span> <span class="nf">result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exception</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exception</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span></div>
 
 <div class="viewcode-block" id="MainThreadFuture.add_done_callback"><a class="viewcode-back" href="../../generated/c7n.html#c7n.executor.MainThreadFuture.add_done_callback">[docs]</a>    <span class="k">def</span> <span class="nf">add_done_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
