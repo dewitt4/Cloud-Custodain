@@ -100,8 +100,12 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Lambda Support</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#cloudwatch-events">CloudWatch Events</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#cloud-custodian-integration">Cloud Custodian Integration</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cloud-custodian-integration">Cloud Custodian Integration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cloudtrail-api-calls">CloudTrail API Calls</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ec2-instance-state-events">EC2 Instance State Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#periodic-function">Periodic Function</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#config-rules">Config Rules</a></li>
@@ -171,70 +175,68 @@ response to infrastructure and application behavior. A number of
 different Amazon services can be used as event sources.</p>
 <div class="section" id="cloudwatch-events">
 <h2>CloudWatch Events<a class="headerlink" href="#cloudwatch-events" title="Permalink to this headline">¶</a></h2>
-<p>CloudWatch Events (CWE) is a general event bus for AWS infrastructure. Currently,
-it covers several major sources of information: CloudTrail API calls
-over a poll period on CloudTrail delivery, real-time instance status
-events, autoscale group notifications, and scheduled/periodic events.</p>
-<p>CloudTrail provides a very rich data source over the entire range
-of AWS services exposed via the audit trail that allows Custodian to define effective
-realtime policies against any AWS product.</p>
-<p>Additionally, for EC2 instances we can provide mandatory policy
-compliance - this means the non-compliant resources never
-became available.</p>
+<p><a class="reference external" href="http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/WhatIsCloudWatchEvents.html">CloudWatch Events</a>
+(CWE) is a general event bus for AWS infrastructure. Currently, it covers
+several major sources of information:</p>
+<ol class="arabic simple">
+<li>CloudTrail API calls over a poll period on CloudTrail delivery,</li>
+<li>real-time instance status events,</li>
+<li>autoscale group notifications, and</li>
+<li>scheduled/periodic events.</li>
+</ol>
+<p>CloudTrail provides a very rich data source over the entire range of AWS
+services exposed via the audit trail that allows Custodian to define effective
+realtime policies against any AWS product. Additionally, for EC2 instances we
+can provide mandatory policy compliance - this means the non-compliant
+resources never became available.</p>
 <div class="section" id="cloud-custodian-integration">
 <h3>Cloud Custodian Integration<a class="headerlink" href="#cloud-custodian-integration" title="Permalink to this headline">¶</a></h3>
-<p>Custodian provides for policy level execution against any CWE event
-stream. Each Custodian policy can be deployed as an independent Lambda
-function. The only difference between a Custodian policy that runs in
-Lambda and one that runs directly from the CLI in poll mode
-is the specification of the subscription of the events in the mode config block of the policy.</p>
+<p>Custodian provides for policy level execution against any CWE event stream.
+Each Custodian policy can be deployed as an independent Lambda function. The
+only difference between a Custodian policy that runs in Lambda and one that
+runs directly from the CLI in poll mode is the specification of the
+subscription of the events in the mode config block of the policy.</p>
 <p>Internally Custodian will reconstitute current state for all the resources
 in the event, execute the policy against them, match against the
 policy filters, and apply the policy actions to matching resources.</p>
-<p><a class="reference internal" href="mu.html#mu"><span class="std std-ref">Mu</span></a> is the letter after Lambda, Lambda is a keyword in python.</p>
-</div>
-<div class="section" id="configuration">
-<h3>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h3>
-<p>Examples</p>
+<div class="section" id="cloudtrail-api-calls">
+<h4>CloudTrail API Calls<a class="headerlink" href="#cloudtrail-api-calls" title="Permalink to this headline">¶</a></h4>
+<p>Lambdas can receive CWE over CloudTrail API calls with delay of 90s at P99.</p>
 <div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
-
-  <span class="c1"># Cloud Watch Events over CloudTrail api calls (1-15m trailing)</span>
-  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-tag-compliance</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-tag-running</span>
     <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
-
-    <span class="c1"># The mode block is the only difference between a Custodian policy that</span>
-    <span class="c1"># runs in reactive/push mode via lambda and one that runs in poll mode.</span>
     <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
       <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">cloudtrail</span>
       <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span>
        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">RunInstances</span>
-
-      <span class="c1"># Note because the total AWS API surface area is so large</span>
-      <span class="c1"># most CloudTrail API event subscriptions need two additional</span>
-      <span class="c1"># fields.</span>
-      <span class="c1">#</span>
-      <span class="c1"># For CloudTrail events we need to reference the source API call</span>
-      <span class="c1"># sources:</span>
-      <span class="c1">#  - ec2.amazonaws.com</span>
-      <span class="c1">#</span>
-      <span class="c1"># To work transparently with existing resource policies, we also</span>
-      <span class="c1"># need to specify how to extract the resource IDs from the event</span>
-      <span class="c1"># via JMESPath so that the resources can be queried.</span>
-      <span class="c1"># IDs: &quot;detail.responseElements.instancesSet.items[].instanceId&quot;</span>
-      <span class="c1">#</span>
-      <span class="c1"># For very common API calls for policies, some shortcuts have</span>
-      <span class="c1"># been defined to allow for easier policy writing as for the</span>
-      <span class="c1"># RunInstances API call above.</span>
-      <span class="c1">#</span>
-
-    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span>
-        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">tag:required1</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
-        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">tag:required2</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
     <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
-
-  <span class="c1"># On EC2 Instance state events (real time, seconds)</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">mark</span>
+        <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">foo</span>
+        <span class="l l-Scalar l-Scalar-Plain">msg</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">bar</span>
+</pre></div>
+</div>
+<p>Because the total AWS API surface area is so large most CloudTrail API
+event subscriptions need two additional fields:</p>
+<ol class="arabic simple">
+<li>For CloudTrail events we need to reference the source API call.</li>
+<li>To work transparently with existing resource policies, we also need to
+specify how to extract the resource IDs from the event via JMESPath so that
+the resources can be queried.</li>
+</ol>
+<p>For very common API calls for policies, some <a class="reference external" href="https://github.com/capitalone/cloud-custodian/blob/master/c7n/cwe.py#L28-L69">shortcuts</a>
+have been defined to allow for easier policy writing as for the
+<code class="docutils literal"><span class="pre">RunInstances</span></code> API call above, which expands to:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span>
+ <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">source</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2.amazonaws.com</span>
+   <span class="l l-Scalar l-Scalar-Plain">event</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">RunInstances</span>
+   <span class="l l-Scalar l-Scalar-Plain">ids</span><span class="p p-Indicator">:</span> <span class="s">&quot;detail.responseElements.instancesSet.items[].instanceId&quot;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="ec2-instance-state-events">
+<h4>EC2 Instance State Events<a class="headerlink" href="#ec2-instance-state-events" title="Permalink to this headline">¶</a></h4>
+<p>Lambdas can receive EC2 instance state events in real time (seconds delay).</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
   <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-require-encrypted-volumes</span>
     <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
     <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
@@ -247,15 +249,14 @@ policy filters, and apply the policy actions to matching resources.</p>
         <span class="l l-Scalar l-Scalar-Plain">value</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">False</span>
     <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">mark</span>
-      <span class="c1"># TODO delete instance volumes that</span>
-      <span class="c1"># are not set to delete on terminate;</span>
-      <span class="c1"># currently we have a poll policy that</span>
-      <span class="c1"># handles this.</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">terminate</span>
-
-  <span class="c1"># Periodic Function</span>
-  <span class="c1"># Syntax for scheduler per http://goo.gl/x3oMQ4</span>
-  <span class="c1"># Supports both rate per unit time and cron expressions</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="periodic-function">
+<h4>Periodic Function<a class="headerlink" href="#periodic-function" title="Permalink to this headline">¶</a></h4>
+<p>We support both rate per unit time and cron expressions, per <a class="reference external" href="http://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html">scheduler syntax</a>.</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
   <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">s3-bucket-check</span>
     <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">s3</span>
     <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
@@ -265,12 +266,14 @@ policy filters, and apply the policy actions to matching resources.</p>
 </div>
 </div>
 </div>
+</div>
 <div class="section" id="config-rules">
 <h2>Config Rules<a class="headerlink" href="#config-rules" title="Permalink to this headline">¶</a></h2>
 <p><a class="reference external" href="http://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules.html">AWS Config rules</a>
 allow you to invoke logic in response to configuration changes in your AWS
 environment, and Cloud Custodian is the easiest way to write and provision
-Config rules.</p>
+Config rules. Delay here is typically 1-15m (though the SLA on tag-only changes
+is a bit higher).</p>
 <p>In this section we&#8217;ll look at how we would deploy the <a class="reference internal" href="../quickstart/index.html#quickstart"><span class="std std-ref">quickstart</span></a> example using Config. Before you proceed, make sure you&#8217;ve
 removed the <code class="docutils literal"><span class="pre">Custodian</span></code> tag from any EC2 instance left over from the
 quickstart.</p>
