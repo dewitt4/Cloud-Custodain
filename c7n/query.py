@@ -71,9 +71,8 @@ class ResourceQuery(object):
         if extra_args:
             params.update(extra_args)
 
-        # TODO: We need to refactor the rest of the resource types to include a default parent_enum_spec of None.
-        if 'parent_enum_spec' in dir(m) and m.parent_enum_spec:
-            parent_resource_type, id_path, param_key, parent_batchable = m.parent_enum_spec
+        if getattr(m, 'parent_enum_spec', None):
+            parent_resource_type, id_path, param_key, parent_batchable = getattr(m, 'parent_enum_spec', None)
 
             parent_id_path = jmespath.compile(id_path)
             parent_resources = self.filter(parent_resource_type.resource_type)
