@@ -45,13 +45,14 @@ class ResourceQuery(object):
             m = resource_type
         return m
 
-    def filter(self, resource_type, **params):
+    def filter(self, resource_type, skip_extra_args=False, **params):
         """Query a set of resources."""
         m = self.resolve(resource_type)
         client = local_session(self.session_factory).client(
             m.service)
         enum_op, path, extra_args = m.enum_spec
-        if extra_args:
+
+        if extra_args and not skip_extra_args:
             params.update(extra_args)
 
         if client.can_paginate(enum_op):
@@ -85,7 +86,7 @@ class ResourceQuery(object):
         else:
             client_filter = True
 
-        resources = self.filter(resource_type, **params)
+        resources = self.filter(resource_type, skip_extra_args=True, **params)
         if client_filter:
             resources = [r for r in resources if r[m.id] in identities]
 
