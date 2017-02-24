@@ -289,15 +289,19 @@ class AttachedVolume(ValueFilter):
 
 class InstanceImageBase(object):
 
-    def warm_image_cache(self, image_ids):
+    def warm_image_cache(self, instances):
+        image_ids = [i['ImageId'] for i in instances if not 'c7n:instance-image' in i]
         self.image_map = self.get_local_image_mapping(image_ids)
 
     def get_base_image_mapping(self):
         return {i['ImageId']: i for i in
                 self.manager.get_resource_manager('ami').resources()}
 
-    def get_image_from_id(self, image_id):
-        return self.image_map.get(image_id, None)
+    def get_instance_image(self, instance):
+        image = instance.get('c7n:instance-image', None)
+        if not image:
+            image = instance['c7n:instance-image'] = self.image_map.get(instance['ImageId'], None)
+        return image
 
     def get_local_image_mapping(self, image_ids):
         base_image_map = self.get_base_image_mapping()
@@ -340,15 +344,16 @@ class ImageAge(AgeFilter, InstanceImageBase):
         return self.manager.get_resource_manager('ami').get_permissions()
 
     def process(self, resources, event=None):
-        self.warm_image_cache([i['ImageId'] for i in resources])
+        self.warm_image_cache(resources)
         return super(ImageAge, self).process(resources, event)
 
     def get_resource_date(self, i):
-        image = get_image_from_id(i['ImageId'])
-        if image == None:
-            return parse("2000-01-01T01:01:01.000Z")
-        else:
+        image = self.get_instance_image(i)
+        if image:
             return parse(image['CreationDate'])
+        else:
+            return parse("2000-01-01T01:01:01.000Z")
+            
 
 
 @filters.register('image')
@@ -360,14 +365,11 @@ class InstanceImage(ValueFilter, InstanceImageBase):
         return self.manager.get_resource_manager('ami').get_permissions()
 
     def process(self, resources, event=None):
-        self.warm_image_cache([i['ImageId'] for i in resources if not 'c7n:instance-image' in i])
+        self.warm_image_cache(resources)
         return super(InstanceImage, self).process(resources, event)
 
     def __call__(self, i):
-        image = i.get('c7n:instance-image', None)
-        if not image:
-            image = i['c7n:instance-image'] = self.get_image_from_id(i['ImageId'])
-
+        image = self.get_instance_image(i)
         # Finally, if we have no image...
         if not image:
             self.log.warning(
