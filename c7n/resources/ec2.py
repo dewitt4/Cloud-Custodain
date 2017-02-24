@@ -289,7 +289,7 @@ class AttachedVolume(ValueFilter):
 
 class InstanceImageBase(object):
 
-    def warm_image_cache(self, instances):
+    def prefetch_instance_images(self, instances):
         image_ids = [i['ImageId'] for i in instances if not 'c7n:instance-image' in i]
         self.image_map = self.get_local_image_mapping(image_ids)
 
@@ -344,7 +344,7 @@ class ImageAge(AgeFilter, InstanceImageBase):
         return self.manager.get_resource_manager('ami').get_permissions()
 
     def process(self, resources, event=None):
-        self.warm_image_cache(resources)
+        self.prefetch_instance_images(resources)
         return super(ImageAge, self).process(resources, event)
 
     def get_resource_date(self, i):
@@ -365,7 +365,7 @@ class InstanceImage(ValueFilter, InstanceImageBase):
         return self.manager.get_resource_manager('ami').get_permissions()
 
     def process(self, resources, event=None):
-        self.warm_image_cache(resources)
+        self.prefetch_instance_images(resources)
         return super(InstanceImage, self).process(resources, event)
 
     def __call__(self, i):
