@@ -46,15 +46,7 @@ class ResourceQuery(object):
             m = resource_type
         return m
 
-    def filter(self, resource_type, **params):
-        """Query a set of resources."""
-        m = self.resolve(resource_type)
-        client = local_session(self.session_factory).client(
-            m.service)
-        enum_op, path, extra_args = m.enum_spec
-        if extra_args:
-            params.update(extra_args)
-
+    def invoke_client_enum(self, client, enum_op, params, path):
         if client.can_paginate(enum_op):
             p = client.get_paginator(enum_op)
             results = p.paginate(**params)
@@ -62,9 +54,53 @@ class ResourceQuery(object):
         else:
             op = getattr(client, enum_op)
             data = op(**params)
+
         if path:
             path = jmespath.compile(path)
             data = path.search(data)
+
+        return data
+
+    def filter(self, resource_type, **params):
+        """Query a set of resources."""
+        m = self.resolve(resource_type)
+        client = local_session(self.session_factory).client(
+            m.service)
+
+        enum_op, path, extra_args = m.enum_spec
+        if extra_args:
+            params.update(extra_args)
+
+        # TODO: We need to refactor the rest of the resource types to include a default parent_enum_spec of None.
+        if 'parent_enum_spec' in dir(m) and m.parent_enum_spec:
+            parent_resource_type, id_path, param_key, parent_batchable = m.parent_enum_spec
+
+            parent_id_path = jmespath.compile(id_path)
+            parent_resources = self.filter(parent_resource_type.resource_type)
+            parent_ids = parent_id_path.search(parent_resources)
+            # Bail out with no parent ids...
+
+            existing_param = param_key in params
+
+            if not existing_param and len(parent_ids) == 0:
+                return []
+            # Handle the param contextual scoping...
+            if existing_param:
+                data = self.invoke_client_enum(client, enum_op, params, path)
+            elif parent_batchable:
+                params[param_key] = parent_ids
+                data = self.invoke_client_enum(client, enum_op, params, path)
+            else:
+                # We need to invoke the op for each item here, which kind of sucks...
+                results = []
+                for parent_id in parent_ids:
+                    merged_params = dict(params, **{param_key: parent_id})
+                    subset = self.invoke_client_enum(client, enum_op, merged_params, path)
+                    results.extend(subset)
+                data = results
+        else:
+            data = self.invoke_client_enum(client, enum_op, params, path)
+
         if data is None:
             data = []
         return data
