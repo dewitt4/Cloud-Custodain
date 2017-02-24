@@ -248,6 +248,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="n">Or</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;and&#39;</span><span class="p">,</span> <span class="n">And</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;not&#39;</span><span class="p">,</span> <span class="n">Not</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;event&#39;</span><span class="p">,</span> <span class="n">EventFilter</span><span class="p">)</span>
 
 <div class="viewcode-block" id="FilterRegistry.parse"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.FilterRegistry.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
@@ -269,6 +270,8 @@
                 <span class="k">return</span> <span class="n">Or</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;and&#39;</span><span class="p">:</span>
                 <span class="k">return</span> <span class="n">And</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;not&#39;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">Not</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">basestring</span><span class="p">):</span>
             <span class="n">filter_type</span> <span class="o">=</span> <span class="n">data</span>
@@ -359,6 +362,42 @@
             <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
 
+
+<div class="viewcode-block" id="Not"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.Not">[docs]</a><span class="k">class</span> <span class="nc">Not</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">registry</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Not</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">registry</span> <span class="o">=</span> <span class="n">registry</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filters</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">()[</span><span class="mi">0</span><span class="p">],</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
+
+<div class="viewcode-block" id="Not.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.Not.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_set</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">Not</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Fallback for older unit tests that don&#39;t utilize a query manager&quot;&quot;&quot;</span>
+
+        <span class="c1"># There is an implicit &#39;and&#39; for self.filters</span>
+        <span class="c1"># ~(A ^ B ^ ... ^ Z) = ~A v ~B v ... v ~Z</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">filters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">f</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="Not.process_set"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.Not.process_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">filters</span><span class="p">:</span>
+            <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+
+        <span class="n">before</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">resource_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">after</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">])</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">before</span> <span class="o">-</span> <span class="n">after</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">resource_map</span><span class="p">[</span><span class="n">r_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">r_id</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span></div></div>
+        
 
 <div class="viewcode-block" id="ValueFilter"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter">[docs]</a><span class="k">class</span> <span class="nc">ValueFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Generic value filter using jmespath</span>
