@@ -179,6 +179,8 @@
 <span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">zlib</span>
 
+<span class="kn">import</span> <span class="nn">jmespath</span>
+
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
@@ -186,7 +188,8 @@
 <span class="kn">from</span> <span class="nn">c7n.filters.revisions</span> <span class="k">import</span> <span class="n">Diff</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">camelResource</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">camelResource</span><span class="p">,</span> <span class="n">parse_cidr</span><span class="p">)</span>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
@@ -678,7 +681,7 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stale&#39;</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeStaleSecurityGroups&#39;</span><span class="p">,)</span>
 
-<div class="viewcode-block" id="Stale.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Stale.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+<div class="viewcode-block" id="Stale.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Stale.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="n">vpc_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;VpcId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;VpcId&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">])</span>
         <span class="n">group_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
@@ -1219,8 +1222,79 @@
 
 <span class="nd">@NetworkAcl</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="AclSubnetFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AclSubnetFilter">[docs]</a><span class="k">class</span> <span class="nc">AclSubnetFilter</span><span class="p">(</span><span class="n">net_filters</span><span class="o">.</span><span class="n">SubnetFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter network acls by the attributes of their attached subnets.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: subnet-acl</span>
+<span class="sd">                resource: network-acl</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: subnet</span>
+<span class="sd">                    key: &quot;tag:Location&quot;</span>
+<span class="sd">                    value: Public</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;Associations[].SubnetId&quot;</span></div>
+
+
+<span class="nd">@NetworkAcl</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;s3-cidr&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="AclAwsS3Cidrs"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AclAwsS3Cidrs">[docs]</a><span class="k">class</span> <span class="nc">AclAwsS3Cidrs</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter network acls by those that allow access to s3 cidrs.</span>
+
+<span class="sd">    Defaults to filtering those nacls that do not allow s3 communication.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        Find all nacls that do not allow communication with s3.</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-not-allowed-nacl</span>
+<span class="sd">                resource: network-acl</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - s3-cidr</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># TODO allow for port specification as range</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;s3-cidr&#39;</span><span class="p">,</span>
+        <span class="n">egress</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+        <span class="n">ingress</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+        <span class="n">present</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribePrefixLists&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="AclAwsS3Cidrs.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AclAwsS3Cidrs.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">ec2</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">cidrs</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+            <span class="s2">&quot;PrefixLists[].Cidrs[]&quot;</span><span class="p">,</span> <span class="n">ec2</span><span class="o">.</span><span class="n">describe_prefix_lists</span><span class="p">())</span>
+        <span class="n">cidrs</span> <span class="o">=</span> <span class="p">[</span><span class="n">parse_cidr</span><span class="p">(</span><span class="n">cidr</span><span class="p">)</span> <span class="k">for</span> <span class="n">cidr</span> <span class="ow">in</span> <span class="n">cidrs</span><span class="p">]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">check_egress</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;egress&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">check_ingress</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ingress&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">present</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;present&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">matched</span> <span class="o">=</span> <span class="p">{</span><span class="n">cidr</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">cidr</span> <span class="ow">in</span> <span class="n">cidrs</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Entries&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">entry</span><span class="p">[</span><span class="s1">&#39;Egress&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">check_egress</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">entry</span><span class="p">[</span><span class="s1">&#39;Egress&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">check_ingress</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">entry_cidr</span> <span class="o">=</span> <span class="n">parse_cidr</span><span class="p">(</span><span class="n">entry</span><span class="p">[</span><span class="s1">&#39;CidrBlock&#39;</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">matched</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">entry_cidr</span> <span class="ow">and</span> <span class="n">matched</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">matched</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="n">entry</span><span class="p">[</span><span class="s1">&#39;RuleAction&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;allow&#39;</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">present</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">matched</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">present</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">matched</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 
 
 <span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;network-addr&#39;</span><span class="p">)</span>
@@ -1317,7 +1391,6 @@
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;KeyName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
-
 
 </pre></div>
 
