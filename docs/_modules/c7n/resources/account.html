@@ -251,6 +251,9 @@
 
 <span class="sd">    Returns an annotated account resource if trail is not enabled.</span>
 
+<span class="sd">    Of particular note, the current-region option will evaluate whether cloudtrail is available</span>
+<span class="sd">    in the current region, either as a multi region trail or as a trail with it as the home region.</span>
+
 <span class="sd">    :example:</span>
 
 <span class="sd">        .. code-block: yaml</span>
@@ -269,6 +272,7 @@
         <span class="s1">&#39;check-cloudtrail&#39;</span><span class="p">,</span>
         <span class="o">**</span><span class="p">{</span><span class="s1">&#39;multi-region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
            <span class="s1">&#39;global-events&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;current-region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
            <span class="s1">&#39;running&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
            <span class="s1">&#39;notifies&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
            <span class="s1">&#39;file-digest&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
@@ -278,12 +282,15 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudtrail:DescribeTrails&#39;</span><span class="p">,</span> <span class="s1">&#39;cloudtrail:GetTrailStatus&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="CloudTrailEnabled.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.CloudTrailEnabled.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
         <span class="n">trails</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trails</span><span class="p">()[</span><span class="s1">&#39;trailList&#39;</span><span class="p">]</span>
         <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:cloudtrails&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trails</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;global-events&#39;</span><span class="p">):</span>
             <span class="n">trails</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IncludeGlobalServiceEvents&#39;</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;current-region&#39;</span><span class="p">):</span>
+            <span class="n">current_region</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">region_name</span>
+            <span class="n">trails</span>  <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;HomeRegion&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">current_region</span> <span class="ow">or</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IsMultiRegionTrail&#39;</span><span class="p">)]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">):</span>
             <span class="n">trails</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">)]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">):</span>
