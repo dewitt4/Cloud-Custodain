@@ -220,14 +220,17 @@
 <span class="sd">    See http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src_path</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lib_paths</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lib_filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                 <span class="n">src_filter</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">src_path</span><span class="p">,</span> <span class="n">virtualenv_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">lib_filter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">src_filter</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">src_path</span> <span class="o">=</span> <span class="n">src_path</span>
+        <span class="k">if</span> <span class="n">virtualenv_dir</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">virtualenv_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">),</span> <span class="s1">&#39;..&#39;</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">virtualenv_dir</span> <span class="o">=</span> <span class="n">virtualenv_dir</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_temp_archive_file</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_zip_file</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">lib_paths</span> <span class="o">=</span> <span class="n">lib_paths</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lib_filter</span> <span class="o">=</span> <span class="n">lib_filter</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">src_filter</span> <span class="o">=</span> <span class="n">src_filter</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">skip</span> <span class="o">=</span> <span class="n">skip</span>
@@ -274,13 +277,24 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="n">f_path</span><span class="p">,</span> <span class="n">dest_path</span><span class="p">)</span>
 
         <span class="c1"># Library Source</span>
-        <span class="k">for</span> <span class="n">lib_path</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib_paths</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">lib_path</span><span class="p">):</span>
+        <span class="n">venv_lib_paths</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">virtualenv_dir</span><span class="p">,</span>
+                <span class="s1">&#39;lib&#39;</span><span class="p">,</span> <span class="n">RUNTIME</span><span class="p">,</span> <span class="s1">&#39;site-packages&#39;</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">virtualenv_dir</span><span class="p">,</span>
+                <span class="s1">&#39;lib64&#39;</span><span class="p">,</span> <span class="n">RUNTIME</span><span class="p">,</span> <span class="s1">&#39;site-packages&#39;</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">venv_lib_path</span> <span class="ow">in</span> <span class="n">venv_lib_paths</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">venv_lib_path</span><span class="p">):</span>
                 <span class="k">continue</span>
-            <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">lib_path</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">venv_lib_path</span><span class="p">):</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib_filter</span><span class="p">:</span>
                     <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lib_filter</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span>
-                <span class="n">arc_prefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">lib_path</span><span class="p">)</span>
+                <span class="n">arc_prefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">venv_lib_path</span><span class="p">)</span>
                 <span class="n">files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_files</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
                     <span class="n">f_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
@@ -343,15 +357,6 @@
     <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pkg_resources&quot;</span><span class="p">,</span> <span class="s2">&quot;ipaddress.py&quot;</span><span class="p">]</span>
     <span class="n">host_platform</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">uname</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
 
-    <span class="c1"># We need to locate the Lambda&#39;s dependencies, but the location where</span>
-    <span class="c1"># dependencies will have been installed varies widely across systems,</span>
-    <span class="c1"># and is somewhat complicated to solve generically. As an 80% hack,</span>
-    <span class="c1"># let&#39;s install a known third-party dependency of custodian, and assume</span>
-    <span class="c1"># that it&#39;s in the place where the rest of the needed dependencies will</span>
-    <span class="c1"># be as well.</span>
-    <span class="kn">import</span> <span class="nn">ipaddress</span>
-    <span class="n">lib_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">ipaddress</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>
-
     <span class="k">def</span> <span class="nf">lib_filter</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">files</span><span class="p">):</span>
             <span class="c1"># Don&#39;t bother with shared libs across platforms</span>
@@ -365,8 +370,9 @@
 
     <span class="k">return</span> <span class="n">PythonPackageArchive</span><span class="p">(</span>
         <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">inspect</span><span class="o">.</span><span class="n">getabsfile</span><span class="p">(</span><span class="n">c7n</span><span class="p">)),</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">),</span> <span class="s1">&#39;..&#39;</span><span class="p">)),</span>
         <span class="n">skip</span><span class="o">=</span><span class="n">skip</span><span class="p">,</span>
-        <span class="n">lib_paths</span><span class="o">=</span><span class="p">[</span><span class="n">lib_path</span><span class="p">],</span>
         <span class="n">lib_filter</span><span class="o">=</span><span class="n">lib_filter</span><span class="p">)</span></div>
 
 
