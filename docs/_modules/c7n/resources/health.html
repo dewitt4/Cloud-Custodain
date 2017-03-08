@@ -173,6 +173,7 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -199,7 +200,6 @@
         <span class="s1">&#39;health:DescribeEvents&#39;</span><span class="p">,</span>
         <span class="s1">&#39;health:DescribeEventDetails&#39;</span><span class="p">,</span>
         <span class="s1">&#39;health:DescribeAffectedEntities&#39;</span><span class="p">)</span>
-
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">HealthEvents</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
@@ -242,12 +242,13 @@
 
             <span class="n">event_arns</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span>
                           <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;eventTypeCategory&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;accountNotification&#39;</span><span class="p">]</span>
-            
+
             <span class="k">if</span> <span class="ow">not</span> <span class="n">event_arns</span><span class="p">:</span>
                 <span class="k">continue</span>
-            
-            <span class="n">entities</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_affected_entities</span><span class="p">(</span>
-                <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eventArns&#39;</span><span class="p">:</span> <span class="n">event_arns</span><span class="p">})[</span><span class="s1">&#39;entities&#39;</span><span class="p">]</span>
+            <span class="n">paginator</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_affected_entities&#39;</span><span class="p">)</span>
+            <span class="n">entities</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="o">*</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;entities&#39;</span><span class="p">]</span><span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span>
+                    <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;eventArns&#39;</span><span class="p">:</span> <span class="n">event_arns</span><span class="p">})]))</span>
 
             <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
                 <span class="n">event_map</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;eventArn&#39;</span><span class="p">)]</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
@@ -262,7 +263,7 @@
     <span class="s1">&#39;regions&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;services&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="s1">&#39;eventStatusCodes&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;closed&#39;</span><span class="p">,</span> <span class="s1">&#39;upcoming&#39;</span><span class="p">},</span>
-    <span class="s1">&#39;types&#39;</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="s1">&#39;eventTypeCodes&#39;</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">}</span>
 
 

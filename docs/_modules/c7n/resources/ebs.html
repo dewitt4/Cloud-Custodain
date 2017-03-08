@@ -174,6 +174,8 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">json</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
@@ -182,12 +184,13 @@
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span>
     <span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.health</span> <span class="k">import</span> <span class="n">HealthEventFilter</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.resources.kms</span> <span class="k">import</span> <span class="n">ResourceKmsKeyAlias</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">worker</span><span class="p">)</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">worker</span><span class="p">,</span> <span class="n">camelResource</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.resources.ami</span> <span class="k">import</span> <span class="n">AMI</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.ebs&#39;</span><span class="p">)</span>
@@ -606,6 +609,60 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tolerant&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">]</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">]</span></div></div>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;health-event&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="HealthFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.HealthFilter">[docs]</a><span class="k">class</span> <span class="nc">HealthFilter</span><span class="p">(</span><span class="n">HealthEventFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;health-event&#39;</span><span class="p">,</span>
+        <span class="n">types</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AWS_EBS_DEGRADED_EBS_VOLUME_PERFORMANCE&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;AWS_EBS_VOLUME_LOST&#39;</span><span class="p">]}},</span>
+        <span class="n">statuses</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;open&#39;</span><span class="p">,</span> <span class="s1">&#39;upcoming&#39;</span><span class="p">,</span> <span class="s1">&#39;closed&#39;</span><span class="p">]</span>
+        <span class="p">}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="n">HealthEventFilter</span><span class="o">.</span><span class="n">permissions</span> <span class="o">+</span> <span class="p">(</span>
+        <span class="s1">&#39;config:GetResourceConfigHistory&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="HealthFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.HealthFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;AWS_EBS_VOLUME_LOST&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;types&#39;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">HealthFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resources</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;health&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_filter</span><span class="p">()</span>
+        <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">paginator</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_events&#39;</span><span class="p">)</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+            <span class="o">*</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]</span><span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="nb">filter</span><span class="o">=</span><span class="n">f</span><span class="p">)]))</span>
+        <span class="n">entities</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">process_event</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span>
+
+        <span class="n">event_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">e</span><span class="p">[</span><span class="s1">&#39;arn&#39;</span><span class="p">]:</span> <span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
+            <span class="n">rid</span> <span class="o">=</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;entityValue&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">resource_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rid</span><span class="p">):</span>
+                <span class="n">resource_map</span><span class="p">[</span><span class="n">rid</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">rid</span><span class="p">)</span>
+            <span class="n">resource_map</span><span class="p">[</span><span class="n">rid</span><span class="p">]</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="s1">&#39;c7n:HealthEvent&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event_map</span><span class="p">[</span><span class="n">e</span><span class="p">[</span><span class="s1">&#39;eventArn&#39;</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">resource_map</span><span class="o">.</span><span class="n">values</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="HealthFilter.load_resource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.HealthFilter.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rid</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">)</span>
+        <span class="n">resources_histories</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">get_resource_config_history</span><span class="p">(</span>
+            <span class="n">resourceType</span><span class="o">=</span><span class="s1">&#39;AWS::EC2::Volume&#39;</span><span class="p">,</span>
+            <span class="n">resourceId</span><span class="o">=</span><span class="n">rid</span><span class="p">,</span>
+            <span class="n">limit</span><span class="o">=</span><span class="mi">2</span><span class="p">)[</span><span class="s1">&#39;configurationItems&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources_histories</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;configurationItemStatus&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="sa">u</span><span class="s1">&#39;ResourceDeleted&#39;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">camelResource</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;VolumeId&quot;</span><span class="p">:</span> <span class="n">rid</span><span class="p">}</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;copy-instance-tags&#39;</span><span class="p">)</span>
