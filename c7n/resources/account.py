@@ -332,6 +332,35 @@ class AccountPasswordPolicy(ValueFilter):
           return resources
       return []
 
+@filters.register('saml-providers')
+class SamlProvidersFilter(ValueFilter):
+  schema = type_schema('saml-providers', rinherit=ValueFilter.schema)
+  permissions = ('iam:ListSAMLProviders',)
+
+  def process(self, resources, event=None):
+    account = resources[0]
+    if not account.get('c7n:saml-providers'):
+      client = local_session(self.manager.session_factory).client('iam')
+      account['c7n:saml-providers'] = client.list_saml_providers().get('SAMLProviderList')
+    if self.match(account['c7n:saml-providers']):
+      return resources
+    else:
+      return []
+
+@filters.register('open-id-connect-providers')
+class OpenIdConnectProvidersFilter(ValueFilter):
+  schema = type_schema('open-id-connect-providers', rinherit=ValueFilter.schema)
+  permissions = ('iam:ListOpenIDConnectProviders',)
+
+  def process(self, resources, event=None):
+    account = resources[0]
+    if not account.get('c7n:open-id-connect-providers'):
+      client = local_session(self.manager.session_factory).client('iam')
+      account['c7n:open-id-connect-providers'] = client.list_open_id_connect_providers().get('OpenIDConnectProviderList')
+    if self.match(account['c7n:open-id-connect-providers']):
+      return resources
+    else:
+      return []
 
 @filters.register('service-limit')
 class ServiceLimit(Filter):
