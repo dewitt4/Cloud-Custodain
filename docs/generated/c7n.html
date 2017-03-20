@@ -1575,46 +1575,96 @@ events, and realtime asg membership changes.</p>
 
 <dl class="class">
 <dt id="c7n.mu.PythonPackageArchive">
-<em class="property">class </em><code class="descclassname">c7n.mu.</code><code class="descname">PythonPackageArchive</code><span class="sig-paren">(</span><em>src_path</em>, <em>virtualenv_dir=None</em>, <em>skip=None</em>, <em>lib_filter=None</em>, <em>src_filter=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">c7n.mu.</code><code class="descname">PythonPackageArchive</code><span class="sig-paren">(</span><em>*modules</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
-<p>Creates a zip file for python lambda functions</p>
-<p>Packages up a virtualenv and a source package directory per lambda&#8217;s
-directory structure.</p>
-<p>See <a class="reference external" href="http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python">http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python</a></p>
+<p>Creates a zip file for python lambda functions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>modules</strong> (<em>tuple</em>) &#8211; the Python modules to add to the archive</td>
+</tr>
+</tbody>
+</table>
+<p>Amazon doesn&#8217;t give us straightforward docs here, only <a class="reference external" href="http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python">an example</a>,
+from which we can infer that they simply unzip the file into a directory on
+<code class="docutils literal"><span class="pre">sys.path</span></code>. So what we do is locate all of the <code class="docutils literal"><span class="pre">modules</span></code> specified, and
+add all of the <code class="docutils literal"><span class="pre">.py</span></code> files we find for these modules to a zip file.</p>
+<p>In addition to the modules specified during instantiation, you can add
+arbitrary additional files to the archive using <a class="reference internal" href="#c7n.mu.PythonPackageArchive.add_file" title="c7n.mu.PythonPackageArchive.add_file"><code class="xref py py-func docutils literal"><span class="pre">add_file()</span></code></a> and
+<a class="reference internal" href="#c7n.mu.PythonPackageArchive.add_contents" title="c7n.mu.PythonPackageArchive.add_contents"><code class="xref py py-func docutils literal"><span class="pre">add_contents()</span></code></a>. For example, since we only add <code class="docutils literal"><span class="pre">*.py</span></code> files for
+you, you&#8217;ll need to manually add files for any compiled extension modules
+that your Lambda requires.</p>
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.add_contents">
 <code class="descname">add_contents</code><span class="sig-paren">(</span><em>dest</em>, <em>contents</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.add_contents"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.add_contents" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Add file contents to the archive under <code class="docutils literal"><span class="pre">dest</span></code>.</p>
+<p>If <code class="docutils literal"><span class="pre">dest</span></code> is a path, it will be added compressed and world-readable
+(user-writeable). You may also pass a <code class="xref py py-class docutils literal"><span class="pre">ZipInfo</span></code> for
+custom behavior.</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.add_file">
-<code class="descname">add_file</code><span class="sig-paren">(</span><em>src</em>, <em>dest</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.add_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.add_file" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<code class="descname">add_file</code><span class="sig-paren">(</span><em>src</em>, <em>dest=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.add_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.add_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add the file at <code class="docutils literal"><span class="pre">src</span></code> to the archive.</p>
+<p>If <code class="docutils literal"><span class="pre">dest</span></code> is <code class="docutils literal"><span class="pre">None</span></code> then it is added under just the original
+filename. So <code class="docutils literal"><span class="pre">add_file('foo/bar.txt')</span></code> ends up at <code class="docutils literal"><span class="pre">bar.txt</span></code> in the
+archive, while <code class="docutils literal"><span class="pre">add_file('bar.txt',</span> <span class="pre">'foo/bar.txt')</span></code> ends up at
+<code class="docutils literal"><span class="pre">foo/bar.txt</span></code>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="c7n.mu.PythonPackageArchive.add_modules">
+<code class="descname">add_modules</code><span class="sig-paren">(</span><em>*modules</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.add_modules"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.add_modules" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add the named Python modules to the archive. For consistency&#8217;s sake
+we only add <code class="docutils literal"><span class="pre">*.py</span></code> files, not <code class="docutils literal"><span class="pre">*.pyc</span></code>. We also don&#8217;t add other
+files, including compiled modules. You&#8217;ll have to add such files
+manually using <a class="reference internal" href="#c7n.mu.PythonPackageArchive.add_file" title="c7n.mu.PythonPackageArchive.add_file"><code class="xref py py-meth docutils literal"><span class="pre">add_file()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="c7n.mu.PythonPackageArchive.add_py_file">
+<code class="descname">add_py_file</code><span class="sig-paren">(</span><em>src</em>, <em>dest=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.add_py_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.add_py_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is a special case of <a class="reference internal" href="#c7n.mu.PythonPackageArchive.add_file" title="c7n.mu.PythonPackageArchive.add_file"><code class="xref py py-meth docutils literal"><span class="pre">add_file()</span></code></a> that helps for adding
+a <code class="docutils literal"><span class="pre">py</span></code> when a <code class="docutils literal"><span class="pre">pyc</span></code> may be present as well. So for example, if
+<code class="docutils literal"><span class="pre">__file__</span></code> is <code class="docutils literal"><span class="pre">foo.pyc</span></code> and you do:</p>
+<div class="highlight-python"><div class="highlight"><pre><span></span><span class="n">archive</span><span class="o">.</span><span class="n">add_py_file</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>then this method will add <code class="docutils literal"><span class="pre">foo.py</span></code> instead if it exists, and raise
+<code class="docutils literal"><span class="pre">IOError</span></code> if it doesn&#8217;t.</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.close">
 <code class="descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.close" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="method">
-<dt id="c7n.mu.PythonPackageArchive.create">
-<code class="descname">create</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.create"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.create" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="method">
-<dt id="c7n.mu.PythonPackageArchive.filter_files">
-<code class="descname">filter_files</code><span class="sig-paren">(</span><em>files</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.filter_files"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.filter_files" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Close the zip file.</p>
+<p>Note underlying tempfile is removed when archive is garbage collected.</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.get_bytes">
 <code class="descname">get_bytes</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.get_bytes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.get_bytes" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the entire zip file as a byte string.</p>
+</dd></dl>
 
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.get_checksum">
 <code class="descname">get_checksum</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.get_checksum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.get_checksum" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return the b64 encoded sha256 checksum.</p>
+<dd><p>Return the b64 encoded sha256 checksum of the archive.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="c7n.mu.PythonPackageArchive.get_filenames">
+<code class="descname">get_filenames</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.get_filenames"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.get_filenames" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a list of filenames in the archive.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="c7n.mu.PythonPackageArchive.get_reader">
+<code class="descname">get_reader</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.get_reader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.get_reader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a read-only <code class="xref py py-class docutils literal"><span class="pre">ZipFile</span></code>.</p>
 </dd></dl>
 
 <dl class="attribute">
@@ -1625,7 +1675,8 @@ directory structure.</p>
 <dl class="method">
 <dt id="c7n.mu.PythonPackageArchive.remove">
 <code class="descname">remove</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#PythonPackageArchive.remove"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.PythonPackageArchive.remove" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Dispose of the temp file for garbage collection.</p>
+</dd></dl>
 
 <dl class="attribute">
 <dt id="c7n.mu.PythonPackageArchive.size">
@@ -1663,7 +1714,7 @@ directory structure.</p>
 
 <dl class="function">
 <dt id="c7n.mu.custodian_archive">
-<code class="descclassname">c7n.mu.</code><code class="descname">custodian_archive</code><span class="sig-paren">(</span><em>skip=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#custodian_archive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.custodian_archive" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">c7n.mu.</code><code class="descname">custodian_archive</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/c7n/mu.html#custodian_archive"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#c7n.mu.custodian_archive" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a lambda code archive for running custodian.</p>
 </dd></dl>
 
@@ -1680,7 +1731,7 @@ if zip files aren&#8217;t constructed a particular way.</p>
 <p>ie. It respects file perm attributes from the zip including
 those that prevent lambda from working. Namely lambda
 extracts code as one user, and executes code as a different
-user without permissions for the executing user to read
+user. Without permissions for the executing user to read
 the file the lambda function is broken.</p>
 <p>Python&#8217;s default zipfile.writestr does a 0600 perm which
 we modify here as a workaround.</p>
