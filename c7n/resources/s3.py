@@ -53,7 +53,7 @@ from concurrent.futures import as_completed
 
 from c7n.actions import ActionRegistry, BaseAction, AutoTagUser
 from c7n.filters import (
-    FilterRegistry, Filter, CrossAccountAccessFilter, MetricsFilter)
+    FilterRegistry, Filter, CrossAccountAccessFilter, MetricsFilter, ValueFilter)
 from c7n.manager import resources
 from c7n.query import QueryResourceManager
 from c7n.tags import RemoveTag, Tag, TagActionFilter, TagDelayedAction
@@ -449,6 +449,39 @@ class MissingPolicyStatementFilter(Filter):
         if not required:
             return False
         return True
+
+@filters.register('policy-value')
+class PolicyValue(ValueFilter):
+    """Find buckets who match a given value for their policy
+
+    :example:
+
+        .. code-block: yaml
+
+            policies:
+              - name: s3-bucket-with-cloudtrail
+                resource: s3
+                filters:
+                  - type: policy-value
+                    key:
+                    value:
+    """
+
+    schema = type_schema('policy-value', rinherit=ValueFilter.schema)
+    permissions = ('s3:GetBucketPolicy',)
+
+    def process(self, resources, event=None):
+        matches = []
+        for item in resources:
+            policy = item.get('Policy', None)
+            if policy is None:
+                continue
+            if 'c7n:ParsedPolicy' not in item:
+                parsedPolicy = json.loads(policy)
+                item['c7n:ParsedPolicy'] = parsedPolicy
+            if self.match(item['c7n:ParsedPolicy']):
+                matches.append(item)
+        return matches
 
 
 @actions.register('no-op')
