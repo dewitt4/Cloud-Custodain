@@ -48,6 +48,7 @@ class Config(dict):
             'cache': '',
             'profile': None,
             'assume_role': None,
+            'external_id': None,
             'log_group': None,
             'metrics_enabled': True,
             'output_dir': os.environ.get(
