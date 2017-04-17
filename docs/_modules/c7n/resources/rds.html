@@ -211,6 +211,7 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">decimal</span> <span class="k">import</span> <span class="n">Decimal</span> <span class="k">as</span> <span class="n">D</span><span class="p">,</span> <span class="n">ROUND_HALF_UP</span>
 
 <span class="kn">from</span> <span class="nn">distutils.version</span> <span class="k">import</span> <span class="n">LooseVersion</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
@@ -818,6 +819,72 @@
                 <span class="s1">&#39;Backup&#39;</span><span class="p">,</span>
                 <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]),</span>
             <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">])</span></div></div>
+
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resize&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="ResizeInstance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.ResizeInstance">[docs]</a><span class="k">class</span> <span class="nc">ResizeInstance</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Change the allocated storage of an rds instance.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">       This will find databases using over 85% of their allocated</span>
+<span class="sd">       storage, and resize them to have an additional 30% storage</span>
+<span class="sd">       the resize here is async during the next maintenance.</span>
+
+<span class="sd">       .. code-block: yaml</span>
+<span class="sd">            policies:</span>
+<span class="sd">              - name: rds-snapshot-retention</span>
+<span class="sd">                resource: rds</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: metrics</span>
+<span class="sd">                    name: FreeStorageSpace</span>
+<span class="sd">                    percent-attr: AllocatedStorage</span>
+<span class="sd">                    attr-multiplier: 1073741824</span>
+<span class="sd">                    value: 90</span>
+<span class="sd">                    op: greater-than</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: resize</span>
+<span class="sd">                    percent: 30</span>
+
+
+<span class="sd">       This will find databases using under 20% of their allocated</span>
+<span class="sd">       storage, and resize them to be 30% smaller, the resize here</span>
+<span class="sd">       is configured to be immediate.</span>
+
+<span class="sd">       .. code-block: yaml</span>
+<span class="sd">            policies:</span>
+<span class="sd">              - name: rds-snapshot-retention</span>
+<span class="sd">                resource: rds</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: metrics</span>
+<span class="sd">                    name: FreeStorageSpace</span>
+<span class="sd">                    percent-attr: AllocatedStorage</span>
+<span class="sd">                    attr-multiplier: 1073741824</span>
+<span class="sd">                    value: 90</span>
+<span class="sd">                    op: greater-than</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: resize</span>
+<span class="sd">                    percent: -30</span>
+<span class="sd">                    immediate: true</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;resize&#39;</span><span class="p">,</span>
+        <span class="n">percent</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span>
+        <span class="n">immediate</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;rds:ModifyDBInstance&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ResizeInstance.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.ResizeInstance.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">old_val</span> <span class="o">=</span> <span class="n">D</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;AllocatedStorage&#39;</span><span class="p">])</span>
+            <span class="n">_100</span> <span class="o">=</span> <span class="n">D</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+            <span class="n">new_val</span> <span class="o">=</span> <span class="p">((</span><span class="n">_100</span> <span class="o">+</span> <span class="n">D</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;percent&#39;</span><span class="p">]))</span> <span class="o">/</span> <span class="n">_100</span><span class="p">)</span> <span class="o">*</span> <span class="n">old_val</span>
+            <span class="n">rounded</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">new_val</span><span class="o">.</span><span class="n">quantize</span><span class="p">(</span><span class="n">D</span><span class="p">(</span><span class="s1">&#39;0&#39;</span><span class="p">),</span> <span class="n">ROUND_HALF_UP</span><span class="p">))</span>
+            <span class="n">c</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
+                <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+                <span class="n">AllocatedStorage</span><span class="o">=</span><span class="n">rounded</span><span class="p">,</span>
+                <span class="n">ApplyImmediately</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;immediate&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span></div></div>
 
 
 <span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;retention&#39;</span><span class="p">)</span>
