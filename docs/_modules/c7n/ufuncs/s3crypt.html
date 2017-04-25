@@ -227,13 +227,18 @@
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;remediated </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]))</span></div>
 
 
-<div class="viewcode-block" id="get_function"><a class="viewcode-back" href="../../../generated/c7n.ufuncs.html#c7n.ufuncs.s3crypt.get_function">[docs]</a><span class="k">def</span> <span class="nf">get_function</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">role</span><span class="p">,</span> <span class="n">buckets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="process_sns_event"><a class="viewcode-back" href="../../../generated/c7n.ufuncs.html#c7n.ufuncs.s3crypt.process_sns_event">[docs]</a><span class="k">def</span> <span class="nf">process_sns_event</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Records&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+        <span class="n">process_key_event</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s1">&#39;Sns&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]),</span> <span class="n">context</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_function"><a class="viewcode-back" href="../../../generated/c7n.ufuncs.html#c7n.ufuncs.s3crypt.get_function">[docs]</a><span class="k">def</span> <span class="nf">get_function</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">role</span><span class="p">,</span> <span class="n">via_sns</span><span class="p">,</span> <span class="n">buckets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">account_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="p">(</span>
-        <span class="n">LambdaFunction</span><span class="p">,</span> <span class="n">custodian_archive</span><span class="p">,</span> <span class="n">BucketNotification</span><span class="p">)</span>
+        <span class="n">LambdaFunction</span><span class="p">,</span> <span class="n">custodian_archive</span><span class="p">,</span> <span class="n">BucketLambdaNotification</span><span class="p">)</span>
 
     <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
         <span class="n">name</span><span class="o">=</span><span class="s1">&#39;c7n-s3-encrypt&#39;</span><span class="p">,</span>
-        <span class="n">handler</span><span class="o">=</span><span class="s1">&#39;s3crypt.process_key_event&#39;</span><span class="p">,</span>
+        <span class="n">handler</span><span class="o">=</span><span class="s1">&#39;s3crypt.process_&#39;</span> <span class="o">+</span> <span class="s1">&#39;sns_event&#39;</span> <span class="k">if</span> <span class="n">via_sns</span> <span class="k">else</span> <span class="s1">&#39;key_event&#39;</span><span class="p">,</span>
         <span class="n">memory_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
         <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
         <span class="n">role</span><span class="o">=</span><span class="n">role</span><span class="p">,</span>
@@ -242,7 +247,8 @@
 
     <span class="k">if</span> <span class="n">buckets</span><span class="p">:</span>
         <span class="n">config</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="n">BucketNotification</span><span class="p">({</span><span class="s1">&#39;account_s3&#39;</span><span class="p">:</span> <span class="n">account_id</span><span class="p">},</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+            <span class="n">BucketLambdaNotification</span><span class="p">({</span><span class="s1">&#39;account_s3&#39;</span><span class="p">:</span> <span class="n">account_id</span><span class="p">},</span>
+                <span class="n">session_factory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">]</span>
 
     <span class="n">archive</span> <span class="o">=</span> <span class="n">custodian_archive</span><span class="p">()</span>

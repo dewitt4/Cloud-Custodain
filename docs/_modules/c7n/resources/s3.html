@@ -798,7 +798,7 @@
 <span class="sd">                  - attach-encrypt</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
-        <span class="s1">&#39;attach-encrypt&#39;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+        <span class="s1">&#39;attach-encrypt&#39;</span><span class="p">,</span> <span class="n">role</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="n">topic</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
         <span class="s2">&quot;s3:PutBucketNotification&quot;</span><span class="p">,</span> <span class="s2">&quot;s3:GetBucketNotification&quot;</span><span class="p">,</span>
@@ -826,10 +826,11 @@
 
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">account_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span>
+        <span class="n">topic_arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;topic&#39;</span><span class="p">)</span>
 
         <span class="n">func</span> <span class="o">=</span> <span class="n">get_function</span><span class="p">(</span>
             <span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">),</span>
-            <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">)</span>
+            <span class="nb">bool</span><span class="p">(</span><span class="n">topic_arn</span><span class="p">),</span> <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">)</span>
 
         <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
             <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{</span>
@@ -862,6 +863,7 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span>
                         <span class="n">region_funcs</span><span class="p">[</span><span class="n">region</span><span class="p">],</span>
                         <span class="n">b</span><span class="p">,</span>
+                        <span class="n">topic_arn</span><span class="p">,</span>
                         <span class="n">account_id</span><span class="p">,</span>
                         <span class="n">region_sessions</span><span class="p">[</span><span class="n">region</span><span class="p">]</span>
                     <span class="p">))</span>
@@ -872,10 +874,14 @@
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
             <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AttachLambdaEncrypt.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">account_id</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
-        <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">BucketNotification</span>
-        <span class="n">source</span> <span class="o">=</span> <span class="n">BucketNotification</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;account_s3&#39;</span><span class="p">:</span> <span class="n">account_id</span><span class="p">},</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">)</span>
+<div class="viewcode-block" id="AttachLambdaEncrypt.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">topic</span><span class="p">,</span> <span class="n">account_id</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">BucketSNSNotification</span><span class="p">,</span> <span class="n">BucketLambdaNotification</span>
+        <span class="k">if</span> <span class="n">topic</span><span class="p">:</span>
+            <span class="n">topic</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">topic</span> <span class="o">==</span> <span class="s1">&#39;default&#39;</span> <span class="k">else</span> <span class="n">topic</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">BucketSNSNotification</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">topic</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="n">BucketLambdaNotification</span><span class="p">(</span>
+                <span class="p">{</span><span class="s1">&#39;account_s3&#39;</span><span class="p">:</span> <span class="n">account_id</span><span class="p">},</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">source</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div></div>
 
 
