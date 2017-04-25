@@ -178,6 +178,8 @@
 <span class="sd">&quot;&quot;&quot;AWS Account as a custodian resource.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
@@ -186,6 +188,7 @@
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -598,6 +601,148 @@
             <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:ServiceLimitsExceeded&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exceeded</span>
             <span class="k">return</span> <span class="n">resources</span>
         <span class="k">return</span> <span class="p">[]</span></div></div>
+
+
+<div class="viewcode-block" id="cloudtrail_policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.cloudtrail_policy">[docs]</a><span class="k">def</span> <span class="nf">cloudtrail_policy</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">account_id</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;add CloudTrail permissions to an S3 policy, preserving existing&#39;&#39;&#39;</span>
+    <span class="n">ct_actions</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:GetBucketAcl&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Allow&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;Service&#39;</span><span class="p">:</span> <span class="s1">&#39;cloudtrail.amazonaws.com&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;Resource&#39;</span><span class="p">:</span> <span class="s1">&#39;arn:aws:s3:::&#39;</span> <span class="o">+</span> <span class="n">bucket_name</span><span class="p">,</span>
+            <span class="s1">&#39;Sid&#39;</span><span class="p">:</span> <span class="s1">&#39;AWSCloudTrailAclCheck20150319&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">{</span>
+            <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:PutObject&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Condition&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;StringEquals&#39;</span><span class="p">:</span>
+                <span class="p">{</span><span class="s1">&#39;s3:x-amz-acl&#39;</span><span class="p">:</span> <span class="s1">&#39;bucket-owner-full-control&#39;</span><span class="p">},</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Allow&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;Service&#39;</span><span class="p">:</span> <span class="s1">&#39;cloudtrail.amazonaws.com&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;Resource&#39;</span><span class="p">:</span> <span class="s1">&#39;arn:aws:s3:::</span><span class="si">%s</span><span class="s1">/AWSLogs/</span><span class="si">%s</span><span class="s1">/*&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">bucket_name</span><span class="p">,</span> <span class="n">account_id</span>
+            <span class="p">),</span>
+            <span class="s1">&#39;Sid&#39;</span><span class="p">:</span> <span class="s1">&#39;AWSCloudTrailWrite20150319&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">]</span>
+    <span class="c1"># parse original policy</span>
+    <span class="k">if</span> <span class="n">original</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Statement&#39;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s1">&#39;Version&#39;</span><span class="p">:</span> <span class="s1">&#39;2012-10-17&#39;</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">original</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
+    <span class="n">original_actions</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Action&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]]</span>
+    <span class="k">for</span> <span class="n">cta</span> <span class="ow">in</span> <span class="n">ct_actions</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">cta</span><span class="p">[</span><span class="s1">&#39;Action&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">original_actions</span><span class="p">:</span>
+            <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cta</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span></div>
+
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;enable-cloudtrail&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="EnableTrail"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableTrail">[docs]</a><span class="k">class</span> <span class="nc">EnableTrail</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enables logging on the trail(s) named in the policy</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: trail-test</span>
+<span class="sd">            description: Ensure CloudTrail logging is enabled</span>
+<span class="sd">            resource: account</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: enable-cloudtrail</span>
+<span class="sd">                trail: mytrail</span>
+<span class="sd">                bucket: trails</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;cloudtrail:CreateTrail&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cloudtrail:DescribeTrails&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cloudtrail:GetTrailStatus&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cloudtrail:StartLogging&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cloudtrail:UpdateTrail&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;s3:CreateBucket&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;s3:GetBucketPolicy&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;s3:PutBucketPolicy&#39;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;enable-cloudtrail&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;trail&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;bucket&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;multi-region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;global-events&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;notify&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;file-digest&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;kms&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;kms-key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;bucket&#39;</span><span class="p">,),</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="EnableTrail.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableTrail.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">accounts</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create or enable CloudTrail&quot;&quot;&quot;</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;bucket&#39;</span><span class="p">]</span>
+        <span class="n">trail_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;trail&#39;</span><span class="p">,</span> <span class="s1">&#39;default-trail&#39;</span><span class="p">)</span>
+        <span class="n">multi_region</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;multi-region&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">global_events</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;global-events&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">notify</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;notify&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">file_digest</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;file-digest&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">kms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">kms_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+        <span class="n">s3client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+        <span class="n">s3client</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">current_policy</span> <span class="o">=</span> <span class="n">s3client</span><span class="o">.</span><span class="n">get_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span><span class="p">:</span>
+            <span class="n">current_policy</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="n">policy_json</span> <span class="o">=</span> <span class="n">cloudtrail_policy</span><span class="p">(</span>
+            <span class="n">current_policy</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">)</span>
+
+        <span class="n">s3client</span><span class="o">.</span><span class="n">put_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">Policy</span><span class="o">=</span><span class="n">policy_json</span><span class="p">)</span>
+        <span class="n">trails</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trails</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;trailList&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="k">if</span> <span class="n">trail_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Name&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span><span class="p">]:</span>
+            <span class="n">new_trail</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">create_trail</span><span class="p">(</span>
+                <span class="n">Name</span><span class="o">=</span><span class="n">trail_name</span><span class="p">,</span>
+                <span class="n">S3BucketName</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">new_trail</span><span class="p">:</span>
+                <span class="n">trails</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_trail</span><span class="p">)</span>
+                <span class="c1"># the loop below will configure the new trail</span>
+        <span class="k">for</span> <span class="n">trail</span> <span class="ow">in</span> <span class="n">trails</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Name&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">trail_name</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="c1"># enable</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="n">trail</span><span class="p">[</span><span class="s1">&#39;TrailARN&#39;</span><span class="p">]</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_trail_status</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">arn</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">status</span><span class="p">[</span><span class="s1">&#39;IsLogging&#39;</span><span class="p">]:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">start_logging</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">arn</span><span class="p">)</span>
+            <span class="c1"># apply configuration changes (if any)</span>
+            <span class="n">update_args</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">multi_region</span> <span class="o">!=</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IsMultiRegionTrail&#39;</span><span class="p">):</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;IsMultiRegionTrail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">multi_region</span>
+            <span class="k">if</span> <span class="n">global_events</span> <span class="o">!=</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IncludeGlobalServiceEvents&#39;</span><span class="p">):</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;IncludeGlobalServiceEvents&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">global_events</span>
+            <span class="k">if</span> <span class="n">notify</span> <span class="o">!=</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;SNSTopicArn&#39;</span><span class="p">):</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;SnsTopicName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">notify</span>
+            <span class="k">if</span> <span class="n">file_digest</span> <span class="o">!=</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogFileValidationEnabled&#39;</span><span class="p">):</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;EnableLogFileValidation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">file_digest</span>
+            <span class="k">if</span> <span class="n">kms_key</span> <span class="o">!=</span> <span class="n">trail</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">kms</span> <span class="ow">and</span> <span class="s1">&#39;KmsKeyId&#39;</span> <span class="ow">in</span> <span class="n">trail</span><span class="p">:</span>
+                    <span class="n">kms_key</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kms_key</span>
+            <span class="k">if</span> <span class="n">update_args</span><span class="p">:</span>
+                <span class="n">update_args</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail_name</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_trail</span><span class="p">(</span><span class="o">**</span><span class="n">update_args</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
