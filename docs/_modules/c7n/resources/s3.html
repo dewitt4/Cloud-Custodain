@@ -572,6 +572,66 @@
         <span class="k">return</span> <span class="kc">None</span></div></div>
 
 
+<span class="n">ENCRYPTION_STATEMENT_GLOB</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="s1">&#39;Deny&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="s1">&#39;s3:PutObject&#39;</span><span class="p">,</span>
+            <span class="s2">&quot;Condition&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;StringNotEquals&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;s3:x-amz-server-side-encryption&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;AES256&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:kms&quot;</span><span class="p">]}}}</span>
+
+
+<span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;no-encryption-statement&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="EncryptionEnabledFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionEnabledFilter">[docs]</a><span class="k">class</span> <span class="nc">EncryptionEnabledFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find buckets with missing encryption policy statements.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-bucket-not-encrypted</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: no-encryption-statement</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;no-encryption-statement&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="EncryptionEnabledFilter.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionEnabledFilter.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
+<div class="viewcode-block" id="EncryptionEnabledFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionEnabledFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="EncryptionEnabledFilter.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionEnabledFilter.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">b</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">encryption_statement</span> <span class="o">=</span> <span class="n">ENCRYPTION_STATEMENT_GLOB</span>
+
+        <span class="n">statements</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">check</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">statements</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">encryption_statement</span><span class="p">[</span><span class="s2">&quot;Sid&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s2">&quot;Sid&quot;</span><span class="p">]</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> doesn&#39;t have Sid&quot;</span> <span class="o">%</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+
+            <span class="n">encryption_statement</span><span class="p">[</span><span class="s2">&quot;Resource&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s2">&quot;Resource&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="n">encryption_statement</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> contains correct encryption policy&quot;</span><span class="p">,</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                <span class="n">check</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="n">check</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">b</span></div></div>
+
+
 <span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;missing-statement&#39;</span><span class="p">)</span>
 <span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;missing-policy-statement&#39;</span><span class="p">)</span>
 <div class="viewcode-block" id="MissingPolicyStatementFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.MissingPolicyStatementFilter">[docs]</a><span class="k">class</span> <span class="nc">MissingPolicyStatementFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
