@@ -220,8 +220,10 @@
 <span class="sd">    to retrieve a subset of values.</span>
 
 <span class="sd">    Expression syntax</span>
-<span class="sd">    - on json, a jmespath expr is valuated</span>
+<span class="sd">    - on json, a jmespath expr is evaluated</span>
 <span class="sd">    - on csv, an integer column or jmespath expr can be specified</span>
+<span class="sd">    - on csv2dict, a jmespath expr (the csv is parsed into a dictionary where</span>
+<span class="sd">    the keys are the headers and the values are the remaining columns)</span>
 
 <span class="sd">    Text files are expected to be line delimited values.</span>
 
@@ -236,10 +238,15 @@
 <span class="sd">         format: json</span>
 <span class="sd">         expr: Region.&quot;us-east-1&quot;[].ImageId</span>
 
+<span class="sd">      value_from:</span>
+<span class="sd">         url: s3://bucket/abc/foo.csv</span>
+<span class="sd">         format: csv2dict</span>
+<span class="sd">         expr: key[1]</span>
+
 <span class="sd">       # inferred from extension</span>
-<span class="sd">       format: [json, csv, txt]</span>
+<span class="sd">       format: [json, csv, csv2dict, txt]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">supported_formats</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;json&#39;</span><span class="p">,</span> <span class="s1">&#39;txt&#39;</span><span class="p">,</span> <span class="s1">&#39;csv&#39;</span><span class="p">)</span>
+    <span class="n">supported_formats</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;json&#39;</span><span class="p">,</span> <span class="s1">&#39;txt&#39;</span><span class="p">,</span> <span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">)</span>
 
     <span class="c1"># intent is that callers embed this schema</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
@@ -248,7 +255,7 @@
         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">],</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;url&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="s1">&#39;json&#39;</span><span class="p">,</span> <span class="s1">&#39;txt&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="s1">&#39;json&#39;</span><span class="p">,</span> <span class="s1">&#39;txt&#39;</span><span class="p">,</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;expr&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
                 <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
                 <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}]}</span>
@@ -282,13 +289,17 @@
             <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span>
             <span class="k">if</span> <span class="s1">&#39;expr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
                 <span class="k">return</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="n">data</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span> <span class="ow">or</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">contents</span><span class="p">))</span>
-            <span class="k">if</span> <span class="s1">&#39;expr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="nb">int</span><span class="p">):</span>
-                <span class="k">return</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">]]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">:</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">)}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;expr&#39;</span><span class="p">),</span> <span class="nb">int</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">]]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">]</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
             <span class="k">if</span> <span class="s1">&#39;expr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
-            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="n">data</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">data</span>
         <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;txt&#39;</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">StringIO</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span><span class="o">.</span><span class="n">readlines</span><span class="p">()]</span></div></div>
 </pre></div>
