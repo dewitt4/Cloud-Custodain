@@ -185,10 +185,7 @@
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 
-<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
-
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">ResourceManager</span><span class="p">,</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
@@ -601,6 +598,85 @@
             <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:ServiceLimitsExceeded&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exceeded</span>
             <span class="k">return</span> <span class="n">resources</span>
         <span class="k">return</span> <span class="p">[]</span></div></div>
+
+
+<span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;request-limit-increase&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="RequestLimitIncrease"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.RequestLimitIncrease">[docs]</a><span class="k">class</span> <span class="nc">RequestLimitIncrease</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; File support ticket to raise limit</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: account-service-limits</span>
+<span class="sd">            resource: account</span>
+<span class="sd">            filters:</span>
+<span class="sd">             - type: service-limit</span>
+<span class="sd">               services:</span>
+<span class="sd">                 - EBS</span>
+<span class="sd">               threshold: 60.5</span>
+<span class="sd">             actions:</span>
+<span class="sd">               - type: request-limit-increase</span>
+<span class="sd">                 notify: [email, email2]</span>
+<span class="sd">                 percent-increase: 50</span>
+<span class="sd">                 message: &quot;Raise {service} by {percent}%&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;request-limit-increase&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;notify&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;percent-increase&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;subject&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;message&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;severity&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;urgent&#39;</span><span class="p">,</span> <span class="s1">&#39;high&#39;</span><span class="p">,</span> <span class="s1">&#39;normal&#39;</span><span class="p">,</span> <span class="s1">&#39;low&#39;</span><span class="p">]},</span>
+           <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;percent-increase&#39;</span><span class="p">],</span>
+           <span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;support:CreateCase&#39;</span><span class="p">,)</span>
+
+    <span class="n">default_subject</span> <span class="o">=</span> <span class="s1">&#39;Raise the account limit of </span><span class="si">{service}</span><span class="s1">&#39;</span>
+    <span class="n">default_template</span> <span class="o">=</span> <span class="s1">&#39;Please raise the account limit of </span><span class="si">{service}</span><span class="s1"> by </span><span class="si">{percent}</span><span class="s1">%&#39;</span>
+    <span class="n">default_severity</span> <span class="o">=</span> <span class="s1">&#39;normal&#39;</span>
+
+    <span class="n">service_code_mapping</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;AutoScaling&#39;</span><span class="p">:</span> <span class="s1">&#39;auto-scaling&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ELB&#39;</span><span class="p">:</span> <span class="s1">&#39;elastic-load-balancing&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;EBS&#39;</span><span class="p">:</span> <span class="s1">&#39;amazon-elastic-block-store&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;EC2&#39;</span><span class="p">:</span> <span class="s1">&#39;amazon-elastic-compute-cloud-linux&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;RDS&#39;</span><span class="p">:</span> <span class="s1">&#39;amazon-relational-database-service-aurora&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;VPC&#39;</span><span class="p">:</span> <span class="s1">&#39;amazon-virtual-private-cloud&#39;</span><span class="p">,</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="RequestLimitIncrease.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.RequestLimitIncrease.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;support&#39;</span><span class="p">)</span>
+
+        <span class="n">services_done</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;c7n:ServiceLimitsExceeded&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="n">service</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;service&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">service</span> <span class="ow">in</span> <span class="n">services_done</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">services_done</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">service</span><span class="p">)</span>
+            <span class="n">service_code</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">service_code_mapping</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">service</span><span class="p">)</span>
+
+            <span class="n">subject</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subject&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_subject</span><span class="p">)</span>
+            <span class="n">subject</span> <span class="o">=</span> <span class="n">subject</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">service</span><span class="o">=</span><span class="n">service</span><span class="p">)</span>
+
+            <span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_template</span><span class="p">)</span>
+            <span class="n">body</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="p">{</span>
+                    <span class="s1">&#39;service&#39;</span><span class="p">:</span> <span class="n">service</span><span class="p">,</span>
+                    <span class="s1">&#39;percent&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;percent-increase&#39;</span><span class="p">)</span>
+                    <span class="p">})</span>
+            
+            <span class="n">client</span><span class="o">.</span><span class="n">create_case</span><span class="p">(</span>
+                <span class="n">subject</span><span class="o">=</span><span class="n">subject</span><span class="p">,</span>
+                <span class="n">communicationBody</span><span class="o">=</span><span class="n">body</span><span class="p">,</span>
+                <span class="n">serviceCode</span><span class="o">=</span><span class="n">service_code</span><span class="p">,</span>
+                <span class="n">categoryCode</span><span class="o">=</span><span class="s1">&#39;general-guidance&#39;</span><span class="p">,</span>
+                <span class="n">severityCode</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;severity&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_severity</span><span class="p">),</span>
+                <span class="n">ccEmailAddresses</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;notify&#39;</span><span class="p">,</span> <span class="p">[]))</span></div></div>
 
 
 <div class="viewcode-block" id="cloudtrail_policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.cloudtrail_policy">[docs]</a><span class="k">def</span> <span class="nf">cloudtrail_policy</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">bucket_name</span><span class="p">,</span> <span class="n">account_id</span><span class="p">):</span>
