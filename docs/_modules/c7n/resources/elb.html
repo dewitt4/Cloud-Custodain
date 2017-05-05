@@ -189,6 +189,8 @@
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -437,12 +439,13 @@
 
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
 
-        <span class="c1"># Create a custom policy.</span>
-        <span class="n">attrs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attributes&#39;</span><span class="p">)</span>
-        <span class="c1"># This name must be unique within the</span>
+        <span class="c1"># Create a custom policy with epoch timestamp.</span>
+        <span class="c1"># to make it unique within the</span>
         <span class="c1"># set of policies for this load balancer.</span>
-        <span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+        <span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;-&#39;</span> <span class="o">+</span> \
+                      <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">))</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
         <span class="n">lb_name</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">]</span>
+        <span class="n">attrs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attributes&#39;</span><span class="p">)</span>
         <span class="n">policy_attributes</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;AttributeName&#39;</span><span class="p">:</span> <span class="n">attr</span><span class="p">,</span> <span class="s1">&#39;AttributeValue&#39;</span><span class="p">:</span> <span class="s1">&#39;true&#39;</span><span class="p">}</span>
             <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">]</span>
 
@@ -461,15 +464,16 @@
         <span class="c1"># Apply it to all SSL listeners.</span>
         <span class="n">ssl_policies</span> <span class="o">=</span> <span class="p">()</span>
         <span class="k">if</span> <span class="s1">&#39;c7n.ssl-policies&#39;</span> <span class="ow">in</span> <span class="n">elb</span><span class="p">:</span>
-            <span class="n">ssl_policies</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">elb</span><span class="p">[</span><span class="s1">&#39;c7n.ssl-policies&#39;</span><span class="p">])</span>
+            <span class="n">ssl_policies</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;c7n.ssl-policies&#39;</span><span class="p">]</span>
 
         <span class="k">for</span> <span class="n">ld</span> <span class="ow">in</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;ListenerDescriptions&#39;</span><span class="p">]:</span>
             <span class="k">if</span> <span class="n">ld</span><span class="p">[</span><span class="s1">&#39;Listener&#39;</span><span class="p">][</span><span class="s1">&#39;Protocol&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;HTTPS&#39;</span><span class="p">,</span> <span class="s1">&#39;SSL&#39;</span><span class="p">):</span>
                 <span class="n">policy_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">policy_name</span><span class="p">]</span>
                 <span class="c1"># Preserve extant non-ssl listener policies</span>
+                <span class="n">policy_names</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">ld</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PolicyNames&#39;</span><span class="p">,</span> <span class="p">()))</span>
+                <span class="c1"># Remove extant ssl listener policy</span>
                 <span class="k">if</span> <span class="n">ssl_policies</span><span class="p">:</span>
-                    <span class="n">policy_names</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
-                        <span class="n">ssl_policies</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">ld</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PolicyNames&#39;</span><span class="p">,</span> <span class="p">())))</span>
+                    <span class="n">policy_names</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">ssl_policies</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">set_load_balancer_policies_of_listener</span><span class="p">(</span>
                     <span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">lb_name</span><span class="p">,</span>
                     <span class="n">LoadBalancerPort</span><span class="o">=</span><span class="n">ld</span><span class="p">[</span><span class="s1">&#39;Listener&#39;</span><span class="p">][</span><span class="s1">&#39;LoadBalancerPort&#39;</span><span class="p">],</span>
