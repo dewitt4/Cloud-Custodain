@@ -16,6 +16,8 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import json
+import re
+
 from botocore.exceptions import ClientError
 from datetime import datetime, timedelta
 
@@ -53,6 +55,10 @@ class Account(ResourceManager):
     class resource_type(object):
         id = 'account_id'
         name = 'account_name'
+
+    @property
+    def source_type(self):
+        return 'describe'
 
     @classmethod
     def get_permissions(cls):
@@ -690,7 +696,6 @@ class EnableTrail(BaseAction):
                 update_args['Name'] = trail_name
                 client.update_trail(**update_args)
 
-
 @filters.register('has-virtual-mfa')
 class HasVirtualMFA(Filter):
     """Is the account configured with a virtual MFA device?
@@ -728,3 +733,107 @@ class HasVirtualMFA(Filter):
 
     def process(self, resources, event=None):
         return list(filter(self.account_has_virtual_mfa, resources))
+
+@filters.register('alarmed-cloudtrail-patterns')
+class MonitoredCloudtrailMetric(Filter):
+    """Finds cloudtrails with logging and a metric filter. Is a subclass of ValueFilter,
+    filtering the metric filter objects. Optionally, verifies an alarm exists (true by default),
+    and for said alarm, there is atleast one SNS subscription (again, true by default).
+    :example:
+        .. code-block: yaml
+            policies:
+              - name: cloudtrail-trail-with-login-attempts
+                resource: cloudtrail
+                region: us-east-1
+                filters:
+                  - type: monitored-metric
+                    alarm: true
+                    topic-subscription: false
+                    filter: '$.eventName = DeleteTrail'
+    """
+
+    schema = type_schema('alarmed-cloudtrail-patterns', **{
+        'patterns': {'type': 'array'},
+        'topic-subscription': {'type': 'boolean'},
+        'alarm': {'type': 'boolean'}
+    })
+
+    permissions = ('logs:DescribeMetricFilters', 'cloudwatch:DescribeAlarms',
+        'sns:ListSubscriptionsByTopic')
+
+    def find_subscribed_topic_arns(self, session, topicArns):
+        sns = session.client('sns')
+        def arn_has_subscriptions(arn):
+            subscriptions = sns.list_subscriptions_by_topic(TopicArn=arn)['Subscriptions']
+            return any(subscriptions)
+        return filter(arn_has_subscriptions, topicArns)
+
+    def all_alarms(self):
+        return self.manager.get_resource_manager('alarm').resources()
+
+    def fetch_metric_filters_for_log_group(self, session, groupName):
+        logs = session.client('logs')
+        paginator = logs.get_paginator('describe_metric_filters')
+        try:
+            results = paginator.paginate(logGroupName=groupName).build_full_result()
+            return results['metricFilters']
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                return []
+            else:
+                raise
+
+    def alarm_contains_metrics(self, alarm, metrics):
+        pair = (alarm['Namespace'], alarm['MetricName'])
+        return pair in metrics
+
+    def account_matches_filters(self, account):
+        trails = self.manager.get_resource_manager('cloudtrail').resources()
+        return any(filter(self.cloudtrail_matches_filter, trails))
+
+    def text_matches_patterns(self, metric_filter):
+        patterns = self.data['patterns']
+        text = metric_filter['filterPattern']
+        return all(map(lambda pattern: bool(re.search(pattern, text, flags=re.IGNORECASE)), patterns))
+
+    def cloudtrail_matches_filter(self, trail):
+        logGroupArn = trail.get('CloudWatchLogsLogGroupArn')
+        if not logGroupArn:
+            return False
+        session = local_session(self.manager.session_factory)
+        groupName = re.search(':log-group:([^:]+)', logGroupArn).group(1)
+
+        filters = self.fetch_metric_filters_for_log_group(session, groupName)
+        matchingFilters = filter(self.text_matches_patterns, filters)
+        if not matchingFilters:
+            return False
+
+        # We need to filter the list of transformations to those that emit a value, and then put
+        # it into a format we can easily cross compare on.
+        allTransformations = map(lambda filter: filter['metricTransformations'], matchingFilters)
+        transformations = sum(allTransformations, [])
+        emittedMetrics = map(lambda t: (t['metricNamespace'], t['metricName']), transformations)
+        if not emittedMetrics:
+            return False
+
+        consideredSet = emittedMetrics
+
+        if self.data.get('alarm', True):
+            metricAlarms = self.all_alarms()
+
+            def alarmFilter(alarm):
+                return self.alarm_contains_metrics(alarm, emittedMetrics)
+            filteredAlarms = filter(alarmFilter, metricAlarms)
+            if not filteredAlarms:
+                return False
+            consideredSet = filteredAlarms
+            if self.data.get('topic-subscription'):
+                alarmSNSTopics = sum(map(lambda alarm: alarm['AlarmActions'], filteredAlarms), [])
+                if not alarmSNSTopics:
+                    return False
+                consideredSet = self.find_subscribed_topic_arns(session, alarmSNSTopics)
+
+        return any(consideredSet)
+
+    def process(self, resources, event=None):
+        return filter(self.account_matches_filters, resources)
