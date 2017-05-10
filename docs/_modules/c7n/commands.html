@@ -188,7 +188,7 @@
 
 <span class="kn">import</span> <span class="nn">yaml</span>
 
-<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">load</span> <span class="k">as</span> <span class="n">policy_load</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">PolicyCollection</span><span class="p">,</span> <span class="n">load</span> <span class="k">as</span> <span class="n">policy_load</span>
 <span class="kn">from</span> <span class="nn">c7n.reports</span> <span class="k">import</span> <span class="n">report</span> <span class="k">as</span> <span class="n">do_report</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">Bag</span><span class="p">,</span> <span class="n">dumps</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -205,14 +205,17 @@
     <span class="k">def</span> <span class="nf">_load_policies</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
         <span class="n">load_resources</span><span class="p">()</span>
 
-        <span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_policies</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">errors</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">:</span>
+        <span class="n">all_policies</span> <span class="o">=</span> <span class="n">PolicyCollection</span><span class="o">.</span><span class="n">from_data</span><span class="p">({},</span> <span class="n">options</span><span class="p">)</span>
+
+        <span class="c1"># for a default region for policy loading, we&#39;ll expand regions later.</span>
+        <span class="n">options</span><span class="o">.</span><span class="n">region</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">regions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">fp</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">collection</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
+                <span class="n">collection</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">fp</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
-                <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: policy file does not exist (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
+                <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: policy file does not exist (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fp</span><span class="p">))</span>
                 <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="k">continue</span>
             <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -221,17 +224,24 @@
                 <span class="k">continue</span>
 
             <span class="k">if</span> <span class="n">collection</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contained no policies.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file</span><span class="p">))</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contained no policies.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fp</span><span class="p">))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                    <span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contains </span><span class="si">{}</span><span class="s1"> policies (after filtering)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                        <span class="n">file</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">collection</span><span class="p">)))</span>
-                <span class="n">policies</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">policies</span><span class="p">)</span>
-                <span class="n">all_policies</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">unfiltered_policies</span><span class="p">)</span>
+                    <span class="s1">&#39;Loaded file </span><span class="si">{}</span><span class="s1">. Contains </span><span class="si">{}</span><span class="s1"> policies&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">fp</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">collection</span><span class="p">)))</span>
+                <span class="n">all_policies</span> <span class="o">=</span> <span class="n">all_policies</span> <span class="o">+</span> <span class="n">collection</span>
 
         <span class="k">if</span> <span class="n">errors</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Found </span><span class="si">{}</span><span class="s1"> errors.  Exiting.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">errors</span><span class="p">))</span>
             <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># filter by name and resource type</span>
+        <span class="n">policies</span> <span class="o">=</span> <span class="n">all_policies</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;policy_filter&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;resource_type&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+
+        <span class="c1"># expand by region, this results in a separate policy instance per region of execution.</span>
+        <span class="n">policies</span> <span class="o">=</span> <span class="n">policies</span><span class="o">.</span><span class="n">expand_regions</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">regions</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">policies</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">_print_no_policies_warning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">all_policies</span><span class="p">)</span>
@@ -253,7 +263,7 @@
                     <span class="n">eprint</span><span class="p">(</span><span class="s2">&quot;Error: duplicate policy name &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">policy</span><span class="p">))</span>
                     <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">policies</span><span class="p">))</span>
 
     <span class="k">return</span> <span class="n">_load_policies</span></div>
 
