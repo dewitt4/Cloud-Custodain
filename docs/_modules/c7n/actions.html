@@ -683,6 +683,7 @@
                       <span class="p">]}},</span>
            <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
            <span class="s1">&#39;tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;principal_id_tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
            <span class="p">}</span>
     <span class="p">)</span>
 
@@ -707,10 +708,12 @@
 
         <span class="n">user</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">utype</span> <span class="o">==</span> <span class="s2">&quot;IAMUser&quot;</span><span class="p">:</span>
-            <span class="n">user</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;userName&#39;</span><span class="p">]</span>
+            <span class="n">user</span>               <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;userName&#39;</span><span class="p">]</span>
+            <span class="n">principal_id_value</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;principalId&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">utype</span> <span class="o">==</span> <span class="s2">&quot;AssumedRole&quot;</span><span class="p">:</span>
-            <span class="n">user</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;arn&#39;</span><span class="p">]</span>
-            <span class="n">prefix</span><span class="p">,</span> <span class="n">user</span> <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">user</span>               <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">][</span><span class="s1">&#39;arn&#39;</span><span class="p">]</span>
+            <span class="n">principal_id_value</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;userIdentity&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;principalId&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">prefix</span><span class="p">,</span> <span class="n">user</span>       <span class="o">=</span> <span class="n">user</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
             <span class="c1"># instance role</span>
             <span class="k">if</span> <span class="n">user</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;i-&#39;</span><span class="p">):</span>
                 <span class="k">return</span>
@@ -719,24 +722,36 @@
                 <span class="k">return</span>
         <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span>
+        <span class="c1"># if the auto-tag-user policy set update to False (or it&#39;s unset) then we</span>
+        <span class="c1"># will skip writing their UserName tag and not overwrite pre-existing values</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;update&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="n">untagged</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
-                    <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">]:</span>
-                        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">untagged_resources</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="c1"># iterating over all the resources the user spun up in this event</span>
+            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">tag_already_set</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                    <span class="k">if</span> <span class="n">tag</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">]:</span>
+                        <span class="n">tag_already_set</span> <span class="o">=</span> <span class="kc">True</span>
                         <span class="k">break</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
-                    <span class="n">untagged</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">tag_already_set</span><span class="p">:</span>
+                    <span class="n">untagged_resources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">resource</span><span class="p">)</span>
+        <span class="c1"># if update is set to True, we will overwrite the userName tag even if</span>
+        <span class="c1"># the user already set a value</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">untagged</span> <span class="o">=</span> <span class="n">resources</span>
+            <span class="n">untagged_resources</span> <span class="o">=</span> <span class="n">resources</span>
 
         <span class="n">tag_action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
-        <span class="n">tag_action</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">],</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="n">user</span><span class="p">},</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">untagged</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">untagged</span></div></div>
+        <span class="n">new_tags</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">]:</span> <span class="n">user</span>
+        <span class="p">}</span>
+        <span class="n">principal_id_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;principal_id_tag&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># if principal_id_key is set (and value), we&#39;ll set the principalId tag.</span>
+        <span class="n">principal_id_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;principal_id_tag&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">principal_id_key</span> <span class="ow">and</span> <span class="n">principal_id_value</span><span class="p">:</span>
+            <span class="n">new_tags</span><span class="p">[</span><span class="n">principal_id_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">principal_id_value</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">new_tags</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="n">tag_action</span><span class="p">({</span><span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">untagged_resources</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_tags</span></div></div>
 
 
 <div class="viewcode-block" id="PutMetric"><a class="viewcode-back" href="../../generated/c7n.html#c7n.actions.PutMetric">[docs]</a><span class="k">class</span> <span class="nc">PutMetric</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
