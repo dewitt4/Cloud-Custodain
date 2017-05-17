@@ -200,7 +200,12 @@ class DirectoryOutput(FSOutput):
         super(DirectoryOutput, self).__init__(ctx)
         if self.ctx.output_path is not None:
             if not os.path.exists(self.ctx.output_path):
-                os.makedirs(self.ctx.output_path)
+                try:
+                    os.makedirs(self.ctx.output_path)
+                except OSError as e:
+                    # This is a race condition possibly, so ignore it.
+                    if e.errno != 17:
+                        raise
 
     def __repr__(self):
         return "<%s to dir:%s>" % (self.__class__.__name__, self.root_dir)
