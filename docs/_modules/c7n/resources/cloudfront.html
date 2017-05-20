@@ -200,9 +200,11 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="Distribution"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.Distribution">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;distribution&#39;</span><span class="p">)</span>
@@ -254,6 +256,185 @@
         <span class="k">return</span> <span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">dimension</span><span class="p">,</span>
                  <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]},</span>
                 <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;Region&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;Global&#39;</span><span class="p">}]</span></div></div>
+
+
+<div class="viewcode-block" id="DistributionDisableAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionDisableAction">[docs]</a><span class="nd">@Distribution</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DistributionDisableAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to disable a Distribution</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: distribution-delete</span>
+<span class="sd">                resource: distribution</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: value</span>
+<span class="sd">                    key: CacheBehaviors.Items[].ViewerProtocolPolicy</span>
+<span class="sd">                    value: allow-all</span>
+<span class="sd">                    op: contains</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: disable</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;distribution:GetDistributionConfig&quot;</span><span class="p">,</span>
+                   <span class="s2">&quot;distribution:UpdateDistribution&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DistributionDisableAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionDisableAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distributions</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_distribution</span><span class="p">,</span> <span class="n">distributions</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DistributionDisableAction.process_distribution"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionDisableAction.process_distribution">[docs]</a>    <span class="k">def</span> <span class="nf">process_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distribution</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_distribution_config</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
+            <span class="n">res</span><span class="p">[</span><span class="s1">&#39;DistributionConfig&#39;</span><span class="p">][</span><span class="s1">&#39;Enabled&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">update_distribution</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">],</span>
+                <span class="n">IfMatch</span><span class="o">=</span><span class="n">res</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">],</span>
+                <span class="n">DistributionConfig</span><span class="o">=</span><span class="n">res</span><span class="p">[</span><span class="s1">&#39;DistributionConfig&#39;</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Exception trying to disable Distribution: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">distribution</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span></div></div>
+
+
+<div class="viewcode-block" id="StreamingDistributionDisableAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.StreamingDistributionDisableAction">[docs]</a><span class="nd">@StreamingDistribution</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">StreamingDistributionDisableAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to disable a Streaming Distribution</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: streaming-distribution-delete</span>
+<span class="sd">                resource: streaming-distribution</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: value</span>
+<span class="sd">                    key: S3Origin.OriginAccessIdentity</span>
+<span class="sd">                    value: &#39;&#39;</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: disable</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;streaming-distribution:GetStreamingDistributionConfig&quot;</span><span class="p">,</span>
+                   <span class="s2">&quot;streaming-distribution:UpdateStreamingDistribution&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="StreamingDistributionDisableAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.StreamingDistributionDisableAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distributions</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_distribution</span><span class="p">,</span> <span class="n">distributions</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="StreamingDistributionDisableAction.process_distribution"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.StreamingDistributionDisableAction.process_distribution">[docs]</a>    <span class="k">def</span> <span class="nf">process_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distribution</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_streaming_distribution_config</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
+            <span class="n">res</span><span class="p">[</span><span class="s1">&#39;StreamingDistributionConfig&#39;</span><span class="p">][</span><span class="s1">&#39;Enabled&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">update_streaming_distribution</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">],</span>
+                <span class="n">IfMatch</span><span class="o">=</span><span class="n">res</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">],</span>
+                <span class="n">StreamingDistributionConfig</span><span class="o">=</span><span class="n">res</span><span class="p">[</span><span class="s1">&#39;StreamingDistributionConfig&#39;</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Exception trying to disable Distribution: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">distribution</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span></div></div>
+
+
+<div class="viewcode-block" id="DistributionSSLAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionSSLAction">[docs]</a><span class="nd">@Distribution</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-protocols&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DistributionSSLAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to set mandatory https-only on a Distribution</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: distribution-set-ssl</span>
+<span class="sd">                resource: distribution</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: value</span>
+<span class="sd">                    key: CacheBehaviors.Items[].ViewerProtocolPolicy</span>
+<span class="sd">                    value: allow-all</span>
+<span class="sd">                    op: contains</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-ssl</span>
+<span class="sd">                    ViewerProtocolPolicy: https-only</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;set-protocols&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;OriginProtocolPolicy&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;http-only&#39;</span><span class="p">,</span> <span class="s1">&#39;match-viewer&#39;</span><span class="p">,</span> <span class="s1">&#39;https-only&#39;</span><span class="p">]</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;SSLv3&#39;</span><span class="p">,</span> <span class="s1">&#39;TLSv1&#39;</span><span class="p">,</span> <span class="s1">&#39;TLSv1.1&#39;</span><span class="p">,</span> <span class="s1">&#39;TLSv1.2&#39;</span><span class="p">]}</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;allow-all&#39;</span><span class="p">,</span> <span class="s1">&#39;https-only&#39;</span><span class="p">,</span> <span class="s1">&#39;redirect-to-https&#39;</span><span class="p">]</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;distribution:GetDistributionConfig&quot;</span><span class="p">,</span>
+                   <span class="s2">&quot;distribution:UpdateDistribution&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DistributionSSLAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionSSLAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distributions</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_distribution</span><span class="p">,</span> <span class="n">distributions</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DistributionSSLAction.process_distribution"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionSSLAction.process_distribution">[docs]</a>    <span class="k">def</span> <span class="nf">process_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">distribution</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_distribution_config</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
+            <span class="n">etag</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">]</span>
+            <span class="n">dc</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="s1">&#39;DistributionConfig&#39;</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">dc</span><span class="p">[</span><span class="s1">&#39;CacheBehaviors&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Items&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="n">item</span><span class="p">[</span><span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">,</span>
+                    <span class="n">item</span><span class="p">[</span><span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">])</span>
+            <span class="n">dc</span><span class="p">[</span><span class="s1">&#39;DefaultCacheBehavior&#39;</span><span class="p">][</span><span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">,</span>
+                <span class="n">dc</span><span class="p">[</span><span class="s1">&#39;DefaultCacheBehavior&#39;</span><span class="p">][</span><span class="s1">&#39;ViewerProtocolPolicy&#39;</span><span class="p">])</span>
+
+            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">dc</span><span class="p">[</span><span class="s1">&#39;Origins&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Items&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                    <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginProtocolPolicy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                        <span class="s1">&#39;OriginProtocolPolicy&#39;</span><span class="p">,</span>
+                        <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginProtocolPolicy&#39;</span><span class="p">])</span>
+
+                    <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">][</span><span class="s1">&#39;Items&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                        <span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">,</span>
+                        <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">][</span><span class="s1">&#39;Items&#39;</span><span class="p">])</span>
+
+                    <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">][</span><span class="s1">&#39;Quantity&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span>
+                        <span class="n">item</span><span class="p">[</span><span class="s1">&#39;CustomOriginConfig&#39;</span><span class="p">][</span><span class="s1">&#39;OriginSslProtocols&#39;</span><span class="p">][</span><span class="s1">&#39;Items&#39;</span><span class="p">])</span>
+
+            <span class="n">res</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">update_distribution</span><span class="p">(</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">distribution</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">],</span>
+                <span class="n">IfMatch</span><span class="o">=</span><span class="n">etag</span><span class="p">,</span>
+                <span class="n">DistributionConfig</span><span class="o">=</span><span class="n">dc</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Exception trying to force ssl on Distribution: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">distribution</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">return</span></div></div>
 </pre></div>
 
            </div>
