@@ -115,6 +115,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#config-rules">Config Rules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#execution-options">Execution Options</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="mu.html">Mu - Lambda Lifecycle Management</a></li>
@@ -339,6 +340,71 @@ well, you should eventually see that your new custom Config rule notices the
 EC2 instance with the <code class="docutils literal"><span class="pre">Custodian</span></code> tag, and stops it according to your policy.</p>
 <p>Congratulations! You have now installed your policy to run under Config rather
 than from your command line.</p>
+</div>
+<div class="section" id="execution-options">
+<h2>Execution Options<a class="headerlink" href="#execution-options" title="Permalink to this headline">¶</a></h2>
+<p>When running in Lambda you may want policy execution to run using particular
+options corresponding to those passed to the custodian CLI.</p>
+<p>Execution in lambda comes with a default set of configuration which is
+different from the defaults you might set when running through the command line:</p>
+<ul class="simple">
+<li>Metrics are enabled</li>
+<li>Output dir is set to a random /tmp/ directory</li>
+<li>Caching of AWS resource state is disabled</li>
+<li>Account ID is automatically set with info from sts</li>
+<li>Region is automatically set to the region of the lambda (using the
+AWS_DEFAULT_REGION environment variable in lambda)</li>
+</ul>
+<p>When you want to override these settings, you must set ‘execution-options’ with
+one of the following keys:</p>
+<ul class="simple">
+<li>region</li>
+<li>cache</li>
+<li>profile</li>
+<li>account_id</li>
+<li>assume_role</li>
+<li>log_group</li>
+<li>metrics_enabled</li>
+<li>output_dir</li>
+<li>cache_period</li>
+<li>dryrun</li>
+</ul>
+<p>One useful thing we can do with these options is to make a policy execute in a
+different account using assume_role. A policy definition for this looks like:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">my-first-policy-cross-account</span>
+    <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
+        <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&quot;rate(1</span><span class="nv"> </span><span class="s">day)&quot;</span>
+        <span class="l l-Scalar l-Scalar-Plain">role</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/lambda-role</span>
+        <span class="l l-Scalar l-Scalar-Plain">execution-options</span><span class="p p-Indicator">:</span>
+          <span class="l l-Scalar l-Scalar-Plain">assume_role</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::210987654321:role/target-role</span>
+          <span class="l l-Scalar l-Scalar-Plain">metrics_enabled</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">false</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Custodian&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
+    <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
+</pre></div>
+</div>
+<p>A couple of things to note here:</p>
+<ol class="arabic simple">
+<li>Metrics are pushed using the assumed role which may or may not be desired</li>
+<li>The mode must be periodic as there are restrictions on where policy
+executions can run according to the mode:<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Config:</th><td class="field-body">May run in a different region but not cross-account</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Event:</th><td class="field-body">Only run in the same region and account</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Periodic:</th><td class="field-body">May run in a different region and different account</td>
+</tr>
+</tbody>
+</table>
+</li>
+</ol>
 </div>
 </div>
 

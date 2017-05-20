@@ -208,8 +208,10 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">uuid</span>
+<span class="kn">import</span> <span class="nn">json</span>
 
-<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">load</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">PolicyCollection</span>
+<span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">format_event</span><span class="p">,</span> <span class="n">get_account_id_from_sts</span>
 
 
@@ -267,7 +269,18 @@
     <span class="k">if</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;debug&#39;</span><span class="p">]:</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing event</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">format_event</span><span class="p">(</span><span class="n">event</span><span class="p">))</span>
 
-    <span class="n">policies</span> <span class="o">=</span> <span class="n">load</span><span class="p">(</span><span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">(),</span> <span class="s1">&#39;config.json&#39;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;json&#39;</span><span class="p">)</span>
+    <span class="c1"># policies file should always be valid in lambda so do loading naively</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;config.json&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">policy_config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">policy_config</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">policy_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="n">options_overrides</span> <span class="o">=</span> <span class="n">policy_config</span><span class="p">[</span><span class="s1">&#39;policies&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;execution-options&#39;</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">options</span> <span class="o">=</span> <span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="o">**</span><span class="n">options_overrides</span><span class="p">)</span>
+
+    <span class="n">load_resources</span><span class="p">()</span>
+    <span class="n">policies</span> <span class="o">=</span> <span class="n">PolicyCollection</span><span class="p">(</span><span class="n">policy_config</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">policies</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">:</span>
             <span class="n">p</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>

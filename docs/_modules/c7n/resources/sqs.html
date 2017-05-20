@@ -206,6 +206,8 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="SQS"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SQS">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;sqs&#39;</span><span class="p">)</span>
@@ -259,6 +261,87 @@
 <div class="viewcode-block" id="SQSCrossAccount"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SQSCrossAccount">[docs]</a><span class="nd">@SQS</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">SQSCrossAccount</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sqs:GetQueueAttributes&#39;</span><span class="p">,)</span></div>
+
+
+<div class="viewcode-block" id="DeleteSqsQueue"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.DeleteSqsQueue">[docs]</a><span class="nd">@SQS</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteSqsQueue</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete a SQS queue</span>
+
+<span class="sd">    To prevent unwanted deletion of SQS queues, it is recommended</span>
+<span class="sd">    to include a filter</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: sqs-delete</span>
+<span class="sd">                resource: sqs</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - KmsMasterKeyId: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sqs:DeleteQueue&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteSqsQueue.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.DeleteSqsQueue.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queues</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_queue</span><span class="p">,</span> <span class="n">queues</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteSqsQueue.process_queue"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.DeleteSqsQueue.process_queue">[docs]</a>    <span class="k">def</span> <span class="nf">process_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sqs&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_queue</span><span class="p">(</span><span class="n">QueueUrl</span><span class="o">=</span><span class="n">queue</span><span class="p">[</span><span class="s1">&#39;QueueUrl&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting queue:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="SetEncryption"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetEncryption">[docs]</a><span class="nd">@SQS</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-encryption&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetEncryption</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to set encryption key on SQS queue</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: sqs-set-encrypt</span>
+<span class="sd">                resource: sqs</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - KmsMasterKeyId: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set_encryption</span>
+<span class="sd">                    key: &quot;&lt;alias of kms key&gt;&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-encryption&#39;</span><span class="p">,</span>
+        <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span><span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">,))</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sqs:SetQueueAttributes&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="SetEncryption.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queues</span><span class="p">):</span>
+        <span class="c1"># get KeyId</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="s2">&quot;alias/&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key_id</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;kms&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">][</span><span class="s1">&#39;KeyId&#39;</span><span class="p">]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_queue</span><span class="p">,</span> <span class="n">queues</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SetEncryption.process_queue"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetEncryption.process_queue">[docs]</a>    <span class="k">def</span> <span class="nf">process_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sqs&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">set_queue_attributes</span><span class="p">(</span>
+                <span class="n">QueueUrl</span><span class="o">=</span><span class="n">queue</span><span class="p">[</span><span class="s1">&#39;QueueUrl&#39;</span><span class="p">],</span>
+                <span class="n">Attributes</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s1">&#39;KmsMasterKeyId&#39;</span><span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">key_id</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception modifying queue:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
