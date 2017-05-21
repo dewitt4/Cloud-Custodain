@@ -215,7 +215,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">PolicyCollection</span><span class="p">,</span> <span class="n">load</span> <span class="k">as</span> <span class="n">policy_load</span>
 <span class="kn">from</span> <span class="nn">c7n.reports</span> <span class="k">import</span> <span class="n">report</span> <span class="k">as</span> <span class="n">do_report</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">Bag</span><span class="p">,</span> <span class="n">dumps</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">Bag</span><span class="p">,</span> <span class="n">dumps</span><span class="p">,</span> <span class="n">load_file</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">schema</span>
@@ -229,6 +229,7 @@
     <span class="nd">@wraps</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
     <span class="k">def</span> <span class="nf">_load_policies</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
         <span class="n">load_resources</span><span class="p">()</span>
+        <span class="nb">vars</span> <span class="o">=</span> <span class="n">_load_vars</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
 
         <span class="n">errors</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">all_policies</span> <span class="o">=</span> <span class="n">PolicyCollection</span><span class="o">.</span><span class="n">from_data</span><span class="p">({},</span> <span class="n">options</span><span class="p">)</span>
@@ -238,7 +239,7 @@
 
         <span class="k">for</span> <span class="n">fp</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">collection</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">fp</span><span class="p">)</span>
+                <span class="n">collection</span> <span class="o">=</span> <span class="n">policy_load</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="nb">vars</span><span class="o">=</span><span class="nb">vars</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
                 <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error: policy file does not exist (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fp</span><span class="p">))</span>
                 <span class="n">errors</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -291,6 +292,20 @@
         <span class="k">return</span> <span class="n">f</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">policies</span><span class="p">))</span>
 
     <span class="k">return</span> <span class="n">_load_policies</span></div>
+
+
+<span class="k">def</span> <span class="nf">_load_vars</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+    <span class="nb">vars</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">vars</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="nb">vars</span> <span class="o">=</span> <span class="n">load_file</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">vars</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">IOError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">eprint</span><span class="p">(</span><span class="s1">&#39;Error loading vars file &quot;</span><span class="si">{}</span><span class="s1">&quot;: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">vars</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">strerror</span><span class="p">))</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># TODO - provide builtin vars here (such as account)</span>
+
+    <span class="k">return</span> <span class="nb">vars</span>
 
 
 <span class="k">def</span> <span class="nf">_print_no_policies_warning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">policies</span><span class="p">):</span>
