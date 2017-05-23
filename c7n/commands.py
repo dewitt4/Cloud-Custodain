@@ -41,6 +41,11 @@ def policy_command(f):
 
     @wraps(f)
     def _load_policies(options):
+
+        validate = True
+        if 'skip_validation' in options:
+            validate = not options.skip_validation
+
         load_resources()
         vars = _load_vars(options)
 
@@ -52,7 +57,7 @@ def policy_command(f):
 
         for fp in options.configs:
             try:
-                collection = policy_load(options, fp, vars=vars)
+                collection = policy_load(options, fp, validate=validate, vars=vars)
             except IOError:
                 eprint('Error: policy file does not exist ({})'.format(fp))
                 errors += 1
