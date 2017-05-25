@@ -858,6 +858,7 @@
 <span class="sd">       - Delete transient snapshots</span>
 <span class="sd">       - Detach Unencrypted Volume</span>
 <span class="sd">       - Attach Encrypted Volume</span>
+<span class="sd">       - Set DeleteOnTermination instance attribute equal to source volume</span>
 <span class="sd">    - For each volume</span>
 <span class="sd">       - Delete unencrypted volume</span>
 <span class="sd">    - Start Instance (if originally running)</span>
@@ -891,7 +892,8 @@
         <span class="s1">&#39;ec2:DescribeSnapshots&#39;</span><span class="p">,</span>
         <span class="s1">&#39;ec2:DescribeVolumes&#39;</span><span class="p">,</span>
         <span class="s1">&#39;ec2:StopInstances&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;ec2:StartInstances&#39;</span><span class="p">)</span>
+        <span class="s1">&#39;ec2:StartInstances&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2:ModifyInstanceAttribute&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="EncryptInstanceVolumes.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.EncryptInstanceVolumes.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
@@ -968,6 +970,21 @@
             <span class="n">client</span><span class="o">.</span><span class="n">attach_volume</span><span class="p">(</span>
                 <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">,</span> <span class="n">VolumeId</span><span class="o">=</span><span class="n">vol_id</span><span class="p">,</span>
                 <span class="n">Device</span><span class="o">=</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;Device&#39;</span><span class="p">])</span>
+
+            <span class="c1"># Set DeleteOnTermination attribute the same as source volume</span>
+            <span class="k">if</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;DeleteOnTermination&#39;</span><span class="p">]:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">modify_instance_attribute</span><span class="p">(</span>
+                    <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">,</span>
+                    <span class="n">BlockDeviceMappings</span><span class="o">=</span><span class="p">[</span>
+                        <span class="p">{</span>
+                            <span class="s1">&#39;DeviceName&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;Device&#39;</span><span class="p">],</span>
+                            <span class="s1">&#39;Ebs&#39;</span><span class="p">:</span> <span class="p">{</span>
+                                <span class="s1">&#39;VolumeId&#39;</span><span class="p">:</span> <span class="n">vol_id</span><span class="p">,</span>
+                                <span class="s1">&#39;DeleteOnTermination&#39;</span><span class="p">:</span> <span class="kc">True</span>
+                            <span class="p">}</span>
+                        <span class="p">}</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">instance_running</span><span class="p">:</span>
             <span class="n">client</span><span class="o">.</span><span class="n">start_instances</span><span class="p">(</span><span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">instance_id</span><span class="p">])</span>
