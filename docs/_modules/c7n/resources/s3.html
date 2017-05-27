@@ -1790,6 +1790,97 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">,</span> <span class="n">remove_tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
 
+<div class="viewcode-block" id="SetInventory"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetInventory">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-inventory&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetInventory</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Configure bucket inventories for an s3 bucket.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-inventory&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;destination&#39;</span><span class="p">],</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="s1">&#39;disabled&#39;</span><span class="p">,</span> <span class="s1">&#39;absent&#39;</span><span class="p">]},</span>
+        <span class="n">name</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Name of inventory&#39;</span><span class="p">},</span>
+        <span class="n">destination</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Name of destination bucket&#39;</span><span class="p">},</span>
+        <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Destination prefix&#39;</span><span class="p">},</span>
+        <span class="n">versions</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;All&#39;</span><span class="p">,</span> <span class="s1">&#39;Current&#39;</span><span class="p">]},</span>
+        <span class="n">schedule</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Daily&#39;</span><span class="p">,</span> <span class="s1">&#39;Weekly&#39;</span><span class="p">]},</span>
+        <span class="n">fields</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="s1">&#39;Size&#39;</span><span class="p">,</span> <span class="s1">&#39;LastModifiedDate&#39;</span><span class="p">,</span> <span class="s1">&#39;StorageClass&#39;</span><span class="p">,</span> <span class="s1">&#39;ETag&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;IsMultipartUploaded&#39;</span><span class="p">,</span> <span class="s1">&#39;ReplicationStatus&#39;</span><span class="p">]}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutInventoryConfiguration&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:GetInventoryConfiguration&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SetInventory.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetInventory.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">buckets</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SetInventory.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetInventory.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">inventory_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+        <span class="n">destination</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;destination&#39;</span><span class="p">)</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;schedule&#39;</span><span class="p">,</span> <span class="s1">&#39;Daily&#39;</span><span class="p">)</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fields&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;LastModifiedDate&#39;</span><span class="p">,</span> <span class="s1">&#39;Size&#39;</span><span class="p">])</span>
+        <span class="n">versions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;versions&#39;</span><span class="p">,</span> <span class="s1">&#39;Current&#39;</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="s1">&#39;enabled&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span><span class="p">:</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="s2">&quot;Inventories/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">b</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;absent&#39;</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_bucket_inventory_configuration</span><span class="p">(</span>
+                    <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Id</span><span class="o">=</span><span class="n">inventory_name</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;NoSuchConfiguration&#39;</span><span class="p">:</span>
+                    <span class="k">raise</span>
+            <span class="k">return</span>
+
+        <span class="n">inventory</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Destination&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;S3BucketDestination&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">destination</span><span class="p">,</span>
+                    <span class="s1">&#39;Format&#39;</span><span class="p">:</span> <span class="s1">&#39;CSV&#39;</span><span class="p">}</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;IsEnabled&#39;</span><span class="p">:</span> <span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;enabled&#39;</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s1">&#39;Id&#39;</span><span class="p">:</span> <span class="n">inventory_name</span><span class="p">,</span>
+            <span class="s1">&#39;OptionalFields&#39;</span><span class="p">:</span> <span class="n">fields</span><span class="p">,</span>
+            <span class="s1">&#39;IncludedObjectVersions&#39;</span><span class="p">:</span> <span class="n">versions</span><span class="p">,</span>
+            <span class="s1">&#39;Schedule&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;Frequency&#39;</span><span class="p">:</span> <span class="n">schedule</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">prefix</span><span class="p">:</span>
+            <span class="n">inventory</span><span class="p">[</span><span class="s1">&#39;Destination&#39;</span><span class="p">][</span><span class="s1">&#39;S3BucketDestination&#39;</span><span class="p">][</span><span class="s1">&#39;Prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prefix</span>
+
+        <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_inventory_delta</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">inventory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;updating bucket:</span><span class="si">%s</span><span class="s2"> inventory configuration id:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                           <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">inventory_name</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_inventory_configuration</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Id</span><span class="o">=</span><span class="n">inventory_name</span><span class="p">,</span> <span class="n">InventoryConfiguration</span><span class="o">=</span><span class="n">inventory</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SetInventory.get_inventory_delta"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetInventory.get_inventory_delta">[docs]</a>    <span class="k">def</span> <span class="nf">get_inventory_delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">inventory</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">inventories</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_bucket_inventory_configurations</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">inventories</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;InventoryConfigurationList&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">inventory</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">inventory</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                    <span class="n">v</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+                    <span class="n">i</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">v</span><span class="p">:</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">found</span></div></div>
+
+
 <div class="viewcode-block" id="DeleteBucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteBucket">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">DeleteBucket</span><span class="p">(</span><span class="n">ScanBucket</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action deletes a S3 bucket</span>

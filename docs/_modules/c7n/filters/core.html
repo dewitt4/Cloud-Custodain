@@ -445,7 +445,7 @@
             <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
             <span class="s1">&#39;value_type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
                 <span class="s1">&#39;age&#39;</span><span class="p">,</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;expiration&#39;</span><span class="p">,</span> <span class="s1">&#39;normalize&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">,</span>
-                <span class="s1">&#39;cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;cidr_size&#39;</span><span class="p">,</span> <span class="s1">&#39;swap&#39;</span><span class="p">,</span> <span class="s1">&#39;resource_count&#39;</span><span class="p">]},</span>
+                <span class="s1">&#39;cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;cidr_size&#39;</span><span class="p">,</span> <span class="s1">&#39;swap&#39;</span><span class="p">,</span> <span class="s1">&#39;resource_count&#39;</span><span class="p">,</span> <span class="s1">&#39;expr&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span>
             <span class="s1">&#39;value_from&#39;</span><span class="p">:</span> <span class="n">ValuesFrom</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
             <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
@@ -457,6 +457,10 @@
             <span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">OPERATORS</span><span class="o">.</span><span class="n">keys</span><span class="p">()}}}</span>
 
     <span class="n">annotate</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">=</span> <span class="p">{}</span>
 
     <span class="k">def</span> <span class="nf">_validate_resource_count</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; Specific validation for `resource_count` type</span>
@@ -541,11 +545,11 @@
                     <span class="k">break</span>
         <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
             <span class="n">r</span> <span class="o">=</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">:</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">expr</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expr</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">r</span></div>
 
 <div class="viewcode-block" id="ValueFilter.match"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter.match">[docs]</a>    <span class="k">def</span> <span class="nf">match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
@@ -572,7 +576,7 @@
 
         <span class="c1"># value type conversion</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">v</span><span class="p">,</span> <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+            <span class="n">v</span><span class="p">,</span> <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span>
 
@@ -596,9 +600,12 @@
 
         <span class="k">return</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="ValueFilter.process_value_type"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter.process_value_type">[docs]</a>    <span class="k">def</span> <span class="nf">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<div class="viewcode-block" id="ValueFilter.process_value_type"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter.process_value_type">[docs]</a>    <span class="k">def</span> <span class="nf">process_value_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="o">==</span> <span class="s1">&#39;normalize&#39;</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">basestring</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">sentinel</span><span class="p">,</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="o">==</span> <span class="s1">&#39;expr&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">sentinel</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_value</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">resource</span><span class="p">)</span>
 
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtype</span> <span class="o">==</span> <span class="s1">&#39;integer&#39;</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
