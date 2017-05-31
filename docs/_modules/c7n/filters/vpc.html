@@ -201,7 +201,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
-<span class="kn">from</span> <span class="nn">.core</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span>
+<span class="kn">from</span> <span class="nn">.core</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
 
 
@@ -243,6 +243,150 @@
             <span class="k">if</span> <span class="n">vpcs</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">default_vpc</span> <span class="o">=</span> <span class="n">vpcs</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">vpc_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_vpc</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span></div></div>
+
+
+<div class="viewcode-block" id="NetworkLocation"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation">[docs]</a><span class="k">class</span> <span class="nc">NetworkLocation</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;On a network attached resource, determine intersection of</span>
+<span class="sd">    security-group attributes, subnet attributes, and resource attributes.</span>
+
+<span class="sd">    The use case is a bit specialized, for most use cases using `subnet`</span>
+<span class="sd">    and `security-group` filters suffice. but say for example you wanted to</span>
+<span class="sd">    verify that an ec2 instance was only using subnets and security groups</span>
+<span class="sd">    with a given tag value, and that tag was not present on the resource.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;network-location&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;missing-ok&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">&quot;How to handle missing keys on elements, by default this causes &quot;</span>
+                <span class="s2">&quot;resources to be considered not-equal&quot;</span><span class="p">)},</span>
+           <span class="s1">&#39;match&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;equal&#39;</span><span class="p">,</span> <span class="s1">&#39;non-equal&#39;</span><span class="p">],</span>
+                     <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;non-equal&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;compare&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s1">&#39;Which elements of network location should be considered when&#39;</span>
+                <span class="s1">&#39; matching.&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">,</span> <span class="s1">&#39;subnet&#39;</span><span class="p">,</span> <span class="s1">&#39;security-group&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">,</span> <span class="s1">&#39;subnet&#39;</span><span class="p">,</span> <span class="s1">&#39;security-group&#39;</span><span class="p">]}},</span>
+           <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="p">{</span>
+               <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+               <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;The attribute expression that should be matched on&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;max-cardinality&#39;</span><span class="p">:</span> <span class="p">{</span>
+               <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+               <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span>
+           <span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeSecurityGroups&#39;</span><span class="p">,</span> <span class="s1">&#39;ec2:DescribeSubnets&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NetworkLocation.validate"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">rfilters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;subnet&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">rfilters</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;network-location requires resource subnet filter availability&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;security-group&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">rfilters</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;network-location requires resource security-group filter availability&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="NetworkLocation.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;security-group&#39;</span><span class="p">)({},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span>
+        <span class="n">related_sg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sg</span><span class="o">.</span><span class="n">get_related</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)({},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span>
+        <span class="n">related_subnet</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span><span class="o">.</span><span class="n">get_related</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sg_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;security-group&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subnet_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)({},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span>
+
+        <span class="c1"># filter options</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;compare&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;subnet&#39;</span><span class="p">,</span> <span class="s1">&#39;security-group&#39;</span><span class="p">,</span> <span class="s1">&#39;resource&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_cardinality</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max-cardinality&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">match</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;match&#39;</span><span class="p">,</span> <span class="s1">&#39;not-equal&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">missing_ok</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;missing-ok&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">resource_sgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">related_sg</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sg</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])]</span>
+            <span class="n">resource_subnets</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">related_subnet</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])]</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">resource_sgs</span><span class="p">,</span> <span class="n">resource_subnets</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">found</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="NetworkLocation.process_resource"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">resource_sgs</span><span class="p">,</span> <span class="n">resource_subnets</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="n">evaluation</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="s1">&#39;subnet&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span><span class="p">:</span>
+            <span class="n">subnet_values</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">rsub</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">subnet_model</span><span class="o">.</span><span class="n">id</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span><span class="o">.</span><span class="n">get_resource_value</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">rsub</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">rsub</span> <span class="ow">in</span> <span class="n">resource_subnets</span><span class="p">}</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_ok</span> <span class="ow">and</span> <span class="kc">None</span> <span class="ow">in</span> <span class="n">subnet_values</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;SubnetLocationAbsent&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;subnets&#39;</span><span class="p">:</span> <span class="n">subnet_values</span><span class="p">})</span>
+            <span class="n">subnet_space</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">subnet_values</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">subnet_space</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_cardinality</span><span class="p">:</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;SubnetLocationCardinality&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;subnets&#39;</span><span class="p">:</span> <span class="n">subnet_values</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="s1">&#39;security-group&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span><span class="p">:</span>
+            <span class="n">sg_values</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">rsg</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sg_model</span><span class="o">.</span><span class="n">id</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sg</span><span class="o">.</span><span class="n">get_resource_value</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">rsg</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">rsg</span> <span class="ow">in</span> <span class="n">resource_sgs</span><span class="p">}</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_ok</span> <span class="ow">and</span> <span class="kc">None</span> <span class="ow">in</span> <span class="n">sg_values</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;SecurityGroupLocationAbsent&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;security-groups&#39;</span><span class="p">:</span> <span class="n">sg_values</span><span class="p">})</span>
+
+            <span class="n">sg_space</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">sg_values</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sg_space</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_cardinality</span><span class="p">:</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;SecurityGroupLocationCardinality&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;security-groups&#39;</span><span class="p">:</span> <span class="n">sg_values</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;subnet&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="ow">and</span>
+                <span class="s1">&#39;security-group&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="ow">and</span>
+                <span class="n">sg_space</span> <span class="o">!=</span> <span class="n">subnet_space</span><span class="p">):</span>
+            <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;LocationMismatch&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;subnets&#39;</span><span class="p">:</span> <span class="n">subnet_values</span><span class="p">,</span>
+                <span class="s1">&#39;security-groups&#39;</span><span class="p">:</span> <span class="n">sg_values</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="s1">&#39;resource&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span><span class="p">:</span>
+            <span class="n">r_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vf</span><span class="o">.</span><span class="n">get_resource_value</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing_ok</span> <span class="ow">and</span> <span class="n">r_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;ResourceLocationAbsent&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">r_value</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="s1">&#39;security-group&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="ow">and</span> <span class="n">r_value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sg_space</span><span class="p">:</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;ResourceLocationMismatch&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">r_value</span><span class="p">,</span>
+                    <span class="s1">&#39;security-groups&#39;</span><span class="p">:</span> <span class="n">sg_values</span><span class="p">})</span>
+            <span class="k">elif</span> <span class="s1">&#39;subnet&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="ow">and</span> <span class="n">r_value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">subnet_space</span><span class="p">:</span>
+                <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;ResourceLocationMismatch&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">r_value</span><span class="p">,</span>
+                    <span class="s1">&#39;subnet&#39;</span><span class="p">:</span> <span class="n">subnet_values</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="n">evaluation</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span> <span class="o">==</span> <span class="s1">&#39;not-equal&#39;</span><span class="p">:</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:NetworkLocation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">evaluation</span>
+            <span class="k">return</span> <span class="n">r</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">evaluation</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span> <span class="o">==</span> <span class="s1">&#39;equal&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">r</span></div></div>
 </pre></div>
 
            </div>
