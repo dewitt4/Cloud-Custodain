@@ -201,13 +201,78 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">import</span> <span class="nn">functools</span>
 
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">AutoTagUser</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">,</span> <span class="n">UniversalTagDelayedAction</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span>
+
+
+<div class="viewcode-block" id="Route53Base"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.Route53Base">[docs]</a><span class="k">class</span> <span class="nc">Route53Base</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;route53:ListTagsForResources&#39;</span><span class="p">,)</span>
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">generate_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="n">generate_arn</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span><span class="p">,</span>
+                <span class="n">resource_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">type</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span>
+
+<div class="viewcode-block" id="Route53Base.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.Route53Base.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">_describe_route53_tags</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">(),</span> <span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">_describe_route53_tags</span><span class="p">(</span>
+        <span class="n">model</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">process_tags</span><span class="p">(</span><span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;route53&#39;</span><span class="p">)</span>
+        <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s2">&quot;hostedzone&quot;</span> <span class="ow">in</span> <span class="n">k</span><span class="p">:</span>
+                <span class="n">k</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">resource_map</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">list_tags_for_resources</span><span class="p">,</span>
+            <span class="n">ResourceType</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+            <span class="n">ResourceIds</span><span class="o">=</span><span class="n">resource_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+        <span class="k">for</span> <span class="n">resource_tag_set</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;ResourceTagSets&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="s1">&#39;ResourceId&#39;</span> <span class="ow">in</span> <span class="n">resource_tag_set</span> <span class="ow">and</span>
+                    <span class="n">resource_tag_set</span><span class="p">[</span><span class="s1">&#39;ResourceId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">resource_map</span><span class="p">):</span>
+                <span class="n">resource_map</span><span class="p">[</span><span class="n">resource_tag_set</span><span class="p">[</span><span class="s1">&#39;ResourceId&#39;</span><span class="p">]][</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">resource_tag_set</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+
+    <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">)))</span>
 
 
 <div class="viewcode-block" id="HostedZone"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.HostedZone">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;hostedzone&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">HostedZone</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">HostedZone</span><span class="p">(</span><span class="n">Route53Base</span><span class="p">,</span> <span class="n">QueryResourceManager</span><span class="p">):</span>
+
+    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;hostedzone.filters&#39;</span><span class="p">)</span>
+    <span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
+
+    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;hostedzone.actions&#39;</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">UniversalTagDelayedAction</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;untag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
 
 <div class="viewcode-block" id="HostedZone.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.HostedZone.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;route53&#39;</span>
@@ -218,11 +283,30 @@
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;Name&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="HostedZone.get_arns"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.HostedZone.get_arns">[docs]</a>    <span class="k">def</span> <span class="nf">get_arns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="n">arns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+            <span class="n">_id</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">arns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">arns</span></div></div>
 
 
 <div class="viewcode-block" id="HealthCheck"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.HealthCheck">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;healthcheck&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">HealthCheck</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">HealthCheck</span><span class="p">(</span><span class="n">Route53Base</span><span class="p">,</span> <span class="n">QueryResourceManager</span><span class="p">):</span>
+
+    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;healthcheck.filters&#39;</span><span class="p">)</span>
+    <span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
+
+    <span class="n">action_registry</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;healthcheck.actions&#39;</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">UniversalTagDelayedAction</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;untag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
 
 <div class="viewcode-block" id="HealthCheck.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.route53.HealthCheck.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;route53&#39;</span>
@@ -254,7 +338,7 @@
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;route53domains&#39;</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;r53domain&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_domains&#39;</span><span class="p">,</span> <span class="s1">&#39;Domains&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;Route53Domain&#39;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;DomainName&#39;</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
