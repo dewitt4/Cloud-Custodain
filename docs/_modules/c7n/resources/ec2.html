@@ -708,6 +708,71 @@
         <span class="k">return</span> <span class="n">ec2</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VpcId&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">ec2</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VpcId&#39;</span><span class="p">))</span> <span class="ow">or</span> <span class="kc">False</span></div>
 
 
+<div class="viewcode-block" id="SingletonFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.SingletonFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;singleton&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SingletonFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;EC2 instances without autoscaling or a recover alarm</span>
+
+<span class="sd">    Filters EC2 instances that are not members of an autoscaling group</span>
+<span class="sd">    and do not have Cloudwatch recover alarms.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-recover-instances</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - singleton</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: tag</span>
+<span class="sd">                key: problem</span>
+<span class="sd">                value: instance is not resilient</span>
+
+<span class="sd">    https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-recover.html</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;singleton&#39;</span><span class="p">)</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudwatch:DescribeAlarmsForMetric&#39;</span><span class="p">,)</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_asg</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_recover_alarm</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SingletonFilter.in_asg"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.SingletonFilter.in_asg">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">in_asg</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;Tags&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s1">&#39;aws:autoscaling:groupName&#39;</span> <span class="ow">in</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="SingletonFilter.has_recover_alarm"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.SingletonFilter.has_recover_alarm">[docs]</a>    <span class="k">def</span> <span class="nf">has_recover_alarm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
+        <span class="n">alarms</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_alarms_for_metric</span><span class="p">(</span>
+            <span class="n">MetricName</span><span class="o">=</span><span class="s1">&#39;StatusCheckFailed_System&#39;</span><span class="p">,</span>
+            <span class="n">Namespace</span><span class="o">=</span><span class="s1">&#39;AWS/EC2&#39;</span><span class="p">,</span>
+            <span class="n">Dimensions</span><span class="o">=</span><span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>
+                <span class="p">}</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">alarms</span><span class="p">[</span><span class="s1">&#39;MetricAlarms&#39;</span><span class="p">]:</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;AlarmActions&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">a</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:aws:automate:&#39;</span><span class="p">)</span> <span class="ow">and</span>
+                    <span class="n">a</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;:ec2:recover&#39;</span><span class="p">)</span>
+                <span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">return</span> <span class="kc">False</span></div></div>
+
+
 <div class="viewcode-block" id="Start"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Start">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;start&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Start</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Starts a previously stopped EC2 instance.</span>
