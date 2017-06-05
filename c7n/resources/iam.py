@@ -399,6 +399,7 @@ class AllowAllIamPolicies(Filter):
                     'Action' in s and
                     isinstance(s['Action'], six.string_types) and
                     s['Action'] == "*" and
+                    'Resource' in s and
                     isinstance(s['Resource'], six.string_types) and
                     s['Resource'] == "*" and
                     s['Effect'] == "Allow"):
@@ -561,10 +562,14 @@ class CredentialReport(Filter):
             return report
         data = self.fetch_credential_report()
         report = {}
+<<<<<<< HEAD
         if isinstance(data, six.binary_type):
             reader = csv.reader(io.BytesIO(data))
         else:
             reader = csv.reader(io.StringIO(data))
+=======
+        reader = csv.reader(six.StringIO(data))
+>>>>>>> 71bc889... Misc. bugfixes.
         headers = next(reader)
         for line in reader:
             info = dict(zip(headers, line))
