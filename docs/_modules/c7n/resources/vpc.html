@@ -214,6 +214,7 @@
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.revisions</span> <span class="k">import</span> <span class="n">Diff</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -344,6 +345,40 @@
                         <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="SecurityGroupFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroupFilter">[docs]</a><span class="nd">@Vpc</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;security-group&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SecurityGroupFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter VPCs based on Security Group attributes</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: gray-vpcs</span>
+<span class="sd">                resource: vpc</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: security-group</span>
+<span class="sd">                    key: tag:Color</span>
+<span class="sd">                    value: Gray</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;security-group&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;match-resource&#39;</span><span class="p">:{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;operator&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;and&#39;</span><span class="p">,</span> <span class="s1">&#39;or&#39;</span><span class="p">]}})</span>
+    <span class="n">RelatedResource</span> <span class="o">=</span> <span class="s2">&quot;c7n.resources.vpc.SecurityGroup&quot;</span>
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s1">&#39;[SecurityGroups][].GroupId&#39;</span>
+    <span class="n">AnnotationKey</span> <span class="o">=</span> <span class="s2">&quot;matched-vpcs&quot;</span>
+
+<div class="viewcode-block" id="SecurityGroupFilter.get_related_ids"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroupFilter.get_related_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_related_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">vpc_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">vpc</span><span class="p">[</span><span class="s1">&#39;VpcId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">vpc</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span>
+        <span class="n">vpc_group_ids</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">g</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;security-group&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VpcId&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">vpc_ids</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">vpc_group_ids</span></div></div>
 
 
 <div class="viewcode-block" id="Subnet"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Subnet">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
