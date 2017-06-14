@@ -862,6 +862,8 @@
 <span class="sd">    - For each volume</span>
 <span class="sd">       - Delete unencrypted volume</span>
 <span class="sd">    - Start Instance (if originally running)</span>
+<span class="sd">    - For each newly encrypted volume</span>
+<span class="sd">       - Delete transient tags</span>
 
 <span class="sd">    :example:</span>
 
@@ -893,7 +895,8 @@
         <span class="s1">&#39;ec2:DescribeVolumes&#39;</span><span class="p">,</span>
         <span class="s1">&#39;ec2:StopInstances&#39;</span><span class="p">,</span>
         <span class="s1">&#39;ec2:StartInstances&#39;</span><span class="p">,</span>
-        <span class="s1">&#39;ec2:ModifyInstanceAttribute&#39;</span><span class="p">)</span>
+        <span class="s1">&#39;ec2:ModifyInstanceAttribute&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2:DeleteTags&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="EncryptInstanceVolumes.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.EncryptInstanceVolumes.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
@@ -994,7 +997,18 @@
                 <span class="s2">&quot;Deleting unencrypted volumes for: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">instance_id</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vol_set</span><span class="p">:</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">delete_volume</span><span class="p">(</span><span class="n">VolumeId</span><span class="o">=</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span></div>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_volume</span><span class="p">(</span><span class="n">VolumeId</span><span class="o">=</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Clean-up transient tags on newly created encrypted volume.</span>
+        <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">vol_id</span> <span class="ow">in</span> <span class="n">paired</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_tags</span><span class="p">(</span>
+                <span class="n">Resources</span><span class="o">=</span><span class="p">[</span><span class="n">vol_id</span><span class="p">],</span>
+                <span class="n">Tags</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;maid-crypt-remediation&#39;</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;maid-origin-volume&#39;</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;maid-instance-device&#39;</span><span class="p">}</span>
+                <span class="p">]</span>
+            <span class="p">)</span></div>
 
 <div class="viewcode-block" id="EncryptInstanceVolumes.stop_instance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.EncryptInstanceVolumes.stop_instance">[docs]</a>    <span class="k">def</span> <span class="nf">stop_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
