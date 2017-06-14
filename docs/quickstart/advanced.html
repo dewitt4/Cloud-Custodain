@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Monitoring your environment &mdash; Cloud Custodian  documentation</title>
+  <title>Advanced Usage &mdash; Cloud Custodian  documentation</title>
   
 
   
@@ -40,8 +40,8 @@
               href="../genindex.html"/>
         <link rel="search" title="Search" href="../search.html"/>
     <link rel="top" title="Cloud Custodian  documentation" href="../index.html"/>
-        <link rel="next" title="Advanced Usage" href="advanced.html"/>
-        <link rel="prev" title="Getting Started" href="index.html"/> 
+        <link rel="next" title="Example offhours policy" href="offhours.html"/>
+        <link rel="prev" title="Monitoring your environment" href="usage.html"/> 
 
   
   <script src="../_static/js/modernizr.min.js"></script>
@@ -94,14 +94,13 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../overview/index.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="index.html">Getting Started</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Monitoring your environment</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#metrics">Metrics</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#cloudwatch-logs">CloudWatch Logs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#s3-logs-records">S3 Logs &amp; Records</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#reports">Reports</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Monitoring your environment</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#running-against-multiple-regions">Running against multiple regions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reporting-against-multiple-regions">Reporting against multiple regions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-custom-fields-to-reports">Adding custom fields to reports</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Usage</a></li>
 </ul>
 <p class="caption"><span class="caption-text">Examples</span></p>
 <ul>
@@ -173,7 +172,7 @@
     
       <li><a href="../index.html">Docs</a> &raquo;</li>
         
-      <li>Monitoring your environment</li>
+      <li>Advanced Usage</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -190,60 +189,71 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="monitoring-your-environment">
-<span id="usage"></span><h1>Monitoring your environment<a class="headerlink" href="#monitoring-your-environment" title="Permalink to this headline">¶</a></h1>
-<p>Cloud Custodian generates a consistent set of outputs for any given
-policy.</p>
-<p>Custodian automatically generates per policy outputs with resources metrics
-and archives serialization for all resources that match against a policy’s
-filters.</p>
-<p>TODO: figure out where “Custodian Dashboards in CloudWatch” page goes –
-here? its own page? part of Getting Started?</p>
-<div class="section" id="metrics">
-<h2>Metrics<a class="headerlink" href="#metrics" title="Permalink to this headline">¶</a></h2>
-<p>By default Cloud Custodian generates CloudWatch metrics on each policy for
-the number of resources that matched the set of filters,
-the time to retrieve and filter the resources, and the time to
-execute actions.</p>
-<p>In practice this number of matching resources allows for generating
-enough metrics to put together useful dashboards over policies
-in CloudWatch custom dashboards.</p>
-<p>Additionally some filters and actions may generate their own metrics.</p>
-<p>In order to enable metrics output, the boolean metrics
-flag needs to be specified when running Cloud Custodian:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian run -s &lt;output_directory&gt; --metrics &lt;policyfile&gt;.yml
+  <div class="section" id="advanced-usage">
+<span id="advanced"></span><h1>Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="#run-multiple-regions"><span class="std std-ref">Running against multiple regions</span></a></li>
+<li><a class="reference internal" href="#report-multiple-regions"><span class="std std-ref">Reporting against multiple regions</span></a></li>
+<li><a class="reference internal" href="#report-custom-fields"><span class="std std-ref">Adding custom fields to reports</span></a></li>
+</ul>
+<div class="section" id="running-against-multiple-regions">
+<span id="run-multiple-regions"></span><h2>Running against multiple regions<a class="headerlink" href="#running-against-multiple-regions" title="Permalink to this headline">¶</a></h2>
+<p>By default Cloud Custodian determines the region to run against in the following
+order:</p>
+<blockquote>
+<div><ul class="simple">
+<li>the <code class="docutils literal"><span class="pre">--region</span></code> flag</li>
+<li>the <code class="docutils literal"><span class="pre">AWS_DEFAULT_REGION</span></code> environment variable</li>
+<li>the region set in the <code class="docutils literal"><span class="pre">~/.aws/config</span></code> file</li>
+</ul>
+</div></blockquote>
+<p>It is possible to run policies against multiple regions by specifying the <code class="docutils literal"><span class="pre">--region</span></code>
+flag multiple times:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian run -s out --region us-east-1 --region us-west-1 policy.yml
 </pre></div>
 </div>
-</div>
-<div class="section" id="cloudwatch-logs">
-<h2>CloudWatch Logs<a class="headerlink" href="#cloudwatch-logs" title="Permalink to this headline">¶</a></h2>
-<p>Custodian can optionally upload its logs in realtime to CloudWatch logs, if
-a log group is specified. Each policy’s log output is generated as a
-separate stream.</p>
-<p>Usage example:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian run --log-group=/cloud-custodian/&lt;dev-account&gt;/&lt;region&gt; &lt;policyfile&gt;.yml
+<p>If a supplied region does not support the resource for a given policy that region will
+be skipped.</p>
+<p>The special <code class="docutils literal"><span class="pre">all</span></code> keyword can be used in place of a region to specify the policy
+should run against <a class="reference external" href="https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/">all applicable regions</a>
+for the policy’s resource:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian run -s out --region all policy.yml
 </pre></div>
 </div>
-<p>If enabled, it is recommended to set a log subscription on the group to
-be informed of an operations issue.</p>
-<p>If S3 output is also enabled, then it is also recommended to set a log group
-archival policy and to use the S3 logs as permanent/audit archive.</p>
+<p>Note: when running reports against multiple regions the output is placed in a different
+directory than when running against a single region.  See the multi-region reporting
+section below.</p>
 </div>
-<div class="section" id="s3-logs-records">
-<h2>S3 Logs &amp; Records<a class="headerlink" href="#s3-logs-records" title="Permalink to this headline">¶</a></h2>
-<p>Custodian will output its logs and structured resource records in JSON format to S3, along
-with its log files for archival purposes.</p>
-<p>The S3 bucket and prefix can be specified via parameters:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian run --output-dir s3://&lt;my-bucket&gt;/&lt;my-prefix&gt; &lt;policyfile&gt;.yml
+<div class="section" id="reporting-against-multiple-regions">
+<span id="report-multiple-regions"></span><h2>Reporting against multiple regions<a class="headerlink" href="#reporting-against-multiple-regions" title="Permalink to this headline">¶</a></h2>
+<p>When running against multiple regions the output files are placed in a different
+location that when running against a single region.  When generating a report, specify
+multiple regions the same way as with the <code class="docutils literal"><span class="pre">run</span></code> command:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian report -s out --region us-east-1 --region-us-west-1 policy.yml
 </pre></div>
 </div>
+<p>A region column will be added to reports generated that include multiple regions to
+indicate which region each row is from.</p>
 </div>
-<div class="section" id="reports">
-<h2>Reports<a class="headerlink" href="#reports" title="Permalink to this headline">¶</a></h2>
-<p>CSV or text-based reports can be generated with the <code class="docutils literal"><span class="pre">report</span></code> subcommand.</p>
-<p>Reporting is used to list information gathered during previous calls to the <code class="docutils literal"><span class="pre">run</span></code>
-subcommand.  If your goal is to find out what resources match on a policy use <code class="docutils literal"><span class="pre">run</span></code>
-along with the <code class="docutils literal"><span class="pre">--dryrun</span></code> option.</p>
+<div class="section" id="adding-custom-fields-to-reports">
+<span id="report-custom-fields"></span><h2>Adding custom fields to reports<a class="headerlink" href="#adding-custom-fields-to-reports" title="Permalink to this headline">¶</a></h2>
+<p>Reports use a default set of fields that are resource-specific.  To add other fields
+use the <code class="docutils literal"><span class="pre">--field</span></code> flag, which can be supplied multiple times.  The syntax is:
+<code class="docutils literal"><span class="pre">--field</span> <span class="pre">KEY=VALUE</span></code> where KEY is the header name (what will print at the top of
+the column) and the VALUE is a JMESPath expression accessing the desired data:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian report -s out --field Image=ImageId policy.yml
+</pre></div>
+</div>
+<p>If hyphens or other special characters are present in the JMESPath it may require
+quoting, e.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian report -s . --field &quot;AccessKey1LastRotated&quot;=&#39;&quot;c7n:credential-report&quot;.access_keys[0].last_rotated&#39; policy.yml
+</pre></div>
+</div>
+<p>To remove the default fields and only add the desired ones, the <code class="docutils literal"><span class="pre">--no-default-fields</span></code>
+flag can be specified and then specific fields can be added in, e.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ custodian report -s out --no-default-fields --field Image=ImageId policy.yml
+</pre></div>
+</div>
 </div>
 </div>
 
@@ -257,10 +267,10 @@ along with the <code class="docutils literal"><span class="pre">--dryrun</span><
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="advanced.html" class="btn btn-neutral float-right" title="Advanced Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="offhours.html" class="btn btn-neutral float-right" title="Example offhours policy" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="index.html" class="btn btn-neutral" title="Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral" title="Monitoring your environment" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
