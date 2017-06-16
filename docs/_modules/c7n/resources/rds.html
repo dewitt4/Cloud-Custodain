@@ -1725,8 +1725,14 @@
         <span class="k">if</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;string&#39;</span><span class="p">:</span>
             <span class="n">ret_val</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;boolean&#39;</span><span class="p">:</span>
-            <span class="c1"># AWS returns 1s and 0s for this</span>
-            <span class="n">ret_val</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+            <span class="c1"># AWS returns 1s and 0s for boolean for most of the cases</span>
+            <span class="k">if</span> <span class="n">val</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                <span class="n">ret_val</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">))</span>
+            <span class="c1"># AWS returns &#39;TRUE,FALSE&#39; for Oracle engine</span>
+            <span class="k">elif</span> <span class="n">val</span> <span class="o">==</span> <span class="s1">&#39;TRUE&#39;</span><span class="p">:</span>
+                <span class="n">ret_val</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="n">val</span> <span class="o">==</span> <span class="s1">&#39;FALSE&#39;</span><span class="p">:</span>
+                <span class="n">ret_val</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">elif</span> <span class="n">datatype</span> <span class="o">==</span> <span class="s1">&#39;integer&#39;</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">val</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
                 <span class="n">ret_val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
@@ -1740,6 +1746,8 @@
         <span class="n">paramcache</span> <span class="o">=</span> <span class="p">{}</span>
 
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">paginator</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_db_parameters&#39;</span><span class="p">)</span>
+
         <span class="n">param_groups</span> <span class="o">=</span> <span class="p">{</span><span class="n">db</span><span class="p">[</span><span class="s1">&#39;DBParameterGroups&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;DBParameterGroupName&#39;</span><span class="p">]</span>
                         <span class="k">for</span> <span class="n">db</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
 
@@ -1752,11 +1760,11 @@
             <span class="k">if</span> <span class="n">pg_values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">paramcache</span><span class="p">[</span><span class="n">pg</span><span class="p">]</span> <span class="o">=</span> <span class="n">pg_values</span>
                 <span class="k">continue</span>
+            <span class="n">param_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;Parameters&#39;</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">DBParameterGroupName</span><span class="o">=</span><span class="n">pg</span><span class="p">)]))</span>
             <span class="n">paramcache</span><span class="p">[</span><span class="n">pg</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="n">p</span><span class="p">[</span><span class="s1">&#39;ParameterName&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">recast</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ParameterValue&#39;</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;DataType&#39;</span><span class="p">])</span>
-                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_db_parameters</span><span class="p">(</span>
-                    <span class="n">DBParameterGroupName</span><span class="o">=</span><span class="n">pg</span><span class="p">)[</span><span class="s1">&#39;Parameters&#39;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s1">&#39;ParameterValue&#39;</span> <span class="ow">in</span> <span class="n">p</span><span class="p">}</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_list</span> <span class="k">if</span> <span class="s1">&#39;ParameterValue&#39;</span> <span class="ow">in</span> <span class="n">p</span><span class="p">}</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">cache_key</span><span class="p">,</span> <span class="n">paramcache</span><span class="p">[</span><span class="n">pg</span><span class="p">])</span>
 
         <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>

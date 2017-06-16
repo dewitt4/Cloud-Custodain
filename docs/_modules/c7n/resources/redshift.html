@@ -206,6 +206,7 @@
 <span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
@@ -346,8 +347,9 @@
 
         <span class="k">def</span> <span class="nf">get_params</span><span class="p">(</span><span class="n">group_name</span><span class="p">):</span>
             <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;redshift&#39;</span><span class="p">)</span>
-            <span class="n">param_group</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">describe_cluster_parameters</span><span class="p">(</span>
-                <span class="n">ParameterGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">)[</span><span class="s1">&#39;Parameters&#39;</span><span class="p">]</span>
+            <span class="n">paginator</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;describe_cluster_parameters&#39;</span><span class="p">)</span>
+            <span class="n">param_group</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;Parameters&#39;</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">ParameterGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">)]))</span>
             <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_group</span><span class="p">:</span>
                 <span class="n">v</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;ParameterValue&#39;</span><span class="p">]</span>
