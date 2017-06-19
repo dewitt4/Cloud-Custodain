@@ -202,11 +202,11 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">import</span> <span class="nn">io</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">os.path</span>
-<span class="kn">from</span> <span class="nn">StringIO</span> <span class="k">import</span> <span class="n">StringIO</span>
-<span class="kn">import</span> <span class="nn">urllib2</span>
-<span class="kn">import</span> <span class="nn">urlparse</span>
+<span class="kn">from</span> <span class="nn">six.moves.urllib.request</span> <span class="k">import</span> <span class="n">urlopen</span>
+<span class="kn">from</span> <span class="nn">six.moves.urllib.parse</span> <span class="k">import</span> <span class="n">parse_qsl</span><span class="p">,</span> <span class="n">urlparse</span>
 
 <span class="kn">import</span> <span class="nn">jmespath</span>
 
@@ -223,20 +223,20 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># TODO: in the case of file: content and untrusted</span>
             <span class="c1"># third parties, uri would need sanitization</span>
-            <span class="n">fh</span> <span class="o">=</span> <span class="n">urllib2</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+            <span class="n">fh</span> <span class="o">=</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
             <span class="n">contents</span> <span class="o">=</span> <span class="n">fh</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
             <span class="n">fh</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="o">.</span><span class="n">save</span><span class="p">((</span><span class="s2">&quot;uri-resolver&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="p">),</span> <span class="n">contents</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">contents</span></div>
 
 <div class="viewcode-block" id="URIResolver.get_s3_uri"><a class="viewcode-back" href="../../generated/c7n.html#c7n.resolver.URIResolver.get_s3_uri">[docs]</a>    <span class="k">def</span> <span class="nf">get_s3_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uri</span><span class="p">):</span>
-        <span class="n">parsed</span> <span class="o">=</span> <span class="n">urlparse</span><span class="o">.</span><span class="n">urlparse</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">urlparse</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span>
         <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
         <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
             <span class="n">Bucket</span><span class="o">=</span><span class="n">parsed</span><span class="o">.</span><span class="n">netloc</span><span class="p">,</span>
             <span class="n">Key</span><span class="o">=</span><span class="n">parsed</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
         <span class="k">if</span> <span class="n">parsed</span><span class="o">.</span><span class="n">query</span><span class="p">:</span>
-            <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">urlparse</span><span class="o">.</span><span class="n">parse_qsl</span><span class="p">(</span><span class="n">parsed</span><span class="o">.</span><span class="n">query</span><span class="p">)))</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">parse_qsl</span><span class="p">(</span><span class="n">parsed</span><span class="o">.</span><span class="n">query</span><span class="p">)))</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;Body&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">()</span></div></div>
 
@@ -318,7 +318,7 @@
             <span class="k">if</span> <span class="s1">&#39;expr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
                 <span class="k">return</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="n">data</span><span class="p">)</span>
         <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv&#39;</span> <span class="ow">or</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">:</span>
-            <span class="n">data</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">contents</span><span class="p">))</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">contents</span><span class="p">))</span>
             <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;csv2dict&#39;</span><span class="p">:</span>
                 <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">data</span><span class="p">)}</span>
             <span class="k">else</span><span class="p">:</span>
@@ -329,7 +329,7 @@
                 <span class="k">return</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;expr&#39;</span><span class="p">],</span> <span class="n">data</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">data</span>
         <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s1">&#39;txt&#39;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">StringIO</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span><span class="o">.</span><span class="n">readlines</span><span class="p">()]</span></div></div>
+            <span class="k">return</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span><span class="o">.</span><span class="n">readlines</span><span class="p">()]</span></div></div>
 </pre></div>
 
            </div>
