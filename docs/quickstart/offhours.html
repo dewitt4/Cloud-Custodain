@@ -103,9 +103,12 @@
 <li class="toctree-l2"><a class="reference internal" href="#resource-scheduling-offhours">Resource Scheduling Offhours</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#policy-configuration">Policy Configuration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#tag-based-configuration">Tag Based Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tag-based-configuration">Tag Based Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#scheduleparser-time-specifications">ScheduleParser Time Specifications</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#policy-examples">Policy examples</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#options">Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#resume-during-offhours">Resume During Offhours</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="tagCompliance.html">Example tag compliance policy</a></li>
@@ -201,7 +204,7 @@ A common use is offhours scheduling for asgs, and instances.</p>
 <h2>Resource Scheduling Offhours<a class="headerlink" href="#resource-scheduling-offhours" title="Permalink to this headline">¶</a></h2>
 <p>Custodian provides for time based filters, that allow for taking periodic
 action on a resource, with resource schedule customization based on tag values.
-A common use is offhours scheduling for asgs, and instances.</p>
+A common use is offhours scheduling for asgs and instances.</p>
 </div>
 <div class="section" id="features">
 <h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
@@ -217,47 +220,108 @@ resources with tag, vpc, etc).</li>
 <div class="section" id="policy-configuration">
 <h2>Policy Configuration<a class="headerlink" href="#policy-configuration" title="Permalink to this headline">¶</a></h2>
 <p>We provide an <cite>onhour</cite> and <cite>offhour</cite> time filter, each should be used in a
-different policy, they support the same configuration options</p>
+different policy, they support the same configuration options:</p>
 <blockquote>
 <div><ul class="simple">
 <li><strong>weekends</strong>: default true, whether to leave resources off for the weekend</li>
 <li><strong>weekend-only</strong>: default false, whether to turn the resource off only on
 the weekend</li>
-<li><strong>default_tz</strong>: which timezone to utilize when evaluating time</li>
-<li><strong>tag</strong>: default maid_offhours, which resource tag key to look for the
-resource’s schedule.</li>
-<li><strong>opt-out</strong>: applies the default schedule to resource which do not specify
-any value.  a value of <cite>off</cite> to disable/exclude the resource.</li>
+<li><strong>default_tz</strong>: which timezone to utilize when evaluating time <strong>(REQUIRED)</strong></li>
+<li><strong>tag</strong>: which resource tag name to use for per-resource configuration
+(schedule and timezone overrides and opt-in/opt-out); default is
+<code class="docutils literal"><span class="pre">maid_offhours</span></code>.</li>
+<li><strong>opt-out</strong>: Determines the behavior for resources which do not have a tag
+matching the one specified for <strong>tag</strong>. Values can be either <code class="docutils literal"><span class="pre">false</span></code> (the
+default) where the policy operates on an opt-in basis and resources must have
+the tag in order to be acted on by the policy, or <code class="docutils literal"><span class="pre">true</span></code> where the policy
+operates on an opt-out basis, and resources without the tag are acted on by
+the policy.</li>
+<li><strong>onhour</strong>: the default time to start/run resources, specified as 0-23</li>
+<li><strong>offhour</strong>: the default time to stop/suspend resources, specified as 0-23</li>
 </ul>
 </div></blockquote>
-<p>The default off hours and on hours are specified per the policy configuration
-along with the opt-in/opt-out behavior. Resources can specify the timezone
-that they wish to have this scheduled utilized with.</p>
+<p>This example policy overrides most of the defaults for an offhour policy:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">offhours-stop</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">offhour</span>
+        <span class="l l-Scalar l-Scalar-Plain">weekends</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">false</span>
+        <span class="l l-Scalar l-Scalar-Plain">default_tz</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">pt</span>
+        <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">downtime</span>
+        <span class="l l-Scalar l-Scalar-Plain">opt-out</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
+        <span class="l l-Scalar l-Scalar-Plain">onhour</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">8</span>
+        <span class="l l-Scalar l-Scalar-Plain">offhour</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">20</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="tag-based-configuration">
 <h2>Tag Based Configuration<a class="headerlink" href="#tag-based-configuration" title="Permalink to this headline">¶</a></h2>
-<p>Note the tag name is configurable per policy configuration, examples below use
-default tag name, ie. custodian_downtime.</p>
+<p>Resources can use a special tag to override the default configuration on a
+per-resource basis. Note that the name of the tag is configurable via the
+<code class="docutils literal"><span class="pre">tag</span></code> option in the policy; the examples below use the default tag name,
+<code class="docutils literal"><span class="pre">maid_offhours</span></code>.</p>
+<p>The value of the tag must be one of the following:</p>
 <ul class="simple">
-<li>custodian_downtime:</li>
+<li><strong>(empty)</strong> - An empty tag value implies night and weekend offhours using
+the default time zone configured in the policy (tz=est if unspecified) and the
+default onhour and offhour values configured in the policy.</li>
+<li><strong>off</strong> - If offhours is configured to run in opt-out mode, this tag can be
+specified to disable offhours on a given instance. If offhours is configured
+to run in opt-in mode, this tag will have no effect (the resource will still
+be opted out).</li>
+<li>a semicolon-separated string composed of one or more of the following
+components, which override the defaults specified in the policy:<ul>
+<li><code class="docutils literal"><span class="pre">tz=&lt;timezone&gt;</span></code> to evaluate with a resource-specific timezone, where
+<code class="docutils literal"><span class="pre">&lt;timezone&gt;</span></code> is either one of the supported timezone aliases defined in
+<a class="reference internal" href="../generated/c7n.filters.html#c7n.filters.offhours.Time.TZ_ALIASES" title="c7n.filters.offhours.Time.TZ_ALIASES"><code class="xref py py-attr docutils literal"><span class="pre">c7n.filters.offhours.Time.TZ_ALIASES</span></code></a> (such as <code class="docutils literal"><span class="pre">pt</span></code>) or the name
+of a geographic timezone identifier in
+[IANA’s tzinfo database](<a class="reference external" href="https://www.iana.org/time-zones">https://www.iana.org/time-zones</a>), such as
+<code class="docutils literal"><span class="pre">Americas/Los_Angeles</span></code>. <em>(Note all timezone aliases are
+referenced to a locality to ensure taking into account local daylight
+savings time, if applicable.)</em></li>
+<li><code class="docutils literal"><span class="pre">off=(time</span> <span class="pre">spec)</span></code> and/or <code class="docutils literal"><span class="pre">on=(time</span> <span class="pre">spec)</span></code> matching time specifications
+supported by <a class="reference internal" href="../generated/c7n.filters.html#c7n.filters.offhours.ScheduleParser" title="c7n.filters.offhours.ScheduleParser"><code class="xref py py-class docutils literal"><span class="pre">c7n.filters.offhours.ScheduleParser</span></code></a> as described
+in the next section.</li>
 </ul>
-<p>An empty tag value implies night and weekend offhours using the default
-time zone configured in the policy (tz=est if unspecified).</p>
-<ul class="simple">
-<li>custodian_downtime: tz=pt</li>
+</li>
 </ul>
-<p>Note all timezone aliases are referenced to a locality to ensure taking into
-account local daylight savings time (if any).</p>
-<ul class="simple">
-<li>custodian_downtime: tz=Americas/Los_Angeles</li>
-</ul>
-<p>A geography can be specified but must be in the time zone database.</p>
-<p>Per <a class="reference external" href="http://www.iana.org/time-zones">http://www.iana.org/time-zones</a></p>
-<ul class="simple">
-<li>custodian_downtime: off</li>
-</ul>
-<p>If offhours is configured to run in opt-out mode, this tag can be specified
-to disable offhours on a given instance.</p>
+<div class="section" id="scheduleparser-time-specifications">
+<h3>ScheduleParser Time Specifications<a class="headerlink" href="#scheduleparser-time-specifications" title="Permalink to this headline">¶</a></h3>
+<p>Each time specification follows the format <code class="docutils literal"><span class="pre">(days,hours)</span></code>. Multiple time
+specifications can be combined in square-bracketed lists, i.e.
+<code class="docutils literal"><span class="pre">[(days,hours),(days,hours),(days,hours)]</span></code>.</p>
+<p><strong>Examples</strong>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># up mon-fri from 7am-7pm; eastern time</span>
+<span class="n">off</span><span class="o">=</span><span class="p">(</span><span class="n">M</span><span class="o">-</span><span class="n">F</span><span class="p">,</span><span class="mi">19</span><span class="p">);</span><span class="n">on</span><span class="o">=</span><span class="p">(</span><span class="n">M</span><span class="o">-</span><span class="n">F</span><span class="p">,</span><span class="mi">7</span><span class="p">)</span>
+<span class="c1"># up mon-fri from 6am-9pm; up sun from 10am-6pm; pacific time</span>
+<span class="n">off</span><span class="o">=</span><span class="p">[(</span><span class="n">M</span><span class="o">-</span><span class="n">F</span><span class="p">,</span><span class="mi">21</span><span class="p">),(</span><span class="n">U</span><span class="p">,</span><span class="mi">18</span><span class="p">)];</span><span class="n">on</span><span class="o">=</span><span class="p">[(</span><span class="n">M</span><span class="o">-</span><span class="n">F</span><span class="p">,</span><span class="mi">6</span><span class="p">),(</span><span class="n">U</span><span class="p">,</span><span class="mi">10</span><span class="p">)];</span><span class="n">tz</span><span class="o">=</span><span class="n">pt</span>
+</pre></div>
+</div>
+<p><strong>Possible values</strong>:</p>
+<blockquote>
+<div><table border="1" class="docutils">
+<colgroup>
+<col width="35%" />
+<col width="65%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">field</th>
+<th class="head">values</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>days</td>
+<td>M, T, W, H, F, S, U</td>
+</tr>
+<tr class="row-odd"><td>hours</td>
+<td>0, 1, 2, …, 22, 23</td>
+</tr>
+</tbody>
+</table>
+<p>Days can be specified in a range (ex. M-F).</p>
+</div></blockquote>
+</div>
 </div>
 <div class="section" id="policy-examples">
 <h2>Policy examples<a class="headerlink" href="#policy-examples" title="Permalink to this headline">¶</a></h2>
@@ -294,27 +358,24 @@ to disable offhours on a given instance.</p>
        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resume</span>
 </pre></div>
 </div>
+<p>Additional policy examples and resource-type-specific information can be seen in
+the <a class="reference internal" href="../usecases/ec2offhours.html#ec2offhours"><span class="std std-ref">EC2 Offhours</span></a> and <a class="reference internal" href="../usecases/asgoffhours.html#asgoffhours"><span class="std std-ref">ASG Offhours</span></a>
+use cases.</p>
 </div>
-<div class="section" id="options">
-<h2>Options<a class="headerlink" href="#options" title="Permalink to this headline">¶</a></h2>
-<ul class="simple">
-<li>tag: the tag name to use when configuring</li>
-<li>default_tz: the default timezone to use when interpreting offhours</li>
-<li>offhour: the time to turn instances off, specified in 0-23</li>
-<li>onhour: the time to turn instances on, specified in 0-23</li>
-<li>opt-out: default behavior is opt in, as in <code class="docutils literal"><span class="pre">tag</span></code> must be present,
-with opt-out: true, the tag doesn’t need to be present.</li>
-</ul>
-<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
-  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">offhours-stop</span>
-    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
-    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">offhour</span>
-        <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">downtime</span>
-        <span class="l l-Scalar l-Scalar-Plain">onhour</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">8</span>
-        <span class="l l-Scalar l-Scalar-Plain">offhour</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">20</span>
-</pre></div>
-</div>
+<div class="section" id="resume-during-offhours">
+<h2>Resume During Offhours<a class="headerlink" href="#resume-during-offhours" title="Permalink to this headline">¶</a></h2>
+<p>These policies are evaluated hourly; during each run (once an hour),
+cloud-custodian will act on <strong>only</strong> the resources tagged for that <strong>exact</strong>
+hour. In other words, if a resource has an offhours policy of
+stopping/suspending at 23:00 Eastern daily and starting/resuming at 06:00
+Eastern daily, and you run cloud-custodian once an hour via Lambda, that
+resource will only be stopped once a day sometime between 23:00 and 23:59, and
+will only be started once a day sometime between 06:00 and 06:59. If the current
+hour does not <em>exactly</em> match the hour specified in the policy, nothing will be
+done at all.</p>
+<p>As a result of this, if custodian stops an instance or suspends an ASG and you
+need to start/resume it, you can safely do so manually and custodian won’t touch
+it again until the next day.</p>
 </div>
 </div>
 

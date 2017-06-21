@@ -205,7 +205,7 @@
 
 <span class="sd">Custodian provides for time based filters, that allow for taking periodic</span>
 <span class="sd">action on a resource, with resource schedule customization based on tag values.</span>
-<span class="sd">A common use is offhours scheduling for asgs, and instances.</span>
+<span class="sd">A common use is offhours scheduling for asgs and instances.</span>
 
 <span class="sd">Features</span>
 <span class="sd">========</span>
@@ -221,48 +221,97 @@
 <span class="sd">====================</span>
 
 <span class="sd">We provide an `onhour` and `offhour` time filter, each should be used in a</span>
-<span class="sd">different policy, they support the same configuration options</span>
+<span class="sd">different policy, they support the same configuration options:</span>
 
 <span class="sd"> - **weekends**: default true, whether to leave resources off for the weekend</span>
 <span class="sd"> - **weekend-only**: default false, whether to turn the resource off only on</span>
 <span class="sd">   the weekend</span>
-<span class="sd"> - **default_tz**: which timezone to utilize when evaluating time</span>
-<span class="sd"> - **tag**: default maid_offhours, which resource tag key to look for the</span>
-<span class="sd">   resource&#39;s schedule.</span>
-<span class="sd"> - **opt-out**: applies the default schedule to resource which do not specify</span>
-<span class="sd">   any value.  a value of `off` to disable/exclude the resource.</span>
+<span class="sd"> - **default_tz**: which timezone to utilize when evaluating time **(REQUIRED)**</span>
+<span class="sd"> - **tag**: which resource tag name to use for per-resource configuration</span>
+<span class="sd">   (schedule and timezone overrides and opt-in/opt-out); default is</span>
+<span class="sd">   ``maid_offhours``.</span>
+<span class="sd"> - **opt-out**: Determines the behavior for resources which do not have a tag</span>
+<span class="sd">   matching the one specified for **tag**. Values can be either ``false`` (the</span>
+<span class="sd">   default) where the policy operates on an opt-in basis and resources must have</span>
+<span class="sd">   the tag in order to be acted on by the policy, or ``true`` where the policy</span>
+<span class="sd">   operates on an opt-out basis, and resources without the tag are acted on by</span>
+<span class="sd">   the policy.</span>
+<span class="sd"> - **onhour**: the default time to start/run resources, specified as 0-23</span>
+<span class="sd"> - **offhour**: the default time to stop/suspend resources, specified as 0-23</span>
 
-<span class="sd">The default off hours and on hours are specified per the policy configuration</span>
-<span class="sd">along with the opt-in/opt-out behavior. Resources can specify the timezone</span>
-<span class="sd">that they wish to have this scheduled utilized with.</span>
+<span class="sd">This example policy overrides most of the defaults for an offhour policy:</span>
+
+<span class="sd">.. code-block:: yaml</span>
+
+<span class="sd">   policies:</span>
+<span class="sd">     - name: offhours-stop</span>
+<span class="sd">       resource: ec2</span>
+<span class="sd">       filters:</span>
+<span class="sd">         - type: offhour</span>
+<span class="sd">           weekends: false</span>
+<span class="sd">           default_tz: pt</span>
+<span class="sd">           tag: downtime</span>
+<span class="sd">           opt-out: true</span>
+<span class="sd">           onhour: 8</span>
+<span class="sd">           offhour: 20</span>
 
 <span class="sd">Tag Based Configuration</span>
 <span class="sd">=======================</span>
 
-<span class="sd">Note the tag name is configurable per policy configuration, examples below use</span>
-<span class="sd">default tag name, ie. custodian_downtime.</span>
+<span class="sd">Resources can use a special tag to override the default configuration on a</span>
+<span class="sd">per-resource basis. Note that the name of the tag is configurable via the</span>
+<span class="sd">``tag`` option in the policy; the examples below use the default tag name,</span>
+<span class="sd">``maid_offhours``.</span>
 
-<span class="sd">- custodian_downtime:</span>
+<span class="sd">The value of the tag must be one of the following:</span>
 
-<span class="sd">An empty tag value implies night and weekend offhours using the default</span>
-<span class="sd">time zone configured in the policy (tz=est if unspecified).</span>
+<span class="sd">- **(empty)** - An empty tag value implies night and weekend offhours using</span>
+<span class="sd">  the default time zone configured in the policy (tz=est if unspecified) and the</span>
+<span class="sd">  default onhour and offhour values configured in the policy.</span>
+<span class="sd">- **off** - If offhours is configured to run in opt-out mode, this tag can be</span>
+<span class="sd">  specified to disable offhours on a given instance. If offhours is configured</span>
+<span class="sd">  to run in opt-in mode, this tag will have no effect (the resource will still</span>
+<span class="sd">  be opted out).</span>
+<span class="sd">- a semicolon-separated string composed of one or more of the following</span>
+<span class="sd">  components, which override the defaults specified in the policy:</span>
 
-<span class="sd">- custodian_downtime: tz=pt</span>
+<span class="sd">  * ``tz=&lt;timezone&gt;`` to evaluate with a resource-specific timezone, where</span>
+<span class="sd">    ``&lt;timezone&gt;`` is either one of the supported timezone aliases defined in</span>
+<span class="sd">    :py:attr:`c7n.filters.offhours.Time.TZ_ALIASES` (such as ``pt``) or the name</span>
+<span class="sd">    of a geographic timezone identifier in</span>
+<span class="sd">    [IANA&#39;s tzinfo database](https://www.iana.org/time-zones), such as</span>
+<span class="sd">    ``Americas/Los_Angeles``. *(Note all timezone aliases are</span>
+<span class="sd">    referenced to a locality to ensure taking into account local daylight</span>
+<span class="sd">    savings time, if applicable.)*</span>
+<span class="sd">  * ``off=(time spec)`` and/or ``on=(time spec)`` matching time specifications</span>
+<span class="sd">    supported by :py:class:`c7n.filters.offhours.ScheduleParser` as described</span>
+<span class="sd">    in the next section.</span>
 
-<span class="sd">Note all timezone aliases are referenced to a locality to ensure taking into</span>
-<span class="sd">account local daylight savings time (if any).</span>
+<span class="sd">ScheduleParser Time Specifications</span>
+<span class="sd">----------------------------------</span>
 
-<span class="sd">- custodian_downtime: tz=Americas/Los_Angeles</span>
+<span class="sd">Each time specification follows the format ``(days,hours)``. Multiple time</span>
+<span class="sd">specifications can be combined in square-bracketed lists, i.e.</span>
+<span class="sd">``[(days,hours),(days,hours),(days,hours)]``.</span>
 
-<span class="sd">A geography can be specified but must be in the time zone database.</span>
+<span class="sd">**Examples**::</span>
 
-<span class="sd">Per http://www.iana.org/time-zones</span>
+<span class="sd">    # up mon-fri from 7am-7pm; eastern time</span>
+<span class="sd">    off=(M-F,19);on=(M-F,7)</span>
+<span class="sd">    # up mon-fri from 6am-9pm; up sun from 10am-6pm; pacific time</span>
+<span class="sd">    off=[(M-F,21),(U,18)];on=[(M-F,6),(U,10)];tz=pt</span>
 
-<span class="sd">- custodian_downtime: off</span>
+<span class="sd">**Possible values**:</span>
 
-<span class="sd">If offhours is configured to run in opt-out mode, this tag can be specified</span>
-<span class="sd">to disable offhours on a given instance.</span>
+<span class="sd">    +------------+----------------------+</span>
+<span class="sd">    | field      | values               |</span>
+<span class="sd">    +============+======================+</span>
+<span class="sd">    | days       | M, T, W, H, F, S, U  |</span>
+<span class="sd">    +------------+----------------------+</span>
+<span class="sd">    | hours      | 0, 1, 2, ..., 22, 23 |</span>
+<span class="sd">    +------------+----------------------+</span>
 
+<span class="sd">    Days can be specified in a range (ex. M-F).</span>
 
 <span class="sd">Policy examples</span>
 <span class="sd">===============</span>
@@ -304,28 +353,26 @@
 <span class="sd">        actions:</span>
 <span class="sd">           - resume</span>
 
+<span class="sd">Additional policy examples and resource-type-specific information can be seen in</span>
+<span class="sd">the :ref:`EC2 Offhours &lt;ec2offhours&gt;` and :ref:`ASG Offhours &lt;asgoffhours&gt;`</span>
+<span class="sd">use cases.</span>
 
-<span class="sd">Options</span>
-<span class="sd">=======</span>
+<span class="sd">Resume During Offhours</span>
+<span class="sd">======================</span>
 
-<span class="sd">- tag: the tag name to use when configuring</span>
-<span class="sd">- default_tz: the default timezone to use when interpreting offhours</span>
-<span class="sd">- offhour: the time to turn instances off, specified in 0-23</span>
-<span class="sd">- onhour: the time to turn instances on, specified in 0-23</span>
-<span class="sd">- opt-out: default behavior is opt in, as in ``tag`` must be present,</span>
-<span class="sd">  with opt-out: true, the tag doesn&#39;t need to be present.</span>
+<span class="sd">These policies are evaluated hourly; during each run (once an hour),</span>
+<span class="sd">cloud-custodian will act on **only** the resources tagged for that **exact**</span>
+<span class="sd">hour. In other words, if a resource has an offhours policy of</span>
+<span class="sd">stopping/suspending at 23:00 Eastern daily and starting/resuming at 06:00</span>
+<span class="sd">Eastern daily, and you run cloud-custodian once an hour via Lambda, that</span>
+<span class="sd">resource will only be stopped once a day sometime between 23:00 and 23:59, and</span>
+<span class="sd">will only be started once a day sometime between 06:00 and 06:59. If the current</span>
+<span class="sd">hour does not *exactly* match the hour specified in the policy, nothing will be</span>
+<span class="sd">done at all.</span>
 
-
-<span class="sd">.. code-block:: yaml</span>
-
-<span class="sd">   policies:</span>
-<span class="sd">     - name: offhours-stop</span>
-<span class="sd">       resource: ec2</span>
-<span class="sd">       filters:</span>
-<span class="sd">         - type: offhour</span>
-<span class="sd">           tag: downtime</span>
-<span class="sd">           onhour: 8</span>
-<span class="sd">           offhour: 20</span>
+<span class="sd">As a result of this, if custodian stops an instance or suspends an ASG and you</span>
+<span class="sd">need to start/resume it, you can safely do so manually and custodian won&#39;t touch</span>
+<span class="sd">it again until the next day.</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
