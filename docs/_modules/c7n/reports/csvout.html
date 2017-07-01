@@ -418,7 +418,7 @@
         <span class="k">return</span> <span class="n">records</span></div>
 
 
-<div class="viewcode-block" id="record_set"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.record_set">[docs]</a><span class="k">def</span> <span class="nf">record_set</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key_prefix</span><span class="p">,</span> <span class="n">start_date</span><span class="p">):</span>
+<div class="viewcode-block" id="record_set"><a class="viewcode-back" href="../../../generated/c7n.reports.html#c7n.reports.csvout.record_set">[docs]</a><span class="k">def</span> <span class="nf">record_set</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key_prefix</span><span class="p">,</span> <span class="n">start_date</span><span class="p">,</span> <span class="n">specify_hour</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Retrieve all s3 records for the given policy output url</span>
 
 <span class="sd">    From the given start date.</span>
@@ -429,8 +429,13 @@
     <span class="n">records</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">key_count</span> <span class="o">=</span> <span class="mi">0</span>
 
-    <span class="n">marker</span> <span class="o">=</span> <span class="n">key_prefix</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span> <span class="o">+</span> <span class="n">start_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span>
-        <span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">/00&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;/resources.json.gz&quot;</span>
+    <span class="n">date</span> <span class="o">=</span> <span class="n">start_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">specify_hour</span><span class="p">:</span>
+        <span class="n">date</span> <span class="o">+=</span> <span class="s2">&quot;/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">start_date</span><span class="o">.</span><span class="n">hour</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">date</span> <span class="o">+=</span> <span class="s2">&quot;/00&quot;</span>
+
+    <span class="n">marker</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2">/resources.json.gz&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key_prefix</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">),</span> <span class="n">date</span><span class="p">)</span>
 
     <span class="n">p</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;list_objects_v2&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span>
         <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">,</span>
@@ -467,7 +472,7 @@
     <span class="n">custodian_date</span> <span class="o">=</span> <span class="n">date_parse</span><span class="p">(</span><span class="n">date_str</span><span class="p">)</span>
     <span class="n">s3</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">])</span>
-    <span class="n">blob</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">StringIO</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;Body&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+    <span class="n">blob</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;Body&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
 
     <span class="n">records</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">gzip</span><span class="o">.</span><span class="n">GzipFile</span><span class="p">(</span><span class="n">fileobj</span><span class="o">=</span><span class="n">blob</span><span class="p">))</span>
     <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;bucket: </span><span class="si">%s</span><span class="s2"> key: </span><span class="si">%s</span><span class="s2"> records: </span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span>
