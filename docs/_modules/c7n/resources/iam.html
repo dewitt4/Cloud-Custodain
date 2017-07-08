@@ -206,11 +206,12 @@
 <span class="kn">import</span> <span class="nn">csv</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
-<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
-<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
+<span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 <span class="kn">import</span> <span class="nn">six</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
@@ -888,8 +889,8 @@
         <span class="k">return</span> <span class="n">matched</span></div></div>
 
 
-<div class="viewcode-block" id="GroupPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupPolicy">[docs]</a><span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">GroupPolicy</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+<div class="viewcode-block" id="GroupMembership"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupMembership">[docs]</a><span class="nd">@User</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">GroupMembership</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter IAM users based on attached group values</span>
 
 <span class="sd">    :example:</span>
@@ -908,20 +909,21 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;group&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListGroupsForUser&#39;</span><span class="p">,)</span>
 
-<div class="viewcode-block" id="GroupPolicy.user_groups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupPolicy.user_groups">[docs]</a>    <span class="k">def</span> <span class="nf">user_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_set</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="GroupMembership.get_user_groups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupMembership.get_user_groups">[docs]</a>    <span class="k">def</span> <span class="nf">get_user_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">user_set</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_set</span><span class="p">:</span>
-            <span class="k">if</span> <span class="s1">&#39;c7n:Groups&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">u</span><span class="p">:</span>
-                <span class="n">u</span><span class="p">[</span><span class="s1">&#39;c7n:Groups&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">u</span><span class="p">[</span><span class="s1">&#39;c7n:Groups&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_groups_for_user</span><span class="p">(</span>
                 <span class="n">UserName</span><span class="o">=</span><span class="n">u</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;Groups&#39;</span><span class="p">]</span></div>
 
-<div class="viewcode-block" id="GroupPolicy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupPolicy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">user_set</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
+<div class="viewcode-block" id="GroupMembership.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.GroupMembership.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-                <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> users&#39; groups&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">user_groups</span><span class="p">,</span> <span class="n">user_set</span><span class="p">))</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">user_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="s1">&#39;c7n:Groups&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_user_groups</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">user_set</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">pass</span>
 
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
