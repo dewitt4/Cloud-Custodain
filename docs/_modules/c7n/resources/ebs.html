@@ -203,6 +203,7 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">Counter</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">json</span>
@@ -210,6 +211,7 @@
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
+<span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
@@ -1213,6 +1215,214 @@
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;InvalidVolume.NotFound&quot;</span><span class="p">:</span>
                 <span class="k">return</span>
             <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="ModifyableVolume"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyableVolume">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modifyable&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ModifyableVolume</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check if an ebs volume is modifyable online.</span>
+
+<span class="sd">    Considerations - https://goo.gl/CBhfqV</span>
+
+<span class="sd">    Consideration Summary</span>
+<span class="sd">      - only current instance types are supported (one exception m3.medium)</span>
+<span class="sd">        Current Generation Instances (2017-2) https://goo.gl/iuNjPZ</span>
+
+<span class="sd">      - older magnetic volume types are not supported</span>
+<span class="sd">      - shrinking volumes is not supported</span>
+<span class="sd">      - must wait at least 6hrs between modifications to the same volume.</span>
+<span class="sd">      - volumes must have been attached after nov 1st, 2016.</span>
+
+<span class="sd">    See `custodian schema ebs.actions.modify` for examples.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;modifyable&#39;</span><span class="p">)</span>
+
+    <span class="n">older_generation</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
+        <span class="s1">&#39;m1.small&#39;</span><span class="p">,</span> <span class="s1">&#39;m1.medium&#39;</span><span class="p">,</span> <span class="s1">&#39;m1.large&#39;</span><span class="p">,</span> <span class="s1">&#39;m1.xlarge&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;c1.medium&#39;</span><span class="p">,</span> <span class="s1">&#39;c1.xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;cc2.8xlarge&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;m2.xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;m2.2xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;m2.4xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;cr1.8xlarge&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;hi1.4xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;hs1.8xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;cg1.4xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;t1.micro&#39;</span><span class="p">,</span>
+        <span class="c1"># two legs good, not all current gen work either.</span>
+        <span class="s1">&#39;m3.large&#39;</span><span class="p">,</span> <span class="s1">&#39;m3.xlarge&#39;</span><span class="p">,</span> <span class="s1">&#39;m3.2xlarge&#39;</span>
+    <span class="p">))</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;ec2:DescribeInstances&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ModifyableVolume.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyableVolume.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">filtered</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">attached</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">stats</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+        <span class="n">marker_date</span> <span class="o">=</span> <span class="n">parse_date</span><span class="p">(</span><span class="s1">&#39;2016-11-01T00:00:00+00:00&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Filter volumes</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="c1"># unsupported type</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeType&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;standard&#39;</span><span class="p">:</span>
+                <span class="n">stats</span><span class="p">[</span><span class="s1">&#39;vol-type&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">filtered</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># unattached are easy</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Attachments&#39;</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># check for attachment date older then supported date</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;AttachTime&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">marker_date</span><span class="p">:</span>
+                <span class="n">stats</span><span class="p">[</span><span class="s1">&#39;attach-time&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">filtered</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
+                <span class="k">continue</span>
+
+            <span class="n">attached</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+
+        <span class="c1"># Filter volumes attached to unsupported instance types</span>
+        <span class="n">ec2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">instance_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">attached</span><span class="p">:</span>
+            <span class="n">instance_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="n">v</span><span class="p">[</span><span class="s1">&#39;Attachments&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+
+        <span class="n">instances</span> <span class="o">=</span> <span class="n">ec2</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">instance_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceType&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">older_generation</span><span class="p">:</span>
+                <span class="n">stats</span><span class="p">[</span><span class="s1">&#39;instance-type&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">instance_map</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]])</span>
+                <span class="n">filtered</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">instance_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">])])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">instance_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]))</span>
+
+        <span class="c1"># Filter volumes that are currently under modification</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">modifying</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">vol_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="mi">200</span><span class="p">):</span>
+            <span class="n">vol_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">vol_set</span><span class="p">]</span>
+            <span class="n">mutating</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_volumes_modifications</span><span class="p">(</span>
+                <span class="n">Filters</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;volume-id&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">vol_ids</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;modification-state&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;modifying&#39;</span><span class="p">,</span> <span class="s1">&#39;optimizing&#39;</span><span class="p">,</span> <span class="s1">&#39;failed&#39;</span><span class="p">]}])</span>
+            <span class="k">for</span> <span class="n">vm</span> <span class="ow">in</span> <span class="n">mutating</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VolumesModifications&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                <span class="n">stats</span><span class="p">[</span><span class="s1">&#39;vol-mutation&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">filtered</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vm</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
+                <span class="n">modifying</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">vm</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;filtered </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> volumes due to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">filtered</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">modifying</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="ModifyVolume"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyVolume">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ModifyVolume</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Modify an ebs volume online.</span>
+
+<span class="sd">    **Note this action requires use of modifyable filter**</span>
+
+<span class="sd">    Intro Blog &amp; Use Cases - https://goo.gl/E3u4Ue</span>
+<span class="sd">    Docs - https://goo.gl/DJM4T0</span>
+<span class="sd">    Considerations - https://goo.gl/CBhfqV</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">      Find under utilized provisioned iops volumes older than a week</span>
+<span class="sd">      and change their type.</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">           policies:</span>
+<span class="sd">            - name: ebs-remove-piops</span>
+<span class="sd">              resource: ebs</span>
+<span class="sd">              filters:</span>
+<span class="sd">               - type: value</span>
+<span class="sd">                 key: CreateDate</span>
+<span class="sd">                 value_type: age</span>
+<span class="sd">                 value: 7</span>
+<span class="sd">                 op: greater-than</span>
+<span class="sd">               - VolumeType: io1</span>
+<span class="sd">               - type: metrics</span>
+<span class="sd">                 name: VolumeConsumedReadWriteOps</span>
+<span class="sd">                 statistics: Maximum</span>
+<span class="sd">                 value: 100</span>
+<span class="sd">                 op: less-than</span>
+<span class="sd">                 days: 7</span>
+<span class="sd">               - modifyable</span>
+<span class="sd">              actions:</span>
+<span class="sd">               - type: modify</span>
+<span class="sd">                 volume-type: gp1</span>
+
+<span class="sd">    `iops-percent` and `size-percent` can be used to modify</span>
+<span class="sd">    respectively iops on io1 volumes and volume size.</span>
+
+<span class="sd">    When converting to io1, `iops-percent` is used to set the iops</span>
+<span class="sd">    allocation for the new volume against the extant value for the old</span>
+<span class="sd">    volume.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">      Double storage and quadruple iops for all io1 volumes.</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">           policies:</span>
+<span class="sd">            - name: ebs-remove-piops</span>
+<span class="sd">              resource: ebs</span>
+<span class="sd">              filters:</span>
+<span class="sd">                - VolumeType: io1</span>
+<span class="sd">                - modifyable</span>
+<span class="sd">              actions:</span>
+<span class="sd">                - type: modify</span>
+<span class="sd">                  size-percent: 200</span>
+<span class="sd">                  iops-percent: 400</span>
+
+
+<span class="sd">    **Note** resizing down aka shrinking requires OS and FS support</span>
+<span class="sd">    and potentially additional preparation, else data-loss may occur.</span>
+<span class="sd">    To prevent accidents, shrinking must be explicitly enabled by also</span>
+<span class="sd">    setting `shrink: true` on the action.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;modify&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;volume-type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;io1&#39;</span><span class="p">,</span> <span class="s1">&#39;gp2&#39;</span><span class="p">,</span> <span class="s1">&#39;st1&#39;</span><span class="p">,</span> <span class="s1">&#39;sc1&#39;</span><span class="p">]},</span>
+           <span class="s1">&#39;shrink&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+           <span class="s1">&#39;size-percent&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;iops-percent&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">}})</span>
+
+    <span class="c1"># assumptions as its the closest i can find.</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;ec2:ModifyVolumeAttribute&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ModifyVolume.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyVolume.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;modifyable&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filters&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;modify action requires modifyable filter in policy&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;size-percent&#39;</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">100</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;shrink&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">((</span>
+                <span class="s2">&quot;shrinking volumes requires os/fs support &quot;</span>
+                <span class="s2">&quot;or data-loss may ensue, use `shrink: true` to override&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="ModifyVolume.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyVolume.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">50</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ModifyVolume.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.ModifyVolume.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">vtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;volume-type&#39;</span><span class="p">)</span>
+        <span class="n">psize</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;size-percent&#39;</span><span class="p">)</span>
+        <span class="n">piops</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;iops-percent&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]}</span>
+            <span class="k">if</span> <span class="n">piops</span> <span class="ow">and</span> <span class="p">(</span><span class="s1">&#39;io1&#39;</span> <span class="ow">in</span> <span class="p">(</span><span class="n">vtype</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VolumeType&#39;</span><span class="p">])):</span>
+                <span class="c1"># default here if we&#39;re changing to io1</span>
+                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Iops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Iops&#39;</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span> <span class="o">*</span> <span class="n">piops</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">),</span> <span class="mi">100</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">psize</span><span class="p">:</span>
+                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;Size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Size&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">psize</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">vtype</span><span class="p">:</span>
+                <span class="n">params</span><span class="p">[</span><span class="s1">&#39;VolumeType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">vtype</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">modify_volume</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
