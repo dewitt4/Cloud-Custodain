@@ -1247,15 +1247,15 @@
 
 
 <div class="viewcode-block" id="SetInstanceProfile"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.SetInstanceProfile">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-instance-profile&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">SetInstanceProfile</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Sets (or removes) the instance profile for an existing EC2 instance.</span>
+<span class="k">class</span> <span class="nc">SetInstanceProfile</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Sets (or removes) the instance profile for a running EC2 instance.</span>
 
 <span class="sd">    :Example:</span>
 
 <span class="sd">    .. code-block: yaml</span>
 
 <span class="sd">        policies:</span>
-<span class="sd">          - name:</span>
+<span class="sd">          - name: set-default-instance-profile</span>
 <span class="sd">            resource: ec2</span>
 <span class="sd">            query:</span>
 <span class="sd">              - IamInstanceProfile: absent</span>
@@ -1276,7 +1276,12 @@
         <span class="s1">&#39;ec2:DisassociateIamInstanceProfile&#39;</span><span class="p">,</span>
         <span class="s1">&#39;iam:PassRole&#39;</span><span class="p">)</span>
 
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,</span> <span class="s1">&#39;pending&#39;</span><span class="p">)</span>
+
 <div class="viewcode-block" id="SetInstanceProfile.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.SetInstanceProfile.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
+            <span class="k">return</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="n">profile_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
