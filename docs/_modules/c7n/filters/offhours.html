@@ -265,9 +265,10 @@
 
 <span class="sd">The value of the tag must be one of the following:</span>
 
-<span class="sd">- **(empty)** - An empty tag value implies night and weekend offhours using</span>
-<span class="sd">  the default time zone configured in the policy (tz=est if unspecified) and the</span>
-<span class="sd">  default onhour and offhour values configured in the policy.</span>
+<span class="sd">- **(empty)** or **on** - An empty tag value or a value of &quot;on&quot; implies night</span>
+<span class="sd">  and weekend offhours using the default time zone configured in the policy</span>
+<span class="sd">  (tz=est if unspecified) and the default onhour and offhour values configured</span>
+<span class="sd">  in the policy.</span>
 <span class="sd">- **off** - If offhours is configured to run in opt-out mode, this tag can be</span>
 <span class="sd">  specified to disable offhours on a given instance. If offhours is configured</span>
 <span class="sd">  to run in opt-in mode, this tag will have no effect (the resource will still</span>
@@ -373,6 +374,20 @@
 <span class="sd">As a result of this, if custodian stops an instance or suspends an ASG and you</span>
 <span class="sd">need to start/resume it, you can safely do so manually and custodian won&#39;t touch</span>
 <span class="sd">it again until the next day.</span>
+
+<span class="sd">ElasticBeanstalk, EFS and Other Services with Tag Value Restrictions</span>
+<span class="sd">====================================================================</span>
+
+<span class="sd">A number of AWS services have restrictions on the characters that can be used</span>
+<span class="sd">in tag values, such as `ElasticBeanstalk &lt;http://docs.aws.amazon.com/elasticbean</span>
+<span class="sd">stalk/latest/dg/using-features.tagging.html&gt;`_ and `EFS &lt;http://docs.aws.amazon.</span>
+<span class="sd">com/efs/latest/ug/API_Tag.html&gt;`_. In particular, these services do not allow</span>
+<span class="sd">parenthesis, square brackets, commas, or semicolons, or empty tag values. This</span>
+<span class="sd">proves to be problematic with the tag-based schedule configuration described</span>
+<span class="sd">above. The best current workaround is to define a separate policy with a unique</span>
+<span class="sd">``tag`` name for each unique schedule that you want to use, and then tag</span>
+<span class="sd">resources with that tag name and a value of ``on``. Note that this can only be</span>
+<span class="sd">used in opt-in mode, not opt-out.</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
@@ -534,20 +549,17 @@
                 <span class="n">schedule</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_schedule</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">schedule</span> <span class="o">=</span> <span class="kc">None</span>
-
         <span class="k">if</span> <span class="n">schedule</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;Invalid schedule on resource:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
             <span class="k">return</span> <span class="kc">False</span>
-
         <span class="n">tz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_tz</span><span class="p">(</span><span class="n">schedule</span><span class="p">[</span><span class="s1">&#39;tz&#39;</span><span class="p">])</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tz</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;Could not resolve tz on resource:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">parse_errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">rid</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
             <span class="k">return</span> <span class="kc">False</span>
-
         <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
             <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="n">schedule</span><span class="p">)</span></div>
