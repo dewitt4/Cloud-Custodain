@@ -811,6 +811,7 @@
         <span class="o">**</span><span class="p">{</span>
             <span class="s1">&#39;trail&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
             <span class="s1">&#39;bucket&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;bucket-region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
             <span class="s1">&#39;multi-region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;global-events&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;notify&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
@@ -826,6 +827,7 @@
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
         <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;bucket&#39;</span><span class="p">]</span>
+        <span class="n">bucket_region</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bucket-region&#39;</span><span class="p">,</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span>
         <span class="n">trail_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;trail&#39;</span><span class="p">,</span> <span class="s1">&#39;default-trail&#39;</span><span class="p">)</span>
         <span class="n">multi_region</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;multi-region&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
         <span class="n">global_events</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;global-events&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
@@ -835,7 +837,16 @@
         <span class="n">kms_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
 
         <span class="n">s3client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
-        <span class="n">s3client</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">s3client</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span>
+                <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span>
+                <span class="n">CreateBucketConfiguration</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">:</span> <span class="n">bucket_region</span><span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">ce</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="s1">&#39;Error&#39;</span> <span class="ow">in</span> <span class="n">ce</span><span class="o">.</span><span class="n">response</span> <span class="ow">and</span>
+            <span class="n">ce</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;BucketAlreadyOwnedByYou&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ce</span>
+
         <span class="k">try</span><span class="p">:</span>
             <span class="n">current_policy</span> <span class="o">=</span> <span class="n">s3client</span><span class="o">.</span><span class="n">get_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">ClientError</span><span class="p">:</span>
