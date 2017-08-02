@@ -66,10 +66,10 @@ class InMemoryCache(object):
         return True
 
     def get(self, key):
-        return self.data.get(cPickle.dumps(key))
+        return self.data.get(pickle.dumps(key))
 
     def save(self, key, data):
-        self.data[cPickle.dumps(key)] = data
+        self.data[pickle.dumps(key)] = data
 
 
 class FileCacheManager(object):
