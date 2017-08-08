@@ -232,6 +232,7 @@ def run(options, policies):
                 log.warning("Reported access denied exception in %s, continuing." % (policy.name,))
             elif error_code in AWS_ERROR_BLACKLIST:
                 # DO nothing... We don't report these.
+                log.warning("Got error on blacklist: %s" % (error_code,))
             else:
                 # Handle it here, but we skip.
                 error_tracking.report_exception()
