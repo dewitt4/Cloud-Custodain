@@ -657,6 +657,41 @@ class UserCredentialReport(CredentialReport):
         return results
 
 
+@User.filter_registry.register('all-user-policies')
+class AllUserPolicies(ValueFilter):
+    """ TODO: Document """
+
+    schema = type_schema('all-user-policies', rinherit=ValueFilter.schema)
+    permissions = ('iam:ListAttachedUserPolicies', 'iam:ListUserPolicies')
+
+    def user_policies(self, user_set):
+        client = local_session(self.manager.session_factory).client('iam')
+        for u in user_set:
+            if 'c7n:AllUserPolicies' not in u:
+                u['c7n:AllUserPolicies'] = {}
+            mapping = u['c7n:AllUserPolicies']
+            # First, attached policies...
+            if not 'AttachedPolicyArns' in mapping:
+                aps = client.list_attached_user_policies(
+                UserName=u['UserName'])['AttachedPolicies']
+                mapping['AttachedPolicyArns'] = map(lambda x: x['PolicyArn'], aps)
+            if not 'InlinePolicyNames' in mapping:
+                ipns = client.list_user_policies(
+                    UserName=u['UserName'])['PolicyNames']
+                mapping['InlinePolicyNames'] = ipns
+
+
+
+    def process(self, resources, event=None):
+        user_set = chunks(resources, size=50)
+        with self.executor_factory(max_workers=2) as w:
+            self.log.debug(
+                "Querying %d users policies" % len(resources))
+            list(w.map(self.user_policies, user_set))
+        return filter(lambda x: self.match(x['c7n:AllUserPolicies']), resources)
+
+
+
 @User.filter_registry.register('policy')
 class UserPolicy(ValueFilter):
     """Filter IAM users based on attached policy values
