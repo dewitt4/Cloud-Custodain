@@ -207,6 +207,9 @@ def validate(options):
 #    pprint.pprint(sorted(list(permissions)))
 
 
+AWS_ERROR_BLACKLIST = ['OptInRequired', 'SubscriptionRequiredException']
+
+
 @policy_command
 def run(options, policies):
     exit_code = 0
@@ -217,7 +220,8 @@ def run(options, policies):
             # AWS Client error, we can handle + resume this, in theory - but we should log
             # it as a warning to the error tracker with some context.
             error_body = e.response['Error']
-            if error_body.get('Code', 'Unknown') == 'AccessDeniedException':
+            error_code = error_body.get('Code', 'Unknown')
+            if error_code == 'AccessDeniedException':
                 error_tracking.report("Access denied in policy", 'warning', {}, extra_data={
                     'error_details': error_body,
                     'policy': repr(policy),
@@ -226,6 +230,8 @@ def run(options, policies):
                     'expected_permissions': list(policy.get_permissions()),
                 })
                 log.warning("Reported access denied exception in %s, continuing." % (policy.name,))
+            elif error_code in AWS_ERROR_BLACKLIST:
+                # DO nothing... We don't report these.
             else:
                 # Handle it here, but we skip.
                 error_tracking.report_exception()
