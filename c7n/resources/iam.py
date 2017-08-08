@@ -598,7 +598,9 @@ class CredentialReport(Filter):
         try:
             report = client.get_credential_report()
         except ClientError as e:
-            if e.response['Error']['Code'] != 'ReportNotPresent':
+            if e.response['Error']['Code'] == 'ReportInProgress':
+                time.sleep(self.get_value_or_schema_default('report_delay'))
+            elif e.response['Error']['Code'] != 'ReportNotPresent':
                 raise
             report = None
         if report:

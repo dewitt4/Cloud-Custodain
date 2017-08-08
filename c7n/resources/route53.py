@@ -68,7 +68,7 @@ def _describe_route53_tags(
                 resource_map[resource_tag_set['ResourceId']]['Tags'] = resource_tag_set['Tags']
 
     with executor_factory(max_workers=2) as w:
-        return list(w.map(process_tags, chunks(resources, 20)))
+        return list(w.map(process_tags, chunks(resources, 10)))
 
 
 @resources.register('hostedzone')

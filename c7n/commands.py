@@ -13,6 +13,9 @@
 # limitations under the License.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+from c7n import error_tracking
+
+from botocore.exceptions import ClientError
 from collections import Counter, defaultdict
 from datetime import timedelta, datetime
 from functools import wraps
@@ -208,20 +211,48 @@ def validate(options):
 #    pprint.pprint(sorted(list(permissions)))
 
 
+AWS_ERROR_BLACKLIST = ['OptInRequired', 'SubscriptionRequiredException']
+
+
 @policy_command
 def run(options, policies):
     exit_code = 0
     for policy in policies:
         try:
             policy()
+        except ClientError as e:
+            # AWS Client error, we can handle + resume this, in theory - but we should log
+            # it as a warning to the error tracker with some context.
+            error_body = e.response['Error']
+            error_code = error_body.get('Code', 'Unknown')
+            if error_code == 'AccessDeniedException':
+                error_tracking.report("Access denied in policy", 'warning', {}, extra_data={
+                    'error_details': error_body,
+                    'policy': repr(policy),
+                    'policy_data': policy.data,
+                    'policy_options': policy.options,
+                    'expected_permissions': list(policy.get_permissions()),
+                })
+                log.warning("Reported access denied exception in %s, continuing." % (policy.name,))
+            elif error_code in AWS_ERROR_BLACKLIST:
+                # DO nothing... We don't report these.
+                log.warning("Got error on blacklist: %s" % (error_code,))
+            else:
+                # Handle it here, but we skip.
+                error_tracking.report_exception()
+                log.warning("Reported generic client exception in %s, continuing." % (policy.name,))
         except Exception:
             exit_code = 2
+            error_tracking.report_exception()
             if options.debug:
                 raise
             log.exception(
                 "Error while executing policy %s, continuing" % (
                     policy.name))
-    if exit_code != 0:
+    if exit_code == 0:
+        log.info("Successfully ran %d policies." % len(policies))
+    else:
+        log.info("Ran %d policies, encountered an unhandled exception." % len(policies))
         sys.exit(exit_code)
 
 
