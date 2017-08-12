@@ -216,7 +216,7 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">set_annotation</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.app-elb&#39;</span><span class="p">)</span>
 
@@ -497,9 +497,32 @@
 
 <div class="viewcode-block" id="AppELBListenerFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBListenerFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;listener&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">AppELBListenerFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">,</span> <span class="n">AppELBListenerFilterBase</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Filter ALB based on matching listener attributes&quot;&quot;&quot;</span>
+    <span class="sd">&quot;&quot;&quot;Filter ALB based on matching listener attributes</span>
 
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;listener&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+<span class="sd">    Adding the `matched` flag will filter on previously matched listeners</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: app-elb-invalid-ciphers</span>
+<span class="sd">                resource: app-elb</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: listener</span>
+<span class="sd">                    key: Protocol</span>
+<span class="sd">                    value: HTTPS</span>
+<span class="sd">                  - type: listener</span>
+<span class="sd">                    key: SslPolicy</span>
+<span class="sd">                    value: [&#39;ELBSecurityPolicy-TLS-1-1-2017-01&#39;,&#39;ELBSecurityPolicy-TLS-1-2-2017-01&#39;]</span>
+<span class="sd">                    op: ni</span>
+<span class="sd">                    matched: true</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: modify-listener</span>
+<span class="sd">                    sslpolicy: &quot;ELBSecurityPolicy-TLS-1-2-2017-01&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;listener&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="n">matched</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="AppELBListenerFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBListenerFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -507,14 +530,16 @@
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">AppELBListenerFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">albs</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alb</span><span class="p">):</span>
-        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">listener</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span><span class="p">[</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]]:</span>
+        <span class="n">listeners</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span><span class="p">[</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;matched&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="n">listeners</span> <span class="o">=</span> <span class="n">alb</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;c7n:MatchedListeners&#39;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="n">found_listeners</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">listener</span> <span class="ow">in</span> <span class="n">listeners</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">listener</span><span class="p">):</span>
-                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">listener</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">matched</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;c7n:MatchedListeners&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched</span>
-        <span class="k">return</span> <span class="kc">True</span></div>
+                <span class="n">set_annotation</span><span class="p">(</span><span class="n">alb</span><span class="p">,</span> <span class="s1">&#39;c7n:MatchedListeners&#39;</span><span class="p">,</span> <span class="n">listener</span><span class="p">)</span>
+                <span class="n">found_listeners</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">found_listeners</span></div>
 
 
 <div class="viewcode-block" id="AppELBModifyListenerPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBModifyListenerPolicy">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-listener&#39;</span><span class="p">)</span>
