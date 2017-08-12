@@ -215,17 +215,26 @@
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span> <span class="k">as</span> <span class="n">Action</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span> <span class="k">as</span> <span class="n">Action</span><span class="p">,</span> <span class="n">AutoTagUser</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 
 <span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;maid_status&quot;</span>
 
+<span class="n">universal_tag_retry</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_retry</span><span class="p">((</span>
+    <span class="s1">&#39;Throttled&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;RequestLimitExceeded&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;Client.RequestLimitExceeded&#39;</span>
+<span class="p">))</span>
 
-<div class="viewcode-block" id="register_tags"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.register_tags">[docs]</a><span class="k">def</span> <span class="nf">register_tags</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">actions</span><span class="p">):</span>
+
+<div class="viewcode-block" id="register_ec2_tags"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.register_ec2_tags">[docs]</a><span class="k">def</span> <span class="nf">register_ec2_tags</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">actions</span><span class="p">):</span>
     <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
     <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-count&#39;</span><span class="p">,</span> <span class="n">TagCountFilter</span><span class="p">)</span>
 
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">TagDelayedAction</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-trim&#39;</span><span class="p">,</span> <span class="n">TagTrim</span><span class="p">)</span>
 
@@ -237,6 +246,42 @@
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rename-tag&#39;</span><span class="p">,</span> <span class="n">RenameTag</span><span class="p">)</span>
     <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;normalize-tag&#39;</span><span class="p">,</span> <span class="n">NormalizeTag</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="register_universal_tags"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.register_universal_tags">[docs]</a><span class="k">def</span> <span class="nf">register_universal_tags</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">actions</span><span class="p">):</span>
+    <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
+    <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-count&#39;</span><span class="p">,</span> <span class="n">TagCountFilter</span><span class="p">)</span>
+
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">UniversalTag</span><span class="p">)</span>
+
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">)</span>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">UniversalTagDelayedAction</span><span class="p">)</span>
+
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;untag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span>
+    <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">,</span> <span class="n">UniversalUntag</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="universal_augment"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.universal_augment">[docs]</a><span class="k">def</span> <span class="nf">universal_augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;resourcegroupstaggingapi&#39;</span><span class="p">)</span>
+
+    <span class="n">paginator</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;get_resources&#39;</span><span class="p">)</span>
+    <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">type</span><span class="p">:</span>
+        <span class="n">resource_type</span> <span class="o">+=</span> <span class="s2">&quot;:&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">type</span>
+    <span class="n">resource_tag_map_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceTagMappingList&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span>
+            <span class="n">ResourceTypeFilters</span><span class="o">=</span><span class="p">[</span><span class="n">resource_type</span><span class="p">])]))</span>
+    <span class="n">resource_tag_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ResourceARN&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_tag_map_list</span><span class="p">}</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+        <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_arns</span><span class="p">([</span><span class="n">r</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">resource_tag_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">t</span><span class="p">:</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">resources</span></div>
 
 
 <span class="k">def</span> <span class="nf">_common_tag_processer</span><span class="p">(</span><span class="n">executor_factory</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">concurrency</span><span class="p">,</span>
@@ -887,7 +932,7 @@
 
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
             <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span>
             <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
             <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
@@ -907,7 +952,6 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">20</span>
-
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;resourcegroupstaggingapi:UntagResources&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="UniversalUntag.process_resource_set"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.UniversalUntag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
@@ -916,7 +960,7 @@
 
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
             <span class="n">client</span><span class="o">.</span><span class="n">untag_resources</span><span class="p">,</span>
             <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
             <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span>
@@ -991,7 +1035,7 @@
 
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
             <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span>
             <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
             <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
