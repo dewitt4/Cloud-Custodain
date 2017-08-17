@@ -206,6 +206,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">defaultdict</span>
@@ -215,7 +216,8 @@
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">tags</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span><span class="p">,</span> <span class="n">ConfigSource</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">set_annotation</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.app-elb&#39;</span><span class="p">)</span>
@@ -255,12 +257,34 @@
         <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancers&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;elasticloadbalancing:DescribeTags&quot;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AppELB.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELB.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
+<div class="viewcode-block" id="AppELB.get_source"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELB.get_source">[docs]</a>    <span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_type</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;describe&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DescribeAppElb</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;config&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ConfigAppElb</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported source: </span><span class="si">%s</span><span class="s2"> for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">source_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">config_type</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="DescribeAppElb"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.DescribeAppElb">[docs]</a><span class="k">class</span> <span class="nc">DescribeAppElb</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DescribeAppElb.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.DescribeAppElb.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
         <span class="n">_describe_appelb_tags</span><span class="p">(</span>
-            <span class="n">albs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">)</span>
+            <span class="n">albs</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">albs</span></div></div>
+
+
+<div class="viewcode-block" id="ConfigAppElb"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.ConfigAppElb">[docs]</a><span class="k">class</span> <span class="nc">ConfigAppElb</span><span class="p">(</span><span class="n">ConfigSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ConfigAppElb.load_resource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.ConfigAppElb.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="n">resource</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ConfigAppElb</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="sa">u</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span> <span class="sa">u</span><span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]}</span>
+          <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">])]</span>
+        <span class="k">return</span> <span class="n">resource</span></div></div>
 
 
 <span class="k">def</span> <span class="nf">_describe_appelb_tags</span><span class="p">(</span><span class="n">albs</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
