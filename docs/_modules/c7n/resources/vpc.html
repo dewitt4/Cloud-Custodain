@@ -216,7 +216,7 @@
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.revisions</span> <span class="k">import</span> <span class="n">Diff</span>
-<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ConfigSource</span><span class="p">,</span> <span class="n">DescribeSource</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">universal_augment</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
@@ -421,7 +421,29 @@
         <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::EC2::SecurityGroup&quot;</span>
         <span class="n">id_prefix</span> <span class="o">=</span> <span class="s2">&quot;sg-&quot;</span></div>
 
-    <span class="n">augment</span> <span class="o">=</span> <span class="n">universal_augment</span></div>
+<div class="viewcode-block" id="SecurityGroup.get_source"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroup.get_source">[docs]</a>    <span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_type</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;config&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ConfigSG</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;describe&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DescribeSG</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SecurityGroup</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="n">source_type</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DescribeSG"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DescribeSG">[docs]</a><span class="k">class</span> <span class="nc">DescribeSG</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DescribeSG.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DescribeSG.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">universal_augment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ConfigSG"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.ConfigSG">[docs]</a><span class="k">class</span> <span class="nc">ConfigSG</span><span class="p">(</span><span class="n">ConfigSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ConfigSG.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.ConfigSG.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IpPermissions&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;IpRanges&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;Ipv4Ranges&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IpPermissionsEgress&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;IpRanges&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;Ipv4Ranges&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
 <div class="viewcode-block" id="SecurityGroupDiffFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SecurityGroupDiffFilter">[docs]</a><span class="nd">@SecurityGroup</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;diff&#39;</span><span class="p">)</span>
