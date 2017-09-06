@@ -264,6 +264,7 @@
 <div class="viewcode-block" id="ELB.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB.get_permissions">[docs]</a>    <span class="nd">@classmethod</span>
     <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;elasticloadbalancing:DescribeLoadBalancers&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;elasticloadbalancing:DescribeLoadBalancerAttributes&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;elasticloadbalancing:DescribeTags&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="ELB.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
@@ -522,6 +523,83 @@
             <span class="n">client</span><span class="o">.</span><span class="n">apply_security_groups_to_load_balancer</span><span class="p">(</span>
                 <span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">l</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">],</span>
                 <span class="n">SecurityGroups</span><span class="o">=</span><span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span></div></div>
+
+
+<div class="viewcode-block" id="EnableS3Logging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.EnableS3Logging">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;enable-s3-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">EnableS3Logging</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to enable S3 logging for Elastic Load Balancers.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: elb-test</span>
+<span class="sd">                resource: app-elb</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: is-not-logging</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: enable-s3-logging</span>
+<span class="sd">                    bucket: elblogtest</span>
+<span class="sd">                    prefix: dahlogs</span>
+<span class="sd">                    emit_interval: 5</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;enable-s3-logging&#39;</span><span class="p">,</span>
+        <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">emit_interval</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+    <span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:ModifyLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="EnableS3Logging.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.EnableS3Logging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">elb</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">elb_name</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">]</span>
+            <span class="n">log_attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Enabled&#39;</span><span class="p">:</span><span class="kc">True</span><span class="p">}</span>
+            <span class="k">if</span> <span class="s1">&#39;bucket&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="n">log_attrs</span><span class="p">[</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;bucket&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s1">&#39;prefix&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="n">log_attrs</span><span class="p">[</span><span class="s1">&#39;S3BucketPrefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;prefix&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="s1">&#39;emit_interval&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="n">log_attrs</span><span class="p">[</span><span class="s1">&#39;EmitInterval&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;emit_interval&#39;</span><span class="p">]</span>
+
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_load_balancer_attributes</span><span class="p">(</span><span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">elb_name</span><span class="p">,</span>
+                                                   <span class="n">LoadBalancerAttributes</span><span class="o">=</span><span class="p">{</span>
+                                                       <span class="s1">&#39;AccessLog&#39;</span><span class="p">:</span> <span class="n">log_attrs</span>
+                                                   <span class="p">})</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
+
+
+<div class="viewcode-block" id="DisableS3Logging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.DisableS3Logging">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;disable-s3-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DisableS3Logging</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Disable s3 logging for ElasticLoadBalancers.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: turn-off-elb-logs</span>
+<span class="sd">                resource: elb</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: is-logging</span>
+<span class="sd">                    bucket: prodbucket</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: disable-elb-logging</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;disable-s3-logging&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:ModifyLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DisableS3Logging.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.DisableS3Logging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">elb</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">elb_name</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">modify_load_balancer_attributes</span><span class="p">(</span><span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">elb_name</span><span class="p">,</span>
+                                                   <span class="n">LoadBalancerAttributes</span><span class="o">=</span><span class="p">{</span>
+                                                       <span class="s1">&#39;AccessLog&#39;</span><span class="p">:</span> <span class="p">{</span>
+                                                           <span class="s1">&#39;Enabled&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+                                                   <span class="p">})</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
 <div class="viewcode-block" id="is_ssl"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.is_ssl">[docs]</a><span class="k">def</span> <span class="nf">is_ssl</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
@@ -865,6 +943,111 @@
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elb</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">elb</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VPCId&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">elb</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VPCId&#39;</span><span class="p">))</span> <span class="ow">or</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="ELBAttributeFilterBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELBAttributeFilterBase">[docs]</a><span class="k">class</span> <span class="nc">ELBAttributeFilterBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Mixin base class for filters that query LB attributes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ELBAttributeFilterBase.initialize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELBAttributeFilterBase.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">elbs</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">_process_attributes</span><span class="p">(</span><span class="n">elb</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s1">&#39;Attributes&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">elb</span><span class="p">:</span>
+                <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_load_balancer_attributes</span><span class="p">(</span>
+                    <span class="n">LoadBalancerName</span><span class="o">=</span><span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">])</span>
+                <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;LoadBalancerAttributes&#39;</span><span class="p">]</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_process_attributes</span><span class="p">,</span> <span class="n">elbs</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="IsLoggingFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.IsLoggingFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;is-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsLoggingFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">,</span> <span class="n">ELBAttributeFilterBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Matches ELBs that are logging to S3.</span>
+<span class="sd">        bucket and prefix are optional</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">            - name: elb-is-logging-test</span>
+<span class="sd">              resource: elb</span>
+<span class="sd">              filters:</span>
+<span class="sd">                - type: is-logging</span>
+
+<span class="sd">            - name: elb-is-logging-bucket-and-prefix-test</span>
+<span class="sd">              resource: elb</span>
+<span class="sd">              filters:</span>
+<span class="sd">                - type: is-logging</span>
+<span class="sd">                  bucket: prodlogs</span>
+<span class="sd">                  prefix: elblogs</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;is-logging&#39;</span><span class="p">,</span>
+                         <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                         <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+                         <span class="p">)</span>
+
+<div class="viewcode-block" id="IsLoggingFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.IsLoggingFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">bucket_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">elb</span> <span class="k">for</span> <span class="n">elb</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="s1">&#39;AccessLog&#39;</span><span class="p">][</span><span class="s1">&#39;Enabled&#39;</span><span class="p">]</span> <span class="ow">and</span>
+                <span class="p">(</span><span class="ow">not</span> <span class="n">bucket_name</span> <span class="ow">or</span> <span class="n">bucket_name</span> <span class="o">==</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span>
+                    <span class="s1">&#39;AccessLog&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;S3BucketName&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">and</span>
+                <span class="p">(</span><span class="ow">not</span> <span class="n">bucket_prefix</span> <span class="ow">or</span> <span class="n">bucket_prefix</span> <span class="o">==</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span>
+                    <span class="s1">&#39;AccessLog&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;S3BucketPrefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+                <span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="IsNotLoggingFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.IsNotLoggingFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;is-not-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsNotLoggingFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">,</span> <span class="n">ELBAttributeFilterBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Matches ELBs that are NOT logging to S3.</span>
+<span class="sd">        or do not match the optional bucket and/or prefix.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">                - name: elb-is-not-logging-test</span>
+<span class="sd">                  resource: elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-not-logging</span>
+
+<span class="sd">                - name: is-not-logging-bucket-and-prefix-test</span>
+<span class="sd">                  resource: app-elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-not-logging</span>
+<span class="sd">                      bucket: prodlogs</span>
+<span class="sd">                      prefix: alblogs</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;is-not-logging&#39;</span><span class="p">,</span>
+                         <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                         <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+                         <span class="p">)</span>
+
+<div class="viewcode-block" id="IsNotLoggingFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.IsNotLoggingFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">bucket_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">elb</span> <span class="k">for</span> <span class="n">elb</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="s1">&#39;AccessLog&#39;</span><span class="p">][</span><span class="s1">&#39;Enabled&#39;</span><span class="p">]</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="n">bucket_name</span> <span class="ow">and</span> <span class="n">bucket_name</span> <span class="o">!=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span>
+                    <span class="s1">&#39;AccessLog&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;S3BucketName&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="n">bucket_prefix</span> <span class="ow">and</span> <span class="n">bucket_prefix</span> <span class="o">!=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span>
+                    <span class="s1">&#39;AccessLog&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;S3AccessPrefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+                <span class="p">]</span></div></div>
 </pre></div>
 
            </div>

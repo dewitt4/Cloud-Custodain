@@ -256,6 +256,7 @@
     <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
         <span class="c1"># override as the service is not the iam prefix</span>
         <span class="k">return</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancers&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;elasticloadbalancing:DescribeTags&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AppELB.get_source"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELB.get_source">[docs]</a>    <span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_type</span><span class="p">):</span>
@@ -330,6 +331,72 @@
 
 
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;network-location&#39;</span><span class="p">,</span> <span class="n">net_filters</span><span class="o">.</span><span class="n">NetworkLocation</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="SetS3Logging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetS3Logging">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-s3-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetS3Logging</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to enable/disable S3 logging for an application loadbalancer.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: elbv2-test</span>
+<span class="sd">                resource: app-elb</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: value</span>
+<span class="sd">                    key: Attributes.&quot;access_logs.s3.enabled&quot;</span>
+<span class="sd">                    value: False</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: enable-s3-logging</span>
+<span class="sd">                    bucket: elbv2logtest</span>
+<span class="sd">                    prefix: dahlogs</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-s3-logging&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="s1">&#39;disabled&#39;</span><span class="p">]},</span>
+        <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,))</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:ModifyLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="SetS3Logging.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetS3Logging.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;enabled&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;bucket&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">or</span> <span class="s1">&#39;prefix&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">((</span>
+                    <span class="s2">&quot;alb logging enablement requires `bucket` &quot;</span>
+                    <span class="s2">&quot;and `prefix` specification&quot;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="SetS3Logging.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetS3Logging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">elb</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">elb_arn</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]</span>
+            <span class="n">attributes</span> <span class="o">=</span> <span class="p">[{</span>
+                <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;access_logs.s3.enabled&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;enabled&#39;</span> <span class="ow">and</span> <span class="s1">&#39;true&#39;</span> <span class="ow">or</span> <span class="s1">&#39;value&#39;</span><span class="p">)}]</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;enabled&#39;</span><span class="p">:</span>
+                <span class="n">attributes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;access_logs.s3.bucket&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;bucket&#39;</span><span class="p">]})</span>
+
+                <span class="n">prefix_template</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;prefix&#39;</span><span class="p">]</span>
+                <span class="n">info</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">elb</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">())}</span>
+                <span class="n">info</span><span class="p">[</span><span class="s1">&#39;DNSName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">elb</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DNSName&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+                <span class="n">info</span><span class="p">[</span><span class="s1">&#39;AccountId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
+                <span class="n">info</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">elb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerName&#39;</span><span class="p">]</span>
+
+                <span class="n">attributes</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;access_logs.s3.prefix&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">prefix_template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="n">info</span><span class="p">)})</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">modify_load_balancer_attributes</span><span class="p">,</span>
+                <span class="n">LoadBalancerArn</span><span class="o">=</span><span class="n">elb_arn</span><span class="p">,</span> <span class="n">Attributes</span><span class="o">=</span><span class="n">attributes</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="AppELBMarkForOpAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBMarkForOpAction">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
@@ -497,14 +564,112 @@
 <div class="viewcode-block" id="AppELBAttributeFilterBase.initialize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBAttributeFilterBase.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
         <span class="k">def</span> <span class="nf">_process_attributes</span><span class="p">(</span><span class="n">alb</span><span class="p">):</span>
             <span class="k">if</span> <span class="s1">&#39;Attributes&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">alb</span><span class="p">:</span>
+                <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
                 <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
                 <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_load_balancer_attributes</span><span class="p">(</span>
                     <span class="n">LoadBalancerArn</span><span class="o">=</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">])</span>
-                <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span>
+                <span class="c1"># flatten out the list of dicts and cast</span>
+                <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]:</span>
+                    <span class="n">k</span> <span class="o">=</span> <span class="n">pair</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span>
+                    <span class="n">v</span> <span class="o">=</span> <span class="n">pair</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+                        <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
+                        <span class="n">v</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;false&#39;</span><span class="p">:</span>
+                        <span class="n">v</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_process_attributes</span><span class="p">,</span> <span class="n">albs</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="IsLoggingFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.IsLoggingFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;is-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsLoggingFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">,</span> <span class="n">AppELBAttributeFilterBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Matches AppELBs that are logging to S3.</span>
+<span class="sd">        bucket and prefix are optional</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">                - name: alb-is-logging-test</span>
+<span class="sd">                  resource: app-elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-logging</span>
+
+<span class="sd">                - name: alb-is-logging-bucket-and-prefix-test</span>
+<span class="sd">                  resource: app-elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-logging</span>
+<span class="sd">                      bucket: prodlogs</span>
+<span class="sd">                      prefix: alblogs</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;is-logging&#39;</span><span class="p">,</span>
+                         <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                         <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+                         <span class="p">)</span>
+
+<div class="viewcode-block" id="IsLoggingFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.IsLoggingFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">bucket_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">alb</span> <span class="k">for</span> <span class="n">alb</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="s1">&#39;access_logs.s3.enabled&#39;</span><span class="p">]</span> <span class="ow">and</span>
+                <span class="p">(</span><span class="ow">not</span> <span class="n">bucket_name</span> <span class="ow">or</span> <span class="n">bucket_name</span> <span class="o">==</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;access_logs.s3.bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">and</span>
+                <span class="p">(</span><span class="ow">not</span> <span class="n">bucket_prefix</span> <span class="ow">or</span> <span class="n">bucket_prefix</span> <span class="o">==</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;access_logs.s3.prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+                <span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="IsNotLoggingFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.IsNotLoggingFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;is-not-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsNotLoggingFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">,</span> <span class="n">AppELBAttributeFilterBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Matches AppELBs that are NOT logging to S3.</span>
+<span class="sd">        or do not match the optional bucket and/or prefix.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">                - name: alb-is-not-logging-test</span>
+<span class="sd">                  resource: app-elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-not-logging</span>
+
+<span class="sd">                - name: alb-is-not-logging-bucket-and-prefix-test</span>
+<span class="sd">                  resource: app-elb</span>
+<span class="sd">                  filters:</span>
+<span class="sd">                    - type: is-not-logging</span>
+<span class="sd">                      bucket: prodlogs</span>
+<span class="sd">                      prefix: alblogs</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeLoadBalancerAttributes&quot;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;is-not-logging&#39;</span><span class="p">,</span>
+                         <span class="n">bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                         <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+                         <span class="p">)</span>
+
+<div class="viewcode-block" id="IsNotLoggingFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.IsNotLoggingFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">bucket_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">bucket_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[</span><span class="n">alb</span> <span class="k">for</span> <span class="n">alb</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="s1">&#39;access_logs.s3.enabled&#39;</span><span class="p">]</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="n">bucket_name</span> <span class="ow">and</span> <span class="n">bucket_name</span> <span class="o">!=</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;access_logs.s3.bucket&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span> <span class="ow">or</span>
+                <span class="p">(</span><span class="n">bucket_prefix</span> <span class="ow">and</span> <span class="n">bucket_prefix</span> <span class="o">!=</span> <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;access_logs.s3.prefix&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+                <span class="p">]</span></div></div>
 
 
 <div class="viewcode-block" id="AppELBTargetGroupFilterBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupFilterBase">[docs]</a><span class="k">class</span> <span class="nc">AppELBTargetGroupFilterBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
