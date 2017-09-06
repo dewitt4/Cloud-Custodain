@@ -206,7 +206,7 @@
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">RemovePolicyBase</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -348,6 +348,9 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="p">)</span></div>
 
 
+<span class="n">ErrAccessDenied</span> <span class="o">=</span> <span class="s2">&quot;AccessDeniedException&quot;</span>
+
+
 <div class="viewcode-block" id="LambdaCrossAccountAccessFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.LambdaCrossAccountAccessFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">LambdaCrossAccountAccessFilter</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters lambda functions with cross-account permissions</span>
@@ -383,7 +386,7 @@
                     <span class="n">FunctionName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span>
                 <span class="k">return</span> <span class="n">r</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">ErrAccessDenied</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                         <span class="s2">&quot;Access denied getting policy lambda:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                         <span class="n">r</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span>
@@ -394,6 +397,71 @@
 
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">LambdaCrossAccountAccessFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span>
             <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="RemovePolicyStatement"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.RemovePolicyStatement">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-statements&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RemovePolicyStatement</span><span class="p">(</span><span class="n">RemovePolicyBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to remove policy/permission statements from lambda functions.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: lambda-remove-cross-accounts</span>
+<span class="sd">                resource: lambda</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: cross-account</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: remove-statements</span>
+<span class="sd">                    statement_ids: matched</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;remove-statements&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">],</span>
+        <span class="n">statement_ids</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}]})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;lambda:GetPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;lambda:RemovePermission&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RemovePolicyStatement.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.RemovePolicyStatement.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s2">&quot;Error processing lambda </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;FunctionArn&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="RemovePolicyStatement.process_resource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.RemovePolicyStatement.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;Policy&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_policy</span><span class="p">(</span>
+                    <span class="n">FunctionName</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">ErrAccessDenied</span><span class="p">:</span>
+                    <span class="k">raise</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">]:</span>
+            <span class="k">return</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
+
+        <span class="n">statements</span><span class="p">,</span> <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_policy</span><span class="p">(</span>
+            <span class="n">p</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">found</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">remove_permission</span><span class="p">(</span>
+                <span class="n">FunctionName</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">],</span>
+                <span class="n">StatementId</span><span class="o">=</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.awslambda.TagDelayedAction">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
