@@ -1011,6 +1011,73 @@
         <span class="k">return</span> <span class="n">matched</span></div></div>
 
 
+<div class="viewcode-block" id="UserDelete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserDelete">[docs]</a><span class="nd">@User</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UserDelete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete a user.</span>
+
+<span class="sd">    For example if you want to have a whitelist of valid (machine-)users</span>
+<span class="sd">    and want to ensure that no users have been clicked without documentation.</span>
+
+<span class="sd">    You can use both the &#39;credential&#39; or the &#39;username&#39;</span>
+<span class="sd">    filter. &#39;credential&#39; will have an SLA of 4h,</span>
+<span class="sd">    (http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_getting-report.html),</span>
+<span class="sd">    but the added benefit of performing less API calls, whereas</span>
+<span class="sd">    &#39;username&#39; will make more API calls, but have a SLA of your cache.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">      .. code-block: yaml</span>
+
+<span class="sd">        # using a &#39;credential&#39; filter&#39;</span>
+<span class="sd">        - name: iam-only-whitelisted-users</span>
+<span class="sd">          resource: iam-user</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - type: credential</span>
+<span class="sd">              key: user</span>
+<span class="sd">              op: not-in</span>
+<span class="sd">              value:</span>
+<span class="sd">                - valid-user-1</span>
+<span class="sd">                - valid-user-2</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - delete</span>
+
+<span class="sd">        # using a &#39;username&#39; filter with &#39;UserName&#39;</span>
+<span class="sd">        - name: iam-only-whitelisted-users</span>
+<span class="sd">          resource: iam-user</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - type: username</span>
+<span class="sd">              key: UserName</span>
+<span class="sd">              op: not-in</span>
+<span class="sd">              value:</span>
+<span class="sd">                - valid-user-1</span>
+<span class="sd">                - valid-user-2</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - delete</span>
+
+<span class="sd">         # using a &#39;username&#39; filter with &#39;Arn&#39;</span>
+<span class="sd">        - name: iam-only-whitelisted-users</span>
+<span class="sd">          resource: iam-user</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - type: username</span>
+<span class="sd">              key: Arn</span>
+<span class="sd">              op: not-in</span>
+<span class="sd">              value:</span>
+<span class="sd">                - arn:aws:iam:123456789012:user/valid-user-1</span>
+<span class="sd">                - arn:aws:iam:123456789012:user/valid-user-2</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - delete</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:DeleteUser&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="UserDelete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserDelete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_user</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Deleted user &quot;</span><span class="si">%s</span><span class="s1">&quot;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">]))</span></div></div>
+
+
 <div class="viewcode-block" id="UserRemoveAccessKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserRemoveAccessKey">[docs]</a><span class="nd">@User</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-keys&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">UserRemoveAccessKey</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Delete or disable user&#39;s access keys.</span>
