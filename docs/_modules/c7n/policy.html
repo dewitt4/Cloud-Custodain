@@ -660,6 +660,17 @@
                     <span class="s2">&quot;action-</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">action</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">results</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">resources</span></div>
 
+<div class="viewcode-block" id="LambdaMode.expand_variables"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.LambdaMode.expand_variables">[docs]</a>    <span class="k">def</span> <span class="nf">expand_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">variables</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;expand variables in the mode role fields.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="s1">&#39;role&#39;</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">][</span><span class="s1">&#39;mode&#39;</span><span class="p">]:</span>
+                <span class="n">mode</span> <span class="o">=</span> <span class="n">variables</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">][</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">mode</span><span class="p">[</span><span class="s1">&#39;role&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mode</span><span class="p">[</span><span class="s1">&#39;role&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="n">variables</span><span class="p">)</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mode</span>
+        <span class="k">return</span> <span class="n">p</span></div>
+
 <div class="viewcode-block" id="LambdaMode.provision"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.LambdaMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Avoiding runtime lambda dep, premature optimization?</span>
         <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">PolicyLambda</span><span class="p">,</span> <span class="n">LambdaManager</span>
@@ -667,6 +678,11 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;Provisioning policy lambda </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">variables</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;account_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="s1">&#39;policy&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span>
+            <span class="p">}</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expand_variables</span><span class="p">(</span><span class="n">variables</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">manager</span> <span class="o">=</span> <span class="n">LambdaManager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span><span class="p">:</span>
