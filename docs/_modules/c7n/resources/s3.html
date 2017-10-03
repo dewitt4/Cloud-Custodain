@@ -247,9 +247,11 @@
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">PutMetric</span><span class="p">,</span> <span class="n">RemovePolicyBase</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">PutMetric</span><span class="p">,</span> <span class="n">RemovePolicyBase</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">MetricsFilter</span><span class="p">)</span>
+    <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">MetricsFilter</span><span class="p">,</span>
+    <span class="n">ValueFilter</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
@@ -301,27 +303,18 @@
     <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
         <span class="n">perms</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;s3:ListAllMyBuckets&quot;</span><span class="p">]</span>
         <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">n</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">S3_AUGMENT_TABLE</span><span class="p">])</span>
-        <span class="k">return</span> <span class="n">perms</span></div>
-
-<div class="viewcode-block" id="S3.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span>
-                <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
-                <span class="n">assemble_bucket</span><span class="p">,</span>
-                <span class="nb">zip</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">buckets</span><span class="p">))</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">))</span>
-            <span class="k">return</span> <span class="n">results</span></div></div>
+        <span class="k">return</span> <span class="n">perms</span></div></div>
 
 
 <div class="viewcode-block" id="DescribeS3"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DescribeS3">[docs]</a><span class="k">class</span> <span class="nc">DescribeS3</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">DescribeSource</span><span class="p">):</span>
 
 <div class="viewcode-block" id="DescribeS3.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DescribeS3.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span>
-                <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">))))</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="n">max_workers</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="mi">10</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
                 <span class="n">assemble_bucket</span><span class="p">,</span>
                 <span class="nb">zip</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">buckets</span><span class="p">))</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">))</span>
             <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -378,7 +371,7 @@
                 <span class="s1">&#39;owner&#39;</span><span class="p">][</span><span class="s1">&#39;displayName&#39;</span><span class="p">]</span>
         <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Acl&#39;</span><span class="p">][</span><span class="s1">&#39;Grants&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grants</span> <span class="o">=</span> <span class="p">[]</span>
 
-        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;grantList&#39;</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="p">(</span><span class="n">item_value</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;grantList&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">()):</span>
             <span class="k">if</span> <span class="s1">&#39;id&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">g</span><span class="p">[</span><span class="s1">&#39;grantee&#39;</span><span class="p">]:</span>
                 <span class="k">assert</span> <span class="n">g</span><span class="p">[</span><span class="s1">&#39;grantee&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">GRANTEE_MAP</span><span class="p">,</span> <span class="s2">&quot;unknown grantee </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">g</span>
                 <span class="n">rg</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;Group&#39;</span><span class="p">,</span> <span class="s1">&#39;URI&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">GRANTEE_MAP</span><span class="p">[</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;grantee&#39;</span><span class="p">]]}</span>
@@ -449,7 +442,7 @@
             <span class="n">rr</span><span class="p">[</span><span class="s1">&#39;ID&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">):</span>
                 <span class="n">rr</span><span class="p">[</span><span class="s1">&#39;Prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;prefix&#39;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="s1">&#39;filter&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;filter&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">]:</span>
                 <span class="k">continue</span>
 
             <span class="n">rr</span><span class="p">[</span><span class="s1">&#39;Filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convertLifePredicate</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">][</span><span class="s1">&#39;predicate&#39;</span><span class="p">])</span>
@@ -492,8 +485,9 @@
             <span class="n">ninfo</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nid</span>
             <span class="n">ninfo</span><span class="p">[</span><span class="s1">&#39;Events&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]</span>
             <span class="n">rules</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;s3KeyFilter&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filterRules&#39;</span><span class="p">,</span> <span class="p">[]):</span>
-                <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
+            <span class="k">if</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">]:</span>
+                <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">n</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;s3KeyFilter&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filterRules&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
             <span class="k">if</span> <span class="n">rules</span><span class="p">:</span>
                 <span class="n">ninfo</span><span class="p">[</span><span class="s1">&#39;Filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;FilterRules&#39;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}}</span>
         <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Notification&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span></div>
@@ -2095,6 +2089,89 @@
 <div class="viewcode-block" id="RemoveBucketTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.RemoveBucketTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
         <span class="n">modify_bucket_tags</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">,</span> <span class="n">remove_tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DataEvents"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;data-events&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DataEvents</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;data-events&#39;</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;present&#39;</span><span class="p">,</span> <span class="s1">&#39;absent&#39;</span><span class="p">]})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;cloudtrail:DescribeTrails&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;cloudtrail:GetEventSelectors&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DataEvents.get_event_buckets"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents.get_event_buckets">[docs]</a>    <span class="k">def</span> <span class="nf">get_event_buckets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">trails</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return a mapping of bucket name to cloudtrail.</span>
+
+<span class="sd">        For wildcard trails the bucket name is &#39;&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">event_buckets</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">events</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">get_event_selectors</span><span class="p">(</span>
+                    <span class="n">TrailName</span><span class="o">=</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EventSelectors&#39;</span><span class="p">,</span> <span class="p">()):</span>
+                <span class="k">if</span> <span class="s1">&#39;DataResources&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">data_events</span> <span class="ow">in</span> <span class="n">events</span><span class="p">[</span><span class="s1">&#39;DataResources&#39;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">data_events</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;AWS::S3::Object&#39;</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">data_events</span><span class="p">[</span><span class="s1">&#39;Values&#39;</span><span class="p">]:</span>
+                        <span class="n">event_buckets</span><span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)]</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">event_buckets</span></div>
+
+<div class="viewcode-block" id="DataEvents.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">trails</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
+        <span class="n">event_buckets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_event_buckets</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">trails</span><span class="p">)</span>
+        <span class="n">ops</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;present&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">x</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">event_buckets</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span> <span class="ow">in</span> <span class="n">event_buckets</span><span class="p">),</span>
+            <span class="s1">&#39;absent&#39;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">event_buckets</span> <span class="ow">and</span> <span class="s1">&#39;&#39;</span>
+                <span class="ow">not</span> <span class="ow">in</span> <span class="n">event_buckets</span><span class="p">)}</span>
+
+        <span class="n">op</span> <span class="o">=</span> <span class="n">ops</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;state&#39;</span><span class="p">]]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">op</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="Inventory"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.Inventory">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;inventory&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Inventory</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter inventories for a bucket&quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;inventory&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:GetInventoryConfiguration&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="Inventory.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.Inventory.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">)]</span> <span class="o">=</span> <span class="n">b</span>
+
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="n">b</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Error processing bucket: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">():</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="Inventory.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.Inventory.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;c7n:inventories&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">b</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">b</span><span class="p">)</span>
+            <span class="n">inventories</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_bucket_inventory_configurations</span><span class="p">(</span>
+                <span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;InventoryConfigurationList&#39;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">b</span><span class="p">[</span><span class="s1">&#39;c7n:inventories&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">inventories</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">b</span><span class="p">[</span><span class="s1">&#39;c7n:inventories&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span></div></div>
 
 
 <div class="viewcode-block" id="SetInventory"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetInventory">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-inventory&#39;</span><span class="p">)</span>

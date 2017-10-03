@@ -445,13 +445,13 @@
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">m</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">:</span>
-            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span>
-                    <span class="n">client</span><span class="o">.</span><span class="n">get_resource_config_history</span><span class="p">(</span>
-                        <span class="n">resourceId</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
-                        <span class="n">resourceType</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">config_type</span><span class="p">,</span>
-                        <span class="n">limit</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span>
-                            <span class="s1">&#39;configurationItems&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">revisions</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_resource_config_history</span><span class="p">(</span>
+                <span class="n">resourceId</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
+                <span class="n">resourceType</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">config_type</span><span class="p">,</span>
+                <span class="n">limit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;configurationItems&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">revisions</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">revisions</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="ConfigSource.load_resource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.ConfigSource.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
@@ -467,6 +467,7 @@
         <span class="n">pages</span> <span class="o">=</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span>
             <span class="n">resourceType</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">config_type</span><span class="p">)</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">resource_ids</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="n">r</span><span class="p">[</span><span class="s1">&#39;resourceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span>
@@ -481,8 +482,8 @@
                 <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_resources</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">))</span>
                 <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                     <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                            <span class="s2">&quot;Exception creating snapshot set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                            <span class="s2">&quot;Exception getting resources from config </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
                                 <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span>
                     <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
         <span class="k">return</span> <span class="n">results</span></div>

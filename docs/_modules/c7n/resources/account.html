@@ -944,6 +944,161 @@
 
 <div class="viewcode-block" id="HasVirtualMFA.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.HasVirtualMFA.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">account_has_virtual_mfa</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="EnableDataEvents"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableDataEvents">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;enable-data-events&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">EnableDataEvents</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Ensure all buckets in account are setup to log data events.</span>
+
+<span class="sd">    Note this works via a single trail for data events per</span>
+<span class="sd">    (https://goo.gl/1ux7RG).</span>
+
+<span class="sd">    This trail should NOT be used for api management events, the</span>
+<span class="sd">    configuration here is soley for data events. If directed to create</span>
+<span class="sd">    a trail this will do so without management events.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-remove-owner-tag</span>
+<span class="sd">                resource: actions</span>
+<span class="sd">                actions:</span>
+<span class="sd">                 - type: enable-data-events</span>
+<span class="sd">                   data-trail:</span>
+<span class="sd">                     name: s3-events</span>
+<span class="sd">                     multi-region: us-east-1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;enable-data-events&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;data-trail&#39;</span><span class="p">],</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;data-trail&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;create&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;Should we create trail if needed for events?&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ReadOnly&#39;</span><span class="p">,</span> <span class="s1">&#39;WriteOnly&#39;</span><span class="p">,</span> <span class="s1">&#39;All&#39;</span><span class="p">]},</span>
+                    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;The name of the event trail&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;topic&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;If creating, the sns topic for the trail to send updates&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;s3-bucket&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;If creating, the bucket to store trail event data&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;s3-prefix&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;key-id&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;If creating, Enable kms on the trail&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                    <span class="c1"># region that we&#39;re aggregating via trails.</span>
+                    <span class="s1">&#39;multi-region&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;If creating, use this region for all data trails&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}}})</span>
+
+<div class="viewcode-block" id="EnableDataEvents.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableDataEvents.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;data-trail&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s1">&#39;s3-bucket&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;data-trail&#39;</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;If creating data trails, an s3-bucket is required&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="EnableDataEvents.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableDataEvents.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s1">&#39;cloudtrail:DescribeTrails&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;cloudtrail:GetEventSelectors&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;cloudtrail:PutEventSelectors&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;data-trail&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">):</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span>
+                <span class="s1">&#39;cloudtrail:CreateTrail&#39;</span><span class="p">,</span> <span class="s1">&#39;cloudtrail:StartLogging&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
+<div class="viewcode-block" id="EnableDataEvents.add_data_trail"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableDataEvents.add_data_trail">[docs]</a>    <span class="k">def</span> <span class="nf">add_data_trail</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">trail_cfg</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">trail_cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;s3 data event trail missing and not configured to create&quot;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">Name</span><span class="o">=</span><span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+            <span class="n">S3BucketName</span><span class="o">=</span><span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;s3-bucket&#39;</span><span class="p">],</span>
+            <span class="n">EnableLogFileValidation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s1">&#39;key-id&#39;</span> <span class="ow">in</span> <span class="n">trail_cfg</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;KmsKeyId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;key-id&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;s3-prefix&#39;</span> <span class="ow">in</span> <span class="n">trail_cfg</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;S3KeyPrefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;s3-prefix&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;topic&#39;</span> <span class="ow">in</span> <span class="n">trail_cfg</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SnsTopicName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;topic&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;multi-region&#39;</span> <span class="ow">in</span> <span class="n">trail_cfg</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;IsMultiRegionTrail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="n">client</span><span class="o">.</span><span class="n">create_trail</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">trail_cfg</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]}</span></div>
+
+<div class="viewcode-block" id="EnableDataEvents.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.EnableDataEvents.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">region</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;data-trail&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;multi-region&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">region</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
+
+        <span class="n">added</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">tconfig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;data-trail&#39;</span><span class="p">]</span>
+        <span class="n">trails</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_trails</span><span class="p">(</span>
+            <span class="n">trailNameList</span><span class="o">=</span><span class="p">[</span><span class="n">tconfig</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;trailList&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">trails</span><span class="p">:</span>
+            <span class="n">trail</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_data_trail</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">tconfig</span><span class="p">)</span>
+            <span class="n">added</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">trail</span> <span class="o">=</span> <span class="n">trails</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">events</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_event_selectors</span><span class="p">(</span>
+            <span class="n">TrailName</span><span class="o">=</span><span class="n">trail</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EventSelectors&#39;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DataResources&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">data_events</span> <span class="ow">in</span> <span class="n">e</span><span class="p">[</span><span class="s1">&#39;DataResources&#39;</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="n">data_events</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;AWS::S3::Object&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">data_events</span><span class="p">[</span><span class="s1">&#39;Values&#39;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">b</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+                        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n_data_trail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail</span>
+                <span class="k">return</span>
+
+        <span class="c1"># Opinionated choice, separate api and data events.</span>
+        <span class="n">event_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">e</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IncludeManagementEvents&#39;</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="o">!=</span> <span class="n">event_count</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;removing api trail from data trail&quot;</span><span class="p">)</span>
+
+        <span class="c1"># future proof&#39;d for other data events, for s3 this trail</span>
+        <span class="c1"># encompasses all the buckets in the account.</span>
+
+        <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+            <span class="s1">&#39;IncludeManagementEvents&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s1">&#39;ReadWriteType&#39;</span><span class="p">:</span> <span class="n">tconfig</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">,</span> <span class="s1">&#39;All&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;DataResources&#39;</span><span class="p">:</span> <span class="p">[{</span>
+                <span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;AWS::S3::Object&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;arn:aws:s3:::&#39;</span><span class="p">]}]})</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">put_event_selectors</span><span class="p">(</span>
+            <span class="n">TrailName</span><span class="o">=</span><span class="n">trail</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">EventSelectors</span><span class="o">=</span><span class="n">events</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">added</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">start_logging</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">tconfig</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+
+        <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n_data_trail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail</span></div></div>
 </pre></div>
 
            </div>
