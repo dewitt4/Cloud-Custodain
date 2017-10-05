@@ -203,8 +203,12 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="ShieldProtection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.shield.ShieldProtection">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-protection&#39;</span><span class="p">)</span>
@@ -231,6 +235,60 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;ResourceArns&#39;</span>
         <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;list&#39;</span></div></div>
+
+
+<div class="viewcode-block" id="IsShieldProtected"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.shield.IsShieldProtected">[docs]</a><span class="k">class</span> <span class="nc">IsShieldProtected</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;shield:ListProtections&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;shield-enabled&#39;</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="IsShieldProtected.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.shield.IsShieldProtected.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;shield&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span>
+        <span class="n">protections</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_protections</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Protections&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="n">protected_resources</span> <span class="o">=</span> <span class="p">{</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">protections</span><span class="p">}</span>
+
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arn</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:ShieldProtected&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">shielded</span> <span class="o">=</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">protected_resources</span>
+            <span class="k">if</span> <span class="n">shielded</span> <span class="ow">and</span> <span class="n">state</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">shielded</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">state</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="SetShieldProtection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.shield.SetShieldProtection">[docs]</a><span class="k">class</span> <span class="nc">SetShieldProtection</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable shield protection on applicable resource.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;shield:CreateProtection&#39;</span><span class="p">,</span> <span class="s1">&#39;shield:ListProtections&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-shield&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="SetShieldProtection.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.shield.SetShieldProtection.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;shield&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="n">protections</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_protections</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Protections&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="n">protected_resources</span> <span class="o">=</span> <span class="p">{</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">protections</span><span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arn</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">protected_resources</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">create_protection</span><span class="p">(</span>
+                    <span class="n">Name</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">name</span><span class="p">],</span>
+                    <span class="n">ResourceArn</span><span class="o">=</span><span class="n">arn</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceAlreadyExistsException&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>

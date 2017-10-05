@@ -215,7 +215,8 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
+    <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span>
+    <span class="n">ShieldMetrics</span><span class="p">)</span>
 <span class="kn">import</span> <span class="nn">c7n.filters.vpc</span> <span class="k">as</span> <span class="nn">net_filters</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
@@ -224,14 +225,19 @@
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">worker</span>
 
+<span class="kn">from</span> <span class="nn">c7n.resources.shield</span> <span class="k">import</span> <span class="n">IsShieldProtected</span><span class="p">,</span> <span class="n">SetShieldProtection</span>
+
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.elb&#39;</span><span class="p">)</span>
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;elb.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;elb.actions&#39;</span><span class="p">)</span>
 
 <span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span> <span class="n">AutoTagUser</span><span class="p">)</span>
+<span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-shield&#39;</span><span class="p">,</span> <span class="n">SetShieldProtection</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-count&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagCountFilter</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-enabled&#39;</span><span class="p">,</span> <span class="n">IsShieldProtected</span><span class="p">)</span>
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-metrics&#39;</span><span class="p">,</span> <span class="n">ShieldMetrics</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="ELB"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;elb&#39;</span><span class="p">)</span>
@@ -266,6 +272,12 @@
         <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;elasticloadbalancing:DescribeLoadBalancers&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;elasticloadbalancing:DescribeLoadBalancerAttributes&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;elasticloadbalancing:DescribeTags&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ELB.get_arn"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB.get_arn">[docs]</a>    <span class="k">def</span> <span class="nf">get_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;arn:aws:elasticloadbalancing:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:loadbalancer/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+            <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">])</span></div>
 
 <div class="viewcode-block" id="ELB.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.ELB.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">_elb_tags</span><span class="p">(</span>

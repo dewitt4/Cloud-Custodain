@@ -1099,6 +1099,61 @@
             <span class="n">client</span><span class="o">.</span><span class="n">start_logging</span><span class="p">(</span><span class="n">Name</span><span class="o">=</span><span class="n">tconfig</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
 
         <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n_data_trail&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">trail</span></div></div>
+
+
+<div class="viewcode-block" id="ShieldEnabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.ShieldEnabled">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-enabled&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ShieldEnabled</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;shield:DescribeSubscription&#39;</span><span class="p">,)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;shield-enabled&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="ShieldEnabled.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.ShieldEnabled.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;shield&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">subscription</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_subscription</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="s1">&#39;Subscription&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="n">subscription</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:ShieldSubscription&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">subscription</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">subscription</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resources</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="n">state</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">subscription</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resources</span>
+        <span class="k">return</span> <span class="p">[]</span></div></div>
+
+
+<div class="viewcode-block" id="SetShieldAdvanced"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.SetShieldAdvanced">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-shield-advanced&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetShieldAdvanced</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable/disable Shield Advanced on an account.&quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;shield:CreateSubscription&#39;</span><span class="p">,</span> <span class="s1">&#39;shield:DeleteSubscription&#39;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-shield-advanced&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="SetShieldAdvanced.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.account.SetShieldAdvanced.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;shield&#39;</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">state</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">create_subscription</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_subscription</span><span class="p">()</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
+                    <span class="k">return</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
