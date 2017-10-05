@@ -206,11 +206,11 @@
 <span class="kn">import</span> <span class="nn">functools</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">ShieldMetrics</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">ShieldMetrics</span><span class="p">,</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">universal_augment</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span>
 
 <span class="kn">from</span> <span class="nn">c7n.resources.shield</span> <span class="k">import</span> <span class="n">IsShieldProtected</span><span class="p">,</span> <span class="n">SetShieldProtection</span>
 
@@ -311,6 +311,80 @@
         <span class="k">return</span> <span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">dimension</span><span class="p">,</span>
                  <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]},</span>
                 <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;Region&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;Global&#39;</span><span class="p">}]</span></div></div>
+
+
+<div class="viewcode-block" id="IsWafEnabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.IsWafEnabled">[docs]</a><span class="nd">@Distribution</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;waf-enabled&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsWafEnabled</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="c1"># useful primarily to use the same name across accounts, else webaclid</span>
+    <span class="c1"># attribute works as well</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;waf-enabled&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;web-acl&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;waf:ListWebACLs&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="IsWafEnabled.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.IsWafEnabled.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">target_acl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;web-acl&#39;</span><span class="p">)</span>
+        <span class="n">wafs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;waf&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">waf_name_id_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">wafs</span><span class="p">}</span>
+        <span class="n">target_acl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;web-acl&#39;</span><span class="p">)</span>
+        <span class="n">target_acl_id</span> <span class="o">=</span> <span class="n">waf_name_id_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_acl</span><span class="p">,</span> <span class="n">target_acl</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">target_acl_id</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">waf_name_id_map</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid web acl: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">target_acl_id</span><span class="p">))</span>
+
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">target_acl_id</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">target_acl_id</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="SetWaf"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.SetWaf">[docs]</a><span class="nd">@Distribution</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-waf&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetWaf</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudfront:UpdateDistribution&#39;</span><span class="p">,</span> <span class="s1">&#39;waf:ListWebACLs&#39;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-waf&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;web-acl&#39;</span><span class="p">],</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;web-acl&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;force&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,)))</span>
+
+<div class="viewcode-block" id="SetWaf.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.SetWaf.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">wafs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;waf&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">waf_name_id_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">wafs</span><span class="p">}</span>
+        <span class="n">target_acl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;web-acl&#39;</span><span class="p">)</span>
+        <span class="n">target_acl_id</span> <span class="o">=</span> <span class="n">waf_name_id_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_acl</span><span class="p">,</span> <span class="n">target_acl</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">target_acl_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">waf_name_id_map</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid web acl: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">target_acl_id</span><span class="p">))</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;cloudfront&#39;</span><span class="p">)</span>
+        <span class="n">force</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">force</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">target_acl_id</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_distribution_config</span><span class="p">(</span><span class="n">Id</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;DistributionConfig&#39;</span><span class="p">]</span>
+            <span class="n">config</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_acl_id</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_distribution</span><span class="p">,</span>
+                <span class="n">Id</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">],</span> <span class="n">DistributionConfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span> <span class="n">IfMatch</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;ETag&#39;</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="DistributionDisableAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cloudfront.DistributionDisableAction">[docs]</a><span class="nd">@Distribution</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;disable&#39;</span><span class="p">)</span>

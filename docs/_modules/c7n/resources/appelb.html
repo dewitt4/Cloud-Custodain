@@ -342,6 +342,117 @@
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;network-location&#39;</span><span class="p">,</span> <span class="n">net_filters</span><span class="o">.</span><span class="n">NetworkLocation</span><span class="p">)</span>
 
 
+<div class="viewcode-block" id="WafEnabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.WafEnabled">[docs]</a><span class="nd">@AppELB</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;waf-enabled&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">WafEnabled</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;waf-enabled&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;web-acl&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;waf-regional:ListResourcesForWebACL&#39;</span><span class="p">,</span> <span class="s1">&#39;waf-regional:ListWebACLs&#39;</span><span class="p">)</span>
+
+    <span class="c1"># TODO verify name uniqueness within region/account</span>
+    <span class="c1"># TODO consider associated resource fetch in augment</span>
+<div class="viewcode-block" id="WafEnabled.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.WafEnabled.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;waf-regional&#39;</span><span class="p">)</span>
+
+        <span class="n">target_acl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;web-acl&#39;</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+        <span class="n">name_id_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">wafs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;waf-regional&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">wafs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;c7n:AssociatedResources&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">w</span><span class="p">:</span>
+                <span class="n">arns</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_resources_for_web_acl</span><span class="p">(</span>
+                    <span class="n">WebACLId</span><span class="o">=</span><span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ResourceArns&#39;</span><span class="p">,</span> <span class="p">[])</span>
+                <span class="n">w</span><span class="p">[</span><span class="s1">&#39;c7n:AssociatedResources&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arns</span>
+            <span class="n">name_id_map</span><span class="p">[</span><span class="n">w</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;c7n:AssociatedResources&#39;</span><span class="p">]:</span>
+                <span class="n">resource_map</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span>
+
+        <span class="n">target_acl_id</span> <span class="o">=</span> <span class="n">name_id_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_acl</span><span class="p">,</span> <span class="n">target_acl</span><span class="p">)</span>
+
+        <span class="c1"># generally frown on runtime validation errors, but also frown on</span>
+        <span class="c1"># api calls during validation.</span>
+        <span class="k">if</span> <span class="n">target_acl_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">name_id_map</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid target acl:</span><span class="si">%s</span><span class="s2">, acl not found&quot;</span> <span class="o">%</span> <span class="n">target_acl</span><span class="p">)</span>
+
+        <span class="n">arn_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span>
+
+        <span class="n">state_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">arn</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="n">arn_key</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">resource_map</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n_webacl&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">resource_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">target_acl</span><span class="p">:</span>
+                    <span class="n">state_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">continue</span>
+                <span class="n">r_acl</span> <span class="o">=</span> <span class="n">resource_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">r_acl</span> <span class="o">==</span> <span class="n">target_acl_id</span><span class="p">:</span>
+                    <span class="n">state_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">continue</span>
+                <span class="n">state_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">state_map</span><span class="p">[</span><span class="n">arn</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">state_map</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="n">arn_key</span><span class="p">]]</span> <span class="o">==</span> <span class="n">state</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="SetWaf"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetWaf">[docs]</a><span class="nd">@AppELB</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-waf&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetWaf</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable/Disable waf protection on applicable resource.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;waf-regional:AssociateWebACL&#39;</span><span class="p">,</span> <span class="s1">&#39;waf-regional:ListWebACLs&#39;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-waf&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;web-acl&#39;</span><span class="p">],</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;web-acl&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="c1"># &#39;force&#39;: {&#39;type&#39;: &#39;boolean&#39;},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+<div class="viewcode-block" id="SetWaf.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetWaf.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">WafEnabled</span><span class="p">):</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="c1"># try to ensure idempotent usage</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;set-waf should be used in conjunction with waf-enabled filter&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="SetWaf.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetWaf.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">wafs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;waf-regional&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">name_id_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span> <span class="n">w</span><span class="p">[</span><span class="s1">&#39;WebACLId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">wafs</span><span class="p">}</span>
+        <span class="n">target_acl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;web-acl&#39;</span><span class="p">)</span>
+        <span class="n">target_acl_id</span> <span class="o">=</span> <span class="n">name_id_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_acl</span><span class="p">,</span> <span class="n">target_acl</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">and</span> <span class="n">target_acl_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">name_id_map</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid web acl: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">target_acl_id</span><span class="p">))</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;waf-regional&#39;</span><span class="p">)</span>
+
+        <span class="n">arn_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span>
+
+        <span class="c1"># TODO implement force to reassociate.</span>
+        <span class="c1"># TODO investigate limits on waf association.</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">state</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">associate_web_acl</span><span class="p">(</span>
+                    <span class="n">WebACLId</span><span class="o">=</span><span class="n">target_acl_id</span><span class="p">,</span> <span class="n">ResourceArn</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="n">arn_key</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">disassociate_web_acl</span><span class="p">(</span>
+                    <span class="n">WebACLId</span><span class="o">=</span><span class="n">target_acl_id</span><span class="p">,</span> <span class="n">ResourceArn</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="n">arn_key</span><span class="p">])</span></div></div>
+
+
 <div class="viewcode-block" id="SetS3Logging"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.SetS3Logging">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-s3-logging&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">SetS3Logging</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to enable/disable S3 logging for an application loadbalancer.</span>
