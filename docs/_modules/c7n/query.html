@@ -213,6 +213,7 @@
 
 <span class="kn">import</span> <span class="nn">six</span>
 <span class="kn">from</span> <span class="nn">botocore.client</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">botocore.paginate</span> <span class="k">import</span> <span class="n">set_value_from_jmespath</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
@@ -433,6 +434,8 @@
 <div class="viewcode-block" id="ConfigSource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.ConfigSource">[docs]</a><span class="nd">@sources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;config&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">ConfigSource</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
+    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;ThrottlingException&#39;</span><span class="p">,)))</span>
+
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
 
@@ -445,14 +448,15 @@
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">m</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">:</span>
-            <span class="n">revisions</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_resource_config_history</span><span class="p">(</span>
+            <span class="n">revisions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">get_resource_config_history</span><span class="p">,</span>
                 <span class="n">resourceId</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
                 <span class="n">resourceType</span><span class="o">=</span><span class="n">m</span><span class="o">.</span><span class="n">config_type</span><span class="p">,</span>
                 <span class="n">limit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;configurationItems&#39;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">revisions</span><span class="p">:</span>
                 <span class="k">continue</span>
             <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">revisions</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
-        <span class="k">return</span> <span class="n">results</span></div>
+        <span class="k">return</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="ConfigSource.load_resource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.ConfigSource.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;configuration&#39;</span><span class="p">],</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
@@ -469,9 +473,9 @@
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">ridents</span> <span class="o">=</span> <span class="n">pager</span><span class="p">(</span><span class="n">pages</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">)</span>
             <span class="n">resource_ids</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;resourceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span>
-                <span class="n">pages</span><span class="o">.</span><span class="n">build_full_result</span><span class="p">()[</span><span class="s1">&#39;resourceIdentifiers&#39;</span><span class="p">]]</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;resourceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ridents</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resourceIdentifiers&#39;</span><span class="p">,</span> <span class="p">())]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                 <span class="s2">&quot;querying </span><span class="si">%d</span><span class="s2"> </span><span class="si">%s</span><span class="s2"> resources&quot;</span><span class="p">,</span>
                 <span class="nb">len</span><span class="p">(</span><span class="n">resource_ids</span><span class="p">),</span>
@@ -490,6 +494,28 @@
 
 <div class="viewcode-block" id="ConfigSource.augment"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.ConfigSource.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
+
+
+<div class="viewcode-block" id="pager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.pager">[docs]</a><span class="k">def</span> <span class="nf">pager</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">iterator</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">page</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span><span class="nb">next</span><span class="p">,</span> <span class="n">iterator</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">StopIteration</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">results</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">page</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">page</span> <span class="o">=</span> <span class="n">page</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">rexpr</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">result_keys</span><span class="p">:</span>
+            <span class="n">rv</span> <span class="o">=</span> <span class="n">rexpr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">page</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">rv</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">ev</span> <span class="o">=</span> <span class="n">rexpr</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ev</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">set_value_from_jmespath</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">rexpr</span><span class="o">.</span><span class="n">expression</span><span class="p">,</span> <span class="n">rv</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="n">ev</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">rv</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="QueryResourceManager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.query.QueryResourceManager">[docs]</a><span class="nd">@six</span><span class="o">.</span><span class="n">add_metaclass</span><span class="p">(</span><span class="n">QueryMeta</span><span class="p">)</span>
