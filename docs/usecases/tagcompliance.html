@@ -238,8 +238,8 @@ default and configurable value.</p>
 </div>
 </dd>
 <dt>Enforce Tag Compliance</dt>
-<dd><p class="first">All instances that do not have the three required tags (CostCenter, Owner, Project) will
-be stopped hourly after 2 days, and terminated after 5 days.</p>
+<dd><p class="first">All EC2 non-AutoScaling instances that do not have the three required tags (CostCenter, Owner, Project)
+will be stopped hourly after 2 days, and terminated after 5 days.</p>
 <div class="last highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
 
 <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-tag-compliance-mark</span>
@@ -324,6 +324,236 @@ be stopped hourly after 2 days, and terminated after 5 days.</p>
       <span class="l l-Scalar l-Scalar-Plain">skew</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
   <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
     <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
+</pre></div>
+</div>
+</dd>
+<dt>Enforce Tag Compliance</dt>
+<dd><p class="first">All AutoScaling Groups that do not have the 5 required tags:
+(Resource Contact, Billing Cost Center, Environment, Resource Purpose, Business Unit)
+will be suspended and stopped once after 24 hours and then hourly after 2 days,
+and terminated after 3 days.  We are using a custom tag named c7n_tag_compliance</p>
+<div class="last highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">vars</span><span class="p p-Indicator">:</span>
+  <span class="l l-Scalar l-Scalar-Plain">tag-filters</span><span class="p p-Indicator">:</span> <span class="nl">&amp;tag-compliance-filters</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Resource</span><span class="nv"> </span><span class="s">Contact&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Billing</span><span class="nv"> </span><span class="s">Cost</span><span class="nv"> </span><span class="s">Center&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Environment&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Resource</span><span class="nv"> </span><span class="s">Purpose&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Business</span><span class="nv"> </span><span class="s">Unit&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+
+<span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg-tag-compliance-mark-new-day-0</span>
+  <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg</span>
+  <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+     <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">cloudtrail</span>
+     <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">source</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">autoscaling.amazonaws.com</span>
+          <span class="l l-Scalar l-Scalar-Plain">event</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreateAutoScalingGroup</span>
+          <span class="l l-Scalar l-Scalar-Plain">ids</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">requestParameters.autoScalingGroupName</span>
+  <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Marks newly launched non-compliant ASGs if missing any of the required tags</span>
+    <span class="no">also tags the owners.</span>
+  <span class="l l-Scalar l-Scalar-Plain">comments</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Your ASG and ASG instances do not have all the required tags on them and will be suspended</span>
+    <span class="no">in 24 hours if all the required tags have not been added.  If tags are not made compliant</span>
+    <span class="no">after 3 days your ASG and instances will be deleted.</span>
+  <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:c7n_tag_compliance&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span> <span class="nv">*tag-compliance-filters</span>
+  <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">mark-for-op</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">c7n_tag_compliance</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">suspend</span>
+      <span class="l l-Scalar l-Scalar-Plain">days</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">auto-tag-user</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatorName</span>
+      <span class="l l-Scalar l-Scalar-Plain">principal_id_tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatorId</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">notify</span>
+      <span class="l l-Scalar l-Scalar-Plain">template</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">default.html</span>
+      <span class="l l-Scalar l-Scalar-Plain">priority_header</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+      <span class="l l-Scalar l-Scalar-Plain">subject</span><span class="p p-Indicator">:</span> <span class="s">&quot;ASG</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">Missing</span><span class="nv"> </span><span class="s">Required</span><span class="nv"> </span><span class="s">Tags</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">[custodian</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">account</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">region</span><span class="nv"> </span><span class="s">}}]&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">violation_desc</span><span class="p p-Indicator">:</span>  <span class="p p-Indicator">|</span>
+        <span class="no">Your ASG and related servers are missing the required tags and is now marked</span>
+         <span class="no">for suspension if tags not added within 24 hours:</span>
+      <span class="l l-Scalar l-Scalar-Plain">action_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Actions Taken:  The ASG is marked to be suspended tomorrow if</span>
+        <span class="no">required tags don&#39;t get added to the ASG&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">to</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">CloudCustodian@Company.com</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">event-owner</span>
+      <span class="l l-Scalar l-Scalar-Plain">transport</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sqs</span>
+        <span class="l l-Scalar l-Scalar-Plain">queue</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://sqs.us-east-1.amazonaws.com/XXXXXXXXXX/cloud-custodian-mailer</span>
+        <span class="l l-Scalar l-Scalar-Plain">region</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg-tag-compliance-unmark</span>
+  <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg</span>
+  <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+      <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
+      <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&quot;rate(5</span><span class="nv"> </span><span class="s">minutes)&quot;</span>
+  <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Any ASG which have previously been marked as</span>
+    <span class="no">non compliant with tag policies, that are now compliant</span>
+    <span class="no">should be unmarked as non-compliant.</span>
+  <span class="l l-Scalar l-Scalar-Plain">comments</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Thank you for adding the required tags to your ASG!  It is now compliant</span>
+    <span class="no">and has been resumed if it was in a suspended state.</span>
+  <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:c7n_tag_compliance&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Resource</span><span class="nv"> </span><span class="s">Contact&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Billing</span><span class="nv"> </span><span class="s">Cost</span><span class="nv"> </span><span class="s">Center&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Environment&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Resource</span><span class="nv"> </span><span class="s">Purpose&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:Business</span><span class="nv"> </span><span class="s">Unit&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-null</span>
+  <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">unmark</span>
+      <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="s">&quot;c7n_tag_compliance&quot;</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resume</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">propagate-tags</span>
+      <span class="l l-Scalar l-Scalar-Plain">tags</span><span class="p p-Indicator">:</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;Resource</span><span class="nv"> </span><span class="s">Contact&quot;</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;Billing</span><span class="nv"> </span><span class="s">Cost</span><span class="nv"> </span><span class="s">Center&quot;</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;Environment&quot;</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;Resource</span><span class="nv"> </span><span class="s">Purpose&quot;</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;Business</span><span class="nv"> </span><span class="s">Unit&quot;</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">notify</span>
+      <span class="l l-Scalar l-Scalar-Plain">template</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">default.html</span>
+      <span class="l l-Scalar l-Scalar-Plain">priority_header</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+      <span class="l l-Scalar l-Scalar-Plain">subject</span><span class="p p-Indicator">:</span> <span class="s">&quot;ASG</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">AutoScaling</span><span class="nv"> </span><span class="s">Group</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">now</span><span class="nv"> </span><span class="s">compliant</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">[custodian</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">account</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">region</span><span class="nv"> </span><span class="s">}}]&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">violation_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Your ASG which was previously missing required tags is now compliant and won&#39;t be suspended:&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">action_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Actions Taken:  The ASG has been unmarked for suspending as its now compliant with tags&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">to</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resource-owner</span>
+      <span class="l l-Scalar l-Scalar-Plain">transport</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sqs</span>
+        <span class="l l-Scalar l-Scalar-Plain">queue</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://sqs.us-east-1.amazonaws.com/XXXXXXXXXX/cloud-custodian-mailer</span>
+        <span class="l l-Scalar l-Scalar-Plain">region</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg-tag-compliance-suspend-day-1</span>
+  <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg</span>
+  <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+      <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
+      <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&quot;rate(1</span><span class="nv"> </span><span class="s">hour)&quot;</span>
+  <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Suspends the ASG and resizes to 0 instances as the tags are still not compliant</span>
+  <span class="l l-Scalar l-Scalar-Plain">comments</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Your ASG has been suspended and resized to 0 instances as they do not have all</span>
+    <span class="no">the required tags on them.  Please login to AWS and add the required tags to your ASG.</span>
+    <span class="no">Starting tomorrow hourly emails and suspensions will start occuring if the ASG is</span>
+    <span class="no">still not compliant. The following day your ASG will be deleted.</span>
+  <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span> <span class="nv">*tag-compliance-filters</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">marked-for-op</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">c7n_tag_compliance</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">suspend</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">value</span>
+      <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatedTime</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">gte</span>
+      <span class="l l-Scalar l-Scalar-Plain">value_type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">age</span>
+      <span class="l l-Scalar l-Scalar-Plain">value</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+  <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">suspend</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">mark-for-op</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">c7n_tag_compliance</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">delete</span>
+      <span class="l l-Scalar l-Scalar-Plain">days</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">notify</span>
+      <span class="l l-Scalar l-Scalar-Plain">template</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">default.html</span>
+      <span class="l l-Scalar l-Scalar-Plain">priority_header</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+      <span class="l l-Scalar l-Scalar-Plain">subject</span><span class="p p-Indicator">:</span> <span class="s">&quot;ASG</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">!!!!</span><span class="nv"> </span><span class="s">Missing</span><span class="nv"> </span><span class="s">Required</span><span class="nv"> </span><span class="s">Tags</span><span class="nv"> </span><span class="s">!!!!</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">[custodian</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">account</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">region</span><span class="nv"> </span><span class="s">}}]&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">violation_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Your ASG is missing the required tags and will be deleted in 2 days if still not compliant.</span>
+        <span class="no">Until then the ASG will be suspended every hour until tagged:&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">action_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Actions Taken:  The ASG has been suspended as it doesn&#39;t meet tagging requirements.</span>
+        <span class="no">Please tag your ASG.  ASG will be deleted in 2 days if not tagged.&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">to</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resource-owner</span>
+      <span class="l l-Scalar l-Scalar-Plain">transport</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sqs</span>
+        <span class="l l-Scalar l-Scalar-Plain">queue</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://sqs.us-east-1.amazonaws.com/XXXXXXXXXX/cloud-custodian-mailer</span>
+        <span class="l l-Scalar l-Scalar-Plain">region</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg-tag-compliance-nag-stop-day-2</span>
+  <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg</span>
+  <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+      <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
+      <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&quot;rate(1</span><span class="nv"> </span><span class="s">hour)&quot;</span>
+  <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Suspends ASGT and stops ASG instances every hour</span>
+    <span class="no">starting 1 day before their deletion if tags are still not compliant.</span>
+  <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span> <span class="nv">*tag-compliance-filters</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">marked-for-op</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">c7n_tag_compliance</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">delete</span>
+      <span class="l l-Scalar l-Scalar-Plain">skew</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">value</span>
+      <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatedTime</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">gte</span>
+      <span class="l l-Scalar l-Scalar-Plain">value_type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">age</span>
+      <span class="l l-Scalar l-Scalar-Plain">value</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2</span>
+  <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">suspend</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">notify</span>
+      <span class="l l-Scalar l-Scalar-Plain">template</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">default.html</span>
+      <span class="l l-Scalar l-Scalar-Plain">priority_header</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+      <span class="l l-Scalar l-Scalar-Plain">subject</span><span class="p p-Indicator">:</span> <span class="s">&quot;ASG</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">AutoScaling</span><span class="nv"> </span><span class="s">Group</span><span class="nv"> </span><span class="s">Suspended!!!</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">[custodian</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">account</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">region</span><span class="nv"> </span><span class="s">}}]&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">violation_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Your ASG is missing the required tags and will be deleted in less than 1 day if still</span>
+        <span class="no">not compliant.  Until then the ASG will be suspended every hour</span>
+        <span class="no">until tagged or Deleted:&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">action_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Actions Taken:  The ASG has been suspended and set to 0 instances as it doesn&#39;t meet</span>
+        <span class="no">tagging requirements.  Please tag your ASG now.</span>
+        <span class="no">ASG will be deleted in less than 1 day if not tagged.&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">to</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resource-owner</span>
+      <span class="l l-Scalar l-Scalar-Plain">transport</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sqs</span>
+        <span class="l l-Scalar l-Scalar-Plain">queue</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://sqs.us-east-1.amazonaws.com/XXXXXXXXXX/cloud-custodian-mailer</span>
+        <span class="l l-Scalar l-Scalar-Plain">region</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
+
+<span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg-tag-compliance-delete-day3</span>
+  <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">asg</span>
+  <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+      <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
+      <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&quot;rate(1</span><span class="nv"> </span><span class="s">hour)&quot;</span>
+  <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Delete all ASG marked for deletion by today&#39;s date.</span>
+  <span class="l l-Scalar l-Scalar-Plain">comments</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+    <span class="no">Your ASG has been deleted as it still did not meet the required tag compliance!</span>
+  <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">or</span><span class="p p-Indicator">:</span> <span class="nv">*tag-compliance-filters</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">marked-for-op</span>
+      <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">c7n_tag_compliance</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">delete</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">value</span>
+      <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatedTime</span>
+      <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">gte</span>
+      <span class="l l-Scalar l-Scalar-Plain">value_type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">age</span>
+      <span class="l l-Scalar l-Scalar-Plain">value</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">3</span>
+  <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">delete</span>
+      <span class="l l-Scalar l-Scalar-Plain">force</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">notify</span>
+      <span class="l l-Scalar l-Scalar-Plain">template</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">default.html</span>
+      <span class="l l-Scalar l-Scalar-Plain">priority_header</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+      <span class="l l-Scalar l-Scalar-Plain">subject</span><span class="p p-Indicator">:</span> <span class="s">&quot;ASG</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">ASG</span><span class="nv"> </span><span class="s">Deleted</span><span class="nv"> </span><span class="s">Due</span><span class="nv"> </span><span class="s">To</span><span class="nv"> </span><span class="s">Missing</span><span class="nv"> </span><span class="s">Tags</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">[custodian</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">account</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">region</span><span class="nv"> </span><span class="s">}}]&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">violation_desc</span><span class="p p-Indicator">:</span> <span class="s">&quot;Your</span><span class="nv"> </span><span class="s">ASG</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">still</span><span class="nv"> </span><span class="s">missing</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">required</span><span class="nv"> </span><span class="s">tags</span><span class="nv"> </span><span class="s">:&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">action_desc</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+        <span class="no">&quot;Actions Taken:  The ASG has been Deleted.</span>
+        <span class="no">A new ASG will need to be launched to replace this if needed.</span>
+        <span class="no">Please make sure to tag the new ASG&quot;</span>
+      <span class="l l-Scalar l-Scalar-Plain">to</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">CloudCustodian@Company.com</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">resource-owner</span>
+      <span class="l l-Scalar l-Scalar-Plain">transport</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sqs</span>
+        <span class="l l-Scalar l-Scalar-Plain">queue</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">https://sqs.us-east-1.amazonaws.com/XXXXXXXXXX/cloud-custodian-mailer</span>
+        <span class="l l-Scalar l-Scalar-Plain">region</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
 </pre></div>
 </div>
 </dd>
