@@ -743,6 +743,60 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">date_attribute</span><span class="p">,</span> <span class="s2">&quot;2000-01-01T01:01:01.000Z&quot;</span><span class="p">))</span></div></div>
 
 
+<div class="viewcode-block" id="ImageFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ImageFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;image&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ImageFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">,</span> <span class="n">LaunchConfigFilterBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter asg by image</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: asg-image-tag</span>
+<span class="sd">                resource: asg</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: image</span>
+<span class="sd">                    value: &quot;tag:ImageTag&quot;</span>
+<span class="sd">                    key: &quot;TagValue&quot;</span>
+<span class="sd">                    op: eq</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;ec2:DescribeImages&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;autoscaling:DescribeLaunchConfigurations&quot;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;image&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImageFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ImageFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">asgs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">ImageFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">asgs</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ImageFilter.initialize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ImageFilter.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ImageFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">asgs</span><span class="p">)</span>
+        <span class="n">image_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">image_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">])</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ami&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+        <span class="n">base_image_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">results</span><span class="p">}</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="n">base_image_map</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">image_ids</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">base_image_map</span><span class="p">}</span>
+        <span class="n">missing</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">image_ids</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">resources</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+            <span class="n">loaded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ami&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="n">missing</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="n">resources</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">image</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]:</span> <span class="n">image</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">loaded</span><span class="p">})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="n">resources</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">cfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">]]</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cfg</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">],</span> <span class="p">{})</span>
+        <span class="c1"># Finally, if we have no image...</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">image</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Could not locate image for instance:</span><span class="si">%s</span><span class="s2"> ami:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="s2">&quot;ImageId&quot;</span><span class="p">]))</span>
+            <span class="c1"># Match instead on empty skeleton?</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">image</span><span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="VpcIdFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.VpcIdFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc-id&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">VpcIdFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters ASG based on the VpcId</span>
