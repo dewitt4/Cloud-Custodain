@@ -391,29 +391,28 @@
 
 
 <span class="k">def</span> <span class="nf">_db_instance_eligible_for_final_snapshot</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
-    <span class="n">db_instance_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">]</span>
     <span class="n">status</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBInstanceStatus&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-
     <span class="c1"># If the DB instance you are deleting has a status of &quot;Creating,&quot;</span>
     <span class="c1"># you will not be able to have a final DB snapshot taken</span>
     <span class="c1"># If the DB instance is in a failure state with a status of &quot;failed,&quot;</span>
     <span class="c1"># &quot;incompatible-restore,&quot; or &quot;incompatible-network,&quot; you can only delete</span>
     <span class="c1"># the instance when the SkipFinalSnapshot parameter is set to &quot;true.&quot;</span>
-    <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;creating&#39;</span><span class="p">,</span> <span class="s1">&#39;failed&#39;</span><span class="p">,</span>
-                  <span class="s1">&#39;incompatible-restore&#39;</span><span class="p">,</span> <span class="s1">&#39;incompatible-network&#39;</span><span class="p">]:</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-            <span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is in invalid state&quot;</span><span class="p">,</span>
-            <span class="n">db_instance_id</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">eligible_for_final_snapshot</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;creating&#39;</span><span class="p">,</span> <span class="s1">&#39;failed&#39;</span><span class="p">,</span> <span class="s1">&#39;incompatible-restore&#39;</span><span class="p">,</span> <span class="s1">&#39;incompatible-network&#39;</span><span class="p">]:</span>
+        <span class="n">eligible_for_final_snapshot</span> <span class="o">=</span> <span class="kc">False</span>
 
     <span class="c1"># FinalDBSnapshotIdentifier can not be specified when deleting a</span>
     <span class="c1"># replica instance</span>
     <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ReadReplicaSourceDBInstanceIdentifier&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-            <span class="s2">&quot;DB instance </span><span class="si">%s</span><span class="s2"> is a read-replica&quot;</span><span class="p">,</span>
-            <span class="n">db_instance_id</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">False</span>
-    <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">eligible_for_final_snapshot</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="c1"># if it&#39;s a rds-cluster, don&#39;t try to run the rds instance snapshot api call</span>
+    <span class="k">if</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DBClusterIdentifier&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="n">eligible_for_final_snapshot</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">eligible_for_final_snapshot</span><span class="p">:</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;DB instance is not eligible for a snapshot:/n </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">resource</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">eligible_for_final_snapshot</span>
 
 
 <span class="k">def</span> <span class="nf">_get_available_engine_upgrades</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">major</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
