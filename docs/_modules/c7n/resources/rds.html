@@ -1057,11 +1057,12 @@
         <span class="n">filter_type</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;SnapshotCreateTime&#39;</span>
-        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::RDS::DBSnapshot&quot;</span></div>
+        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::RDS::DBSnapshot&quot;</span>
+        <span class="c1"># Need resource_type for Universal Tagging</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;rds:snapshot&quot;</span></div>
 
     <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;rds-snapshot.filters&#39;</span><span class="p">)</span>
     <span class="n">action_registry</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;rds-snapshot.actions&#39;</span><span class="p">)</span>
-    <span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
 
     <span class="n">_generate_arn</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span>
@@ -1087,14 +1088,8 @@
 <div class="viewcode-block" id="DescribeRDSSnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.DescribeRDSSnapshot">[docs]</a><span class="k">class</span> <span class="nc">DescribeRDSSnapshot</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
 
 <div class="viewcode-block" id="DescribeRDSSnapshot.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.DescribeRDSSnapshot.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snaps</span><span class="p">):</span>
-        <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">_rds_snap_tags</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">(),</span>
-            <span class="n">snaps</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">snaps</span></div></div>
+        <span class="k">return</span> <span class="n">universal_augment</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">,</span> <span class="nb">super</span><span class="p">(</span><span class="n">DescribeRDSSnapshot</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">snaps</span><span class="p">))</span></div></div>
 
 
 <div class="viewcode-block" id="ConfigRDSSnapshot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.ConfigRDSSnapshot">[docs]</a><span class="k">class</span> <span class="nc">ConfigRDSSnapshot</span><span class="p">(</span><span class="n">ConfigSource</span><span class="p">):</span>
@@ -1107,28 +1102,9 @@
         <span class="k">return</span> <span class="n">resource</span></div></div>
 
 
-<span class="k">def</span> <span class="nf">_rds_snap_tags</span><span class="p">(</span>
-        <span class="n">model</span><span class="p">,</span> <span class="n">snaps</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">generator</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Augment rds snapshots with their respective tags.&quot;&quot;&quot;</span>
-
-    <span class="k">def</span> <span class="nf">process_tags</span><span class="p">(</span><span class="n">snap</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="n">arn</span> <span class="o">=</span> <span class="n">generator</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">])</span>
-        <span class="n">tag_list</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">tag_list</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">list_tags_for_resource</span><span class="p">,</span> <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">)[</span><span class="s1">&#39;TagList&#39;</span><span class="p">]</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;DBSnapshotNotFound&#39;</span><span class="p">]:</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                    <span class="s2">&quot;Exception getting rds snapshot:</span><span class="si">%s</span><span class="s2"> tags  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">snap</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">return</span> <span class="kc">None</span>
-        <span class="n">snap</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tag_list</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="k">return</span> <span class="n">snap</span>
-
-    <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">snaps</span><span class="p">))))</span>
+<span class="n">register_universal_tags</span><span class="p">(</span>
+    <span class="n">RDSSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="p">,</span>
+    <span class="n">RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="RDSSnapshotOnHour"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotOnHour">[docs]</a><span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;onhour&#39;</span><span class="p">)</span>
@@ -1287,104 +1263,6 @@
         <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;restore_options&#39;</span><span class="p">,</span> <span class="p">{}))</span>
         <span class="n">post_modify</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;modify_options&#39;</span><span class="p">,</span> <span class="p">{}))</span>
         <span class="k">return</span> <span class="n">params</span><span class="p">,</span> <span class="n">post_modify</span></div></div>
-
-
-<div class="viewcode-block" id="RDSSnapshotTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotTag">[docs]</a><span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">RDSSnapshotTag</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">Tag</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Action to tag a RDS snapshot</span>
-
-<span class="sd">    :example:</span>
-
-<span class="sd">        .. code-block: yaml</span>
-
-<span class="sd">            policies:</span>
-<span class="sd">              - name: rds-snapshot-add-owner</span>
-<span class="sd">                resource: rds-snapshot</span>
-<span class="sd">                filters:</span>
-<span class="sd">                  - type: age</span>
-<span class="sd">                    days: 7</span>
-<span class="sd">                    op: le</span>
-<span class="sd">                actions:</span>
-<span class="sd">                  - type: tag</span>
-<span class="sd">                    key: rds_owner</span>
-<span class="sd">                    value: rds_owner_name</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">2</span>
-    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
-
-<div class="viewcode-block" id="RDSSnapshotTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snaps</span><span class="p">,</span> <span class="n">ts</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">snap</span> <span class="ow">in</span> <span class="n">snaps</span><span class="p">:</span>
-            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">ts</span><span class="p">)</span></div></div>
-
-
-<div class="viewcode-block" id="RDSSnapshotTagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotTagDelayedAction">[docs]</a><span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">RDSSnapshotTagDelayedAction</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Mark RDS snapshot resource for an operation at a later date</span>
-
-<span class="sd">    :example:</span>
-
-<span class="sd">        .. code-block: yaml</span>
-
-<span class="sd">            policies:</span>
-<span class="sd">              - name: delete-stale-snapshots</span>
-<span class="sd">                resource: rds-snapshot</span>
-<span class="sd">                filters:</span>
-<span class="sd">                  - type: age</span>
-<span class="sd">                    days: 21</span>
-<span class="sd">                    op: eq</span>
-<span class="sd">                actions:</span>
-<span class="sd">                  - type: mark-for-op</span>
-<span class="sd">                    op: delete</span>
-<span class="sd">                    days: 7</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
-        <span class="s1">&#39;mark-for-op&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">tags</span><span class="o">.</span><span class="n">TagDelayedAction</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
-        <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;delete&#39;</span><span class="p">]})</span>
-
-    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
-
-<div class="viewcode-block" id="RDSSnapshotTagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotTagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snaps</span><span class="p">,</span> <span class="n">ts</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">snap</span> <span class="ow">in</span> <span class="n">snaps</span><span class="p">:</span>
-            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">(</span><span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">ts</span><span class="p">)</span></div></div>
-
-
-<div class="viewcode-block" id="RDSSnapshotRemoveTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotRemoveTag">[docs]</a><span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
-<span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unmark&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">RDSSnapshotRemoveTag</span><span class="p">(</span><span class="n">tags</span><span class="o">.</span><span class="n">RemoveTag</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Removes a tag/set of tags from a RDS snapshot resource</span>
-
-<span class="sd">    :example:</span>
-
-<span class="sd">        .. code-block: yaml</span>
-
-<span class="sd">            policies:</span>
-<span class="sd">              - name: rds-snapshot-unmark</span>
-<span class="sd">                resource: rds-snapshot</span>
-<span class="sd">                filters:</span>
-<span class="sd">                  - &quot;tag:rds_owner&quot;: present</span>
-<span class="sd">                actions:</span>
-<span class="sd">                  - type: remove-tag</span>
-<span class="sd">                    tags:</span>
-<span class="sd">                      - rds_owner</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">concurrency</span> <span class="o">=</span> <span class="mi">2</span>
-    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">5</span>
-
-<div class="viewcode-block" id="RDSSnapshotRemoveTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSnapshotRemoveTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snaps</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">snap</span> <span class="ow">in</span> <span class="n">snaps</span><span class="p">:</span>
-            <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">snap</span><span class="p">[</span><span class="s1">&#39;DBSnapshotIdentifier&#39;</span><span class="p">])</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">remove_tags_from_resource</span><span class="p">(</span>
-                <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="CrossAccountAccess"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.CrossAccountAccess">[docs]</a><span class="nd">@RDSSnapshot</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
