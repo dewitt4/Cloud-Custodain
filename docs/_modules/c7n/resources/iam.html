@@ -1070,13 +1070,81 @@
 
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:DeleteUser&#39;</span><span class="p">,)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;iam:ListAttachedUserPolicies&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListAccessKeys&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListGroupsForUser&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListMFADevices&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListServiceSpecificCredentials&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListSigningCertificates&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:ListSSHPublicKeys&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeactivateMFADevice&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeleteAccessKey&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeleteLoginProfile&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeleteSigningCertificate&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeleteSSHPublicKey&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DeleteUser&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:DetachUserPolicy&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;iam:RemoveUserFromGroup&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="UserDelete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserDelete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">delete_user</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Deleted user &quot;</span><span class="si">%s</span><span class="s1">&quot;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">]))</span></div></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Deleting user </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_user</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UserDelete.process_user"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserDelete.process_user">[docs]</a>    <span class="k">def</span> <span class="nf">process_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_login_profile</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;NoSuchEntity&#39;</span><span class="p">,):</span>
+                <span class="k">raise</span>
+
+        <span class="c1"># Access Keys</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_access_keys</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">access_key</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;AccessKeyMetadata&#39;</span><span class="p">]:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_access_key</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span>
+                                     <span class="n">AccessKeyId</span><span class="o">=</span><span class="n">access_key</span><span class="p">[</span><span class="s1">&#39;AccessKeyId&#39;</span><span class="p">])</span>
+
+        <span class="c1"># User Policies</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_attached_user_policies</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">user_policy</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;AttachedPolicies&#39;</span><span class="p">]:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">detach_user_policy</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span> <span class="n">PolicyArn</span><span class="o">=</span><span class="n">user_policy</span><span class="p">[</span><span class="s1">&#39;PolicyArn&#39;</span><span class="p">])</span>
+
+        <span class="c1"># HW MFA Devices</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_mfa_devices</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">mfa_device</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;MFADevices&#39;</span><span class="p">]:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">deactivate_mfa_device</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span> <span class="n">SerialNumber</span><span class="o">=</span><span class="n">mfa_device</span><span class="p">[</span><span class="s1">&#39;SerialNumber&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Groups</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_groups_for_user</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">user_group</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;Groups&#39;</span><span class="p">]:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">remove_user_from_group</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span> <span class="n">GroupName</span><span class="o">=</span><span class="n">user_group</span><span class="p">[</span><span class="s1">&#39;GroupName&#39;</span><span class="p">])</span>
+
+        <span class="c1"># SSH Keys</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_ssh_public_keys</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;SSHPublicKeys&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_ssh_public_key</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span> <span class="n">SSHPublicKeyId</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;SSHPublicKeyId&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Signing Certificates</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_signing_certificates</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">cert</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Certificates&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_signing_certificate</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span> <span class="n">CertificateId</span><span class="o">=</span><span class="n">cert</span><span class="p">[</span><span class="s1">&#39;CertificateId&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Service specific user credentials (codecommit)</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_service_specific_credentials</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">screds</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ServiceSpecificCredentials&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_service_specific_credential</span><span class="p">(</span>
+                <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">],</span>
+                <span class="n">ServiceSpecificCredentialId</span><span class="o">=</span><span class="n">screds</span><span class="p">[</span><span class="s1">&#39;ServiceSpecificCredentialId&#39;</span><span class="p">])</span>
+
+        <span class="n">client</span><span class="o">.</span><span class="n">delete_user</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="UserRemoveAccessKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UserRemoveAccessKey">[docs]</a><span class="nd">@User</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-keys&#39;</span><span class="p">)</span>
