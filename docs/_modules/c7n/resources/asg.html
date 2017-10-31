@@ -392,7 +392,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">elbs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_elbs</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">appelb_target_groups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_appelb_target_groups</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshots</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_images</span><span class="p">()</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">images</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_snaps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_images</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="ConfigValidFilter.get_subnets"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_subnets">[docs]</a>    <span class="k">def</span> <span class="nf">get_subnets</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
@@ -417,21 +417,49 @@
 <div class="viewcode-block" id="ConfigValidFilter.get_images"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_images">[docs]</a>    <span class="k">def</span> <span class="nf">get_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ami&#39;</span><span class="p">)</span>
         <span class="n">images</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-        <span class="c1"># Verify image snapshot validity, i&#39;ve been told by a TAM this</span>
-        <span class="c1"># is a possibility, but haven&#39;t seen evidence of it, since</span>
-        <span class="c1"># snapshots are strongly ref&#39;d by amis, but its negible cost</span>
-        <span class="c1"># to verify.</span>
-        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">():</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">image_snaps</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">image_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">({</span><span class="n">lc</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">lc</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">values</span><span class="p">()})</span>
+
+        <span class="c1"># Pull account images, we should be able to utilize cached values,</span>
+        <span class="c1"># drawn down the image population to just images not in the account.</span>
+        <span class="n">account_images</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span> <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">image_ids</span><span class="p">]</span>
+        <span class="n">account_image_ids</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">account_images</span><span class="p">}</span>
+        <span class="n">image_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">image_id</span> <span class="k">for</span> <span class="n">image_id</span> <span class="ow">in</span> <span class="n">image_ids</span>
+                     <span class="k">if</span> <span class="n">image_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">account_image_ids</span><span class="p">]</span>
+
+        <span class="c1"># To pull third party images, we explicitly use a describe</span>
+        <span class="c1"># source without any cache.</span>
+        <span class="c1">#</span>
+        <span class="c1"># Can&#39;t use a config source since it won&#39;t have state for</span>
+        <span class="c1"># third party ami, we auto propagate source normally, so we</span>
+        <span class="c1"># explicitly pull a describe source. Can&#39;t use a cache either</span>
+        <span class="c1"># as their not in the account.</span>
+        <span class="c1">#</span>
+        <span class="k">while</span> <span class="n">image_ids</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">amis</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="s1">&#39;describe&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span>
+                    <span class="n">image_ids</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">account_images</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">amis</span><span class="p">)</span>
+                <span class="k">break</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;InvalidAMIID.NotFound&#39;</span><span class="p">:</span>
+                    <span class="k">raise</span>
+                <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">msg</span><span class="p">[</span><span class="n">msg</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;[&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span> <span class="n">msg</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;]&#39;</span><span class="p">)]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">):</span>
+                    <span class="n">image_ids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">account_images</span><span class="p">:</span>
+            <span class="n">images</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">])</span>
+            <span class="c1"># Capture any snapshots, images strongly reference their</span>
+            <span class="c1"># snapshots, and some of these will be third party in the</span>
+            <span class="c1"># case of a third party image.</span>
             <span class="k">for</span> <span class="n">bd</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">,</span> <span class="p">()):</span>
                 <span class="k">if</span> <span class="s1">&#39;Ebs&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span> <span class="ow">or</span> <span class="s1">&#39;SnapshotId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">]:</span>
                     <span class="k">continue</span>
-                <span class="k">if</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span><span class="p">:</span>
-                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-                    <span class="k">break</span>
-            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">images</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">])</span>
-        <span class="k">return</span> <span class="n">images</span></div>
+                <span class="n">image_snaps</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+
+        <span class="k">return</span> <span class="n">images</span><span class="p">,</span> <span class="n">image_snaps</span></div>
 
 <div class="viewcode-block" id="ConfigValidFilter.get_snapshots"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.ConfigValidFilter.get_snapshots">[docs]</a>    <span class="k">def</span> <span class="nf">get_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;ebs-snapshot&#39;</span><span class="p">)</span>
@@ -488,6 +516,8 @@
             <span class="k">if</span> <span class="s1">&#39;Ebs&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span> <span class="ow">or</span> <span class="s1">&#39;SnapshotId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">]:</span>
                 <span class="k">continue</span>
             <span class="n">snapshot_id</span> <span class="o">=</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">snapshot_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_snaps</span><span class="p">:</span>
+                <span class="k">continue</span>
             <span class="k">if</span> <span class="n">snapshot_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">snapshots</span><span class="p">:</span>
                 <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;invalid-snapshot&#39;</span><span class="p">,</span> <span class="n">bd</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]))</span>
         <span class="k">return</span> <span class="n">errors</span></div></div>
