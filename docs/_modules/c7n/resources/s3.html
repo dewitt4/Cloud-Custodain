@@ -648,11 +648,7 @@
 
 
 <div class="viewcode-block" id="bucket_client"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.bucket_client">[docs]</a><span class="k">def</span> <span class="nf">bucket_client</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">kms</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-    <span class="n">location</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">location</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">region</span> <span class="o">=</span> <span class="s1">&#39;us-east-1&#39;</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">region</span> <span class="o">=</span> <span class="n">location</span><span class="p">[</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">]</span> <span class="ow">or</span> <span class="s1">&#39;us-east-1&#39;</span>
+    <span class="n">region</span> <span class="o">=</span> <span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">kms</span><span class="p">:</span>
         <span class="c1"># Need v4 signature for aws:kms crypto, else let the sdk decide</span>
@@ -683,6 +679,24 @@
             <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
                 <span class="s1">&#39;Exception tagging bucket </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
             <span class="k">continue</span></div>
+
+
+<div class="viewcode-block" id="get_region"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.get_region">[docs]</a><span class="k">def</span> <span class="nf">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tries to get the bucket region from Location.LocationConstraint</span>
+
+<span class="sd">    Special cases:</span>
+<span class="sd">        LocationConstraint EU defaults to eu-west-1</span>
+<span class="sd">        LocationConstraint null defaults to us-east-1</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        b (object): A bucket object</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        string: an aws region string</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">remap</span> <span class="o">=</span> <span class="p">{</span><span class="kc">None</span><span class="p">:</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">,</span> <span class="s1">&#39;EU&#39;</span><span class="p">:</span> <span class="s1">&#39;eu-west-1&#39;</span><span class="p">}</span>
+    <span class="n">region</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">remap</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">region</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="S3Metrics"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.S3Metrics">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
@@ -1214,10 +1228,7 @@
             <span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">assume_role</span><span class="p">),</span>
             <span class="n">account_id</span><span class="o">=</span><span class="n">account_id</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">))</span>
 
-        <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span>
-            <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{</span>
-                <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">:</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">})[</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">]</span>
-            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
+        <span class="n">regions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">])</span>
 
         <span class="c1"># session managers by region</span>
         <span class="n">region_sessions</span> <span class="o">=</span> <span class="p">{}</span>
@@ -1237,9 +1248,7 @@
             <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
-                <span class="n">region</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Location&#39;</span><span class="p">,</span> <span class="p">{</span>
-                    <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">:</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                        <span class="s1">&#39;LocationConstraint&#39;</span><span class="p">)</span>
+                <span class="n">region</span> <span class="o">=</span> <span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
                 <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                     <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span>
