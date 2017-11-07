@@ -244,6 +244,7 @@
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">botocore.vendored.requests.exceptions</span> <span class="k">import</span> <span class="n">SSLError</span>
 
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">defaultdict</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 
@@ -857,7 +858,20 @@
 <div class="viewcode-block" id="BucketActionBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase">[docs]</a><span class="k">class</span> <span class="nc">BucketActionBase</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
 
 <div class="viewcode-block" id="BucketActionBase.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">permissions</span></div></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">permissions</span></div>
+
+<div class="viewcode-block" id="BucketActionBase.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">:</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">)]</span> <span class="o">=</span> <span class="n">b</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;error modifying bucket:</span><span class="si">%s</span><span class="se">\n</span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                                   <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+                <span class="n">results</span> <span class="o">+=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">()])</span>
+            <span class="k">return</span> <span class="n">results</span></div></div>
 
 
 <div class="viewcode-block" id="HasStatementFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.HasStatementFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;has-statement&#39;</span><span class="p">)</span>
@@ -992,6 +1006,98 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">required</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="BucketNotificationFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketNotificationFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;bucket-notification&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">BucketNotificationFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter based on bucket notification configuration.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: delete-incorrect-notification</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: bucket-notification</span>
+<span class="sd">                    kind: lambda</span>
+<span class="sd">                    key: Id</span>
+<span class="sd">                    value: &quot;IncorrectLambda&quot;</span>
+<span class="sd">                    op: eq</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: delete-bucket-notification</span>
+<span class="sd">                    statement_ids: matched</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;bucket-notification&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;kind&#39;</span><span class="p">],</span>
+        <span class="n">kind</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;lambda&#39;</span><span class="p">,</span> <span class="s1">&#39;sns&#39;</span><span class="p">,</span> <span class="s1">&#39;sqs&#39;</span><span class="p">]},</span>
+        <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+    <span class="n">annotation_key</span> <span class="o">=</span> <span class="s1">&#39;c7n:MatchedNotificationConfigurationIds&#39;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:GetBucketNotification&#39;</span><span class="p">,)</span>
+
+    <span class="n">FIELDS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;lambda&#39;</span><span class="p">:</span> <span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;sns&#39;</span><span class="p">:</span> <span class="s1">&#39;TopicConfigurations&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;sqs&#39;</span><span class="p">:</span> <span class="s1">&#39;QueueConfigurations&#39;</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="BucketNotificationFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketNotificationFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">BucketNotificationFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+
+        <span class="n">field</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">FIELDS</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;kind&#39;</span><span class="p">]]</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">config</span> <span class="ow">in</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Notification&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+                <span class="n">set_annotation</span><span class="p">(</span>
+                    <span class="n">bucket</span><span class="p">,</span>
+                    <span class="n">BucketNotificationFilter</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">,</span>
+                    <span class="n">config</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">found</span></div>
+
+
+<div class="viewcode-block" id="DeleteBucketNotification"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteBucketNotification">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete-bucket-notification&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteBucketNotification</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete S3 bucket notification configurations&quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;delete-bucket-notification&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">],</span>
+        <span class="n">statement_ids</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;matched&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}]})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutBucketNotification&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteBucketNotification.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DeleteBucketNotification.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Notification&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">n</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">statement_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;statement_ids&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">statement_ids</span> <span class="o">==</span> <span class="s1">&#39;matched&#39;</span><span class="p">:</span>
+            <span class="n">statement_ids</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">BucketNotificationFilter</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">,</span> <span class="p">())</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">statement_ids</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">six</span><span class="o">.</span><span class="n">itervalues</span><span class="p">(</span><span class="n">BucketNotificationFilter</span><span class="o">.</span><span class="n">FIELDS</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">n</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">statement_ids</span><span class="p">:</span>
+                    <span class="n">cfg</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">bucket</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_notification_configuration</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">NotificationConfiguration</span><span class="o">=</span><span class="n">cfg</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="NoOp"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoOp">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;no-op&#39;</span><span class="p">)</span>
