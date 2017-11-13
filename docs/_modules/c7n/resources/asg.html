@@ -940,12 +940,11 @@
 
 <div class="viewcode-block" id="Resize"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resize&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Resize</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Action to resize the min/max instances in an ASG</span>
+    <span class="sd">&quot;&quot;&quot;Action to resize the min/max/desired instances in an ASG</span>
 
-<span class="sd">    **Note:** Resizing of scaling groups desired/minimum size is limited to the</span>
-<span class="sd">    current size of the autoscaling group(s).</span>
+<span class="sd">    There are several ways to use this action:</span>
 
-<span class="sd">    :example:</span>
+<span class="sd">    1. set min/desired to current running instances</span>
 
 <span class="sd">        .. code-block: yaml</span>
 
@@ -956,16 +955,69 @@
 <span class="sd">                  - capacity-delta</span>
 <span class="sd">                actions:</span>
 <span class="sd">                  - type: resize</span>
-<span class="sd">                    desired_size: current</span>
+<span class="sd">                    desired-size: &quot;current&quot;</span>
+
+<span class="sd">    2. apply a fixed resize of min, max or desired, optionally saving the</span>
+<span class="sd">       previous values to a named tag (for restoring later):</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: offhours-asg-off</span>
+<span class="sd">                resource: asg</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: offhour</span>
+<span class="sd">                    offhour: 19</span>
+<span class="sd">                    default_tz: bst</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: resize</span>
+<span class="sd">                    min-size: 0</span>
+<span class="sd">                    desired-size: 0</span>
+<span class="sd">                    save-options-tag: OffHoursPrevious</span>
+
+<span class="sd">    3. restore previous values for min/max/desired from a tag:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: offhours-asg-on</span>
+<span class="sd">                resource: asg</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: onhour</span>
+<span class="sd">                    onhour: 8</span>
+<span class="sd">                    default_tz: bst</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: resize</span>
+<span class="sd">                    restore-options-tag: OffHoursPrevious</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;resize&#39;</span><span class="p">,</span>
-        <span class="c1"># min_size={&#39;type&#39;: &#39;string&#39;},</span>
-        <span class="c1"># max_size={&#39;type&#39;: &#39;string&#39;},</span>
-        <span class="n">desired_size</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
-        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;desired_size&#39;</span><span class="p">,))</span>
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;autoscaling:UpdateAutoScalingGroup&#39;</span><span class="p">,)</span>
+        <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;min-size&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+            <span class="s1">&#39;max-size&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+            <span class="s1">&#39;desired-size&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;anyOf&quot;</span><span class="p">:</span> <span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;current&quot;</span><span class="p">]},</span>
+                    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+                <span class="p">]</span>
+            <span class="p">},</span>
+            <span class="c1"># support previous key name with underscore</span>
+            <span class="s1">&#39;desired_size&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;anyOf&quot;</span><span class="p">:</span> <span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;current&quot;</span><span class="p">]},</span>
+                    <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+                <span class="p">]</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;save-options-tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;restore-options-tag&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;autoscaling:UpdateAutoScalingGroup&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;autoscaling:CreateOrUpdateTags&#39;</span>
+    <span class="p">)</span>
 
 <div class="viewcode-block" id="Resize.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># if self.data[&#39;desired_size&#39;] != &#39;current&#39;:</span>
@@ -974,22 +1026,74 @@
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="Resize.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.Resize.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">):</span>
+        <span class="c1"># ASG parameters to save to/restore from a tag</span>
+        <span class="n">asg_params</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">,</span> <span class="s1">&#39;MaxSize&#39;</span><span class="p">,</span> <span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span>
+
+        <span class="c1"># support previous param desired_size when desired-size is not present</span>
+        <span class="k">if</span> <span class="s1">&#39;desired_size&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="s1">&#39;desired-size&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired-size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired_size&#39;</span><span class="p">]</span>
+
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
             <span class="s1">&#39;autoscaling&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span><span class="p">:</span>
+            <span class="n">tag_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+            <span class="n">update</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="n">current_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span>
-            <span class="n">min_size</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired_size&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="s1">&#39;current&#39;</span><span class="p">:</span>
-                <span class="n">desired</span> <span class="o">=</span> <span class="nb">min</span><span class="p">((</span><span class="n">current_size</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]))</span>
+
+            <span class="k">if</span> <span class="s1">&#39;restore-options-tag&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="c1"># we want to restore all ASG size params from saved data</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Want to restore ASG </span><span class="si">%s</span><span class="s1"> size from tag </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span>
+                    <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;restore-options-tag&#39;</span><span class="p">]))</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;restore-options-tag&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">tag_map</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">tag_map</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;restore-options-tag&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">):</span>
+                        <span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">asg_params</span><span class="p">:</span>
+                            <span class="n">update</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">desired</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired_size&#39;</span><span class="p">])</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;desired </span><span class="si">%d</span><span class="s1"> to </span><span class="si">%s</span><span class="s1">, min </span><span class="si">%d</span><span class="s1"> to </span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">,</span>
-                      <span class="n">desired</span><span class="p">,</span> <span class="n">current_size</span><span class="p">,</span> <span class="n">min_size</span><span class="p">,</span> <span class="n">current_size</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">update_auto_scaling_group</span><span class="p">,</span>
-                <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
-                <span class="n">DesiredCapacity</span><span class="o">=</span><span class="n">desired</span><span class="p">,</span>
-                <span class="n">MinSize</span><span class="o">=</span><span class="nb">min</span><span class="p">((</span><span class="n">current_size</span><span class="p">,</span> <span class="n">min_size</span><span class="p">)))</span></div></div>
+                <span class="c1"># we want to resize, parse provided params</span>
+                <span class="k">if</span> <span class="s1">&#39;min-size&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="n">update</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;min-size&#39;</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="s1">&#39;max-size&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="n">update</span><span class="p">[</span><span class="s1">&#39;MaxSize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;max-size&#39;</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="s1">&#39;desired-size&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired-size&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;current&#39;</span><span class="p">:</span>
+                        <span class="n">update</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">current_size</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">])</span>
+                        <span class="k">if</span> <span class="s1">&#39;MinSize&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">update</span><span class="p">:</span>
+                            <span class="c1"># unless we were given a new value for min_size then</span>
+                            <span class="c1"># ensure it is at least as low as current_size</span>
+                            <span class="n">update</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">current_size</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">])</span>
+                    <span class="k">elif</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired-size&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">int</span><span class="p">:</span>
+                        <span class="n">update</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;desired-size&#39;</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">update</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;ASG </span><span class="si">%s</span><span class="s1"> size: current=</span><span class="si">%d</span><span class="s1">, min=</span><span class="si">%d</span><span class="s1">, max=</span><span class="si">%d</span><span class="s1">, desired=</span><span class="si">%d</span><span class="s1">&#39;</span>
+                    <span class="o">%</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span> <span class="n">current_size</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">],</span>
+                    <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MaxSize&#39;</span><span class="p">],</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]))</span>
+
+                <span class="k">if</span> <span class="s1">&#39;save-options-tag&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="c1"># save existing ASG params to a tag before changing them</span>
+                    <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Saving ASG </span><span class="si">%s</span><span class="s1"> size to tag </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span>
+                        <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;save-options-tag&#39;</span><span class="p">]))</span>
+                    <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span>
+                        <span class="n">Key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;save-options-tag&#39;</span><span class="p">],</span>
+                        <span class="n">PropagateAtLaunch</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                        <span class="n">Value</span><span class="o">=</span><span class="s1">&#39;;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">({</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">=</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="n">param</span><span class="p">])</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">asg_params</span><span class="p">}),</span>
+                        <span class="n">ResourceId</span><span class="o">=</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
+                        <span class="n">ResourceType</span><span class="o">=</span><span class="s1">&#39;auto-scaling-group&#39;</span><span class="p">,</span>
+                    <span class="p">)]</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">create_or_update_tags</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
+
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Resizing ASG </span><span class="si">%s</span><span class="s1"> with </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">update</span><span class="p">)))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">update_auto_scaling_group</span><span class="p">,</span>
+                    <span class="n">AutoScalingGroupName</span><span class="o">=</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AutoScalingGroupName&#39;</span><span class="p">],</span>
+                    <span class="o">**</span><span class="n">update</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;nothing to resize&#39;</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="RemoveTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.asg.RemoveTag">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
