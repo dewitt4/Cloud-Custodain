@@ -1028,6 +1028,70 @@
                 <span class="k">raise</span></div>
 
 
+<div class="viewcode-block" id="Reboot"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Reboot">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;reboot&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Reboot</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;reboots a previously running EC2 instance.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-reboot-instances</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            query:</span>
+<span class="sd">              - instance-state-name: running</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - reboot</span>
+
+<span class="sd">    http://docs.aws.amazon.com/cli/latest/reference/ec2/reboot-instances.html</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;reboot&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:RebootInstances&#39;</span><span class="p">,)</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">exception</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">_filter_ec2_with_volumes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Reboot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Reboot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_filter_ec2_with_volumes</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">failures</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">):</span>
+            <span class="n">fails</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_instance_set</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">fails</span><span class="p">:</span>
+                <span class="n">failures</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">failures</span><span class="p">:</span>
+            <span class="n">fail_count</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="n">failures</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Could not reboot </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instances </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">fail_count</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">),</span>
+                <span class="n">utils</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">failures</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Reboot.process_instance_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Reboot.process_instance_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_instance_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="c1"># Setup retry with insufficient capacity as well</span>
+        <span class="n">retryable</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;InsufficientInstanceCapacity&#39;</span><span class="p">,</span> <span class="s1">&#39;RequestLimitExceeded&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Client.RequestLimitExceeded&#39;</span><span class="p">),</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_retry</span><span class="p">(</span><span class="n">retryable</span><span class="p">,</span> <span class="n">max_attempts</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">instance_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">reboot_instances</span><span class="p">,</span> <span class="n">InstanceIds</span><span class="o">=</span><span class="n">instance_ids</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">retryable</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">raise</span></div></div>
+
+
 <div class="viewcode-block" id="Terminate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Terminate">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Terminate</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Terminate a set of instances.</span>

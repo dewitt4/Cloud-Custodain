@@ -292,7 +292,7 @@
 <div class="viewcode-block" id="ConfigAppElb.load_resource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.ConfigAppElb.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
         <span class="n">resource</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ConfigAppElb</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
         <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="sa">u</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span> <span class="sa">u</span><span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]}</span>
-          <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">])]</span>
+          <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;supplementaryConfiguration&#39;</span><span class="p">][</span><span class="s1">&#39;Tags&#39;</span><span class="p">])]</span>
         <span class="k">return</span> <span class="n">resource</span></div></div>
 
 
@@ -1199,6 +1199,40 @@
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">(</span><span class="n">target_group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VpcId&#39;</span><span class="p">)</span> <span class="ow">and</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">target_group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;VpcId&#39;</span><span class="p">))</span> <span class="ow">or</span> <span class="kc">False</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AppELBTargetGroupDeleteAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction">[docs]</a><span class="nd">@AppELBTargetGroup</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">AppELBTargetGroupDeleteAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete ELB target group</span>
+
+<span class="sd">    It is recommended to apply a filter to the delete policy to avoid unwanted</span>
+<span class="sd">    deletion of any app elb target groups.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: appelb-targetgroups-delete-unused</span>
+<span class="sd">                resource: app-elb-target-group</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:SomeTag&quot;: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;elasticloadbalancing:DeleteTargetGroup&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_targetgroup</span><span class="p">,</span> <span class="n">target_group</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process_targetgroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process_targetgroup">[docs]</a>    <span class="k">def</span> <span class="nf">process_targetgroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_target_group</span><span class="p">,</span>
+            <span class="n">TargetGroupArn</span><span class="o">=</span><span class="n">target_group</span><span class="p">[</span><span class="s1">&#39;TargetGroupArn&#39;</span><span class="p">])</span></div></div>
 </pre></div>
 
            </div>

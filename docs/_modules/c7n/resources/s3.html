@@ -229,6 +229,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">import</span> <span class="nn">copy</span>
 <span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
@@ -257,7 +258,8 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">dumps</span><span class="p">)</span>
+    <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span>
+    <span class="n">dumps</span><span class="p">,</span> <span class="n">format_string_values</span><span class="p">)</span>
 
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.s3&#39;</span><span class="p">)</span>
@@ -445,7 +447,8 @@
             <span class="k">if</span> <span class="s1">&#39;filter&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">]:</span>
                 <span class="k">continue</span>
 
-            <span class="n">rr</span><span class="p">[</span><span class="s1">&#39;Filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convertLifePredicate</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">][</span><span class="s1">&#39;predicate&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">][</span><span class="s1">&#39;predicate&#39;</span><span class="p">]:</span>
+                <span class="n">rr</span><span class="p">[</span><span class="s1">&#39;Filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">convertLifePredicate</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;filter&#39;</span><span class="p">][</span><span class="s1">&#39;predicate&#39;</span><span class="p">])</span>
 
         <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Lifecycle&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Rules&#39;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span></div>
 
@@ -469,6 +472,7 @@
     <span class="n">NotifyTypeMap</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;QueueConfiguration&#39;</span><span class="p">:</span> <span class="s1">&#39;QueueConfigurations&#39;</span><span class="p">,</span>
         <span class="s1">&#39;LambdaConfiguration&#39;</span><span class="p">:</span> <span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;CloudFunctionConfiguration&#39;</span><span class="p">:</span> <span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span>
         <span class="s1">&#39;TopicConfiguration&#39;</span><span class="p">:</span> <span class="s1">&#39;TopicConfigurations&#39;</span><span class="p">}</span>
 
 <div class="viewcode-block" id="ConfigS3.handle_BucketNotificationConfiguration"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ConfigS3.handle_BucketNotificationConfiguration">[docs]</a>    <span class="k">def</span> <span class="nf">handle_BucketNotificationConfiguration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">item_value</span><span class="p">):</span>
@@ -533,8 +537,8 @@
                 <span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;errorDocument&#39;</span><span class="p">]}</span>
         <span class="k">if</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;redirectAllRequestsTo&#39;</span><span class="p">]:</span>
             <span class="n">website</span><span class="p">[</span><span class="s1">&#39;RedirectAllRequestsTo&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s1">&#39;HostName&#39;</span><span class="p">:</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;redirectsAllRequestsTo&#39;</span><span class="p">][</span><span class="s1">&#39;hostName&#39;</span><span class="p">],</span>
-                <span class="s1">&#39;Protocol&#39;</span><span class="p">:</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;redirectsAllRequestsTo&#39;</span><span class="p">][</span><span class="s1">&#39;protocol&#39;</span><span class="p">]}</span>
+                <span class="s1">&#39;HostName&#39;</span><span class="p">:</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;redirectAllRequestsTo&#39;</span><span class="p">][</span><span class="s1">&#39;hostName&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;Protocol&#39;</span><span class="p">:</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;redirectAllRequestsTo&#39;</span><span class="p">][</span><span class="s1">&#39;protocol&#39;</span><span class="p">]}</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">item_value</span><span class="p">[</span><span class="s1">&#39;routingRules&#39;</span><span class="p">]:</span>
             <span class="n">redirect</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="n">rule</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Redirect&#39;</span><span class="p">:</span> <span class="n">redirect</span><span class="p">}</span>
@@ -860,6 +864,14 @@
 <div class="viewcode-block" id="BucketActionBase.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">permissions</span></div>
 
+<div class="viewcode-block" id="BucketActionBase.get_std_format_args"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.get_std_format_args">[docs]</a>    <span class="k">def</span> <span class="nf">get_std_format_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;account_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+            <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+            <span class="s1">&#39;bucket_name&#39;</span><span class="p">:</span> <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;bucket_region&#39;</span><span class="p">:</span> <span class="n">get_region</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+        <span class="p">}</span></div>
+
 <div class="viewcode-block" id="BucketActionBase.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketActionBase.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
@@ -1108,6 +1120,87 @@
 
 <div class="viewcode-block" id="NoOp.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.NoOp.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="SetPolicyStatement"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetPolicyStatement">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-statements&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetPolicyStatement</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to add or update policy statements to S3 buckets</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: force-s3-https</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-statements</span>
+<span class="sd">                    statements:</span>
+<span class="sd">                      - Sid: &quot;DenyHttp&quot;</span>
+<span class="sd">                        Effect: &quot;Deny&quot;</span>
+<span class="sd">                        Action: &quot;s3:GetObject&quot;</span>
+<span class="sd">                        Principal:</span>
+<span class="sd">                          AWS: &quot;*&quot;</span>
+<span class="sd">                        Resource: &quot;arn:aws:s3:::{bucket_name}/*&quot;</span>
+<span class="sd">                        Condition:</span>
+<span class="sd">                          Bool:</span>
+<span class="sd">                            &quot;aws:SecureTransport&quot;: false</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutBucketPolicy&#39;</span><span class="p">,)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-statements&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;statements&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;Sid&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                        <span class="s1">&#39;Effect&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Allow&#39;</span><span class="p">,</span> <span class="s1">&#39;Deny&#39;</span><span class="p">]},</span>
+                        <span class="s1">&#39;Principal&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;NotPrincipal&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;Action&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;NotAction&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;Resource&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;NotResource&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;anyOf&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">}]},</span>
+                        <span class="s1">&#39;Condition&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">}</span>
+                    <span class="p">},</span>
+                    <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">,</span> <span class="s1">&#39;Effect&#39;</span><span class="p">],</span>
+                    <span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+                        <span class="p">{</span><span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Action&#39;</span><span class="p">,</span> <span class="s1">&#39;Resource&#39;</span><span class="p">]},</span>
+                        <span class="p">{</span><span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;NotAction&#39;</span><span class="p">,</span> <span class="s1">&#39;Resource&#39;</span><span class="p">]},</span>
+                        <span class="p">{</span><span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Action&#39;</span><span class="p">,</span> <span class="s1">&#39;NotResource&#39;</span><span class="p">]},</span>
+                        <span class="p">{</span><span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;NotAction&#39;</span><span class="p">,</span> <span class="s1">&#39;NotResource&#39;</span><span class="p">]}</span>
+                    <span class="p">]</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="SetPolicyStatement.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetPolicyStatement.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="n">fmtargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_std_format_args</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">]:</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">policy</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">current</span><span class="p">)</span>
+        <span class="n">additional</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Sid&#39;</span><span class="p">]:</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;statements&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+        <span class="n">additional</span> <span class="o">=</span> <span class="n">format_string_values</span><span class="p">(</span><span class="n">additional</span><span class="p">,</span> <span class="o">**</span><span class="n">fmtargs</span><span class="p">)</span>
+        <span class="n">new</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">additional</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">new</span> <span class="o">==</span> <span class="n">current</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">statements</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">new</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">statements</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+
+        <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">bucket</span><span class="p">)</span>
+        <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_policy</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">Policy</span><span class="o">=</span><span class="n">policy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="s1">&#39;Policy&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="p">}</span></div></div>
 
 
 <div class="viewcode-block" id="RemovePolicyStatement"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.RemovePolicyStatement">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-statements&#39;</span><span class="p">)</span>
@@ -2299,11 +2392,13 @@
         <span class="n">name</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Name of inventory&#39;</span><span class="p">},</span>
         <span class="n">destination</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Name of destination bucket&#39;</span><span class="p">},</span>
         <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Destination prefix&#39;</span><span class="p">},</span>
+        <span class="n">encryption</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;SSES3&#39;</span><span class="p">,</span> <span class="s1">&#39;SSEKMS&#39;</span><span class="p">]},</span>
+        <span class="n">key_id</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Optional Customer KMS KeyId for SSE-KMS&#39;</span><span class="p">},</span>
         <span class="n">versions</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;All&#39;</span><span class="p">,</span> <span class="s1">&#39;Current&#39;</span><span class="p">]},</span>
         <span class="n">schedule</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Daily&#39;</span><span class="p">,</span> <span class="s1">&#39;Weekly&#39;</span><span class="p">]},</span>
         <span class="n">fields</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span>
             <span class="s1">&#39;Size&#39;</span><span class="p">,</span> <span class="s1">&#39;LastModifiedDate&#39;</span><span class="p">,</span> <span class="s1">&#39;StorageClass&#39;</span><span class="p">,</span> <span class="s1">&#39;ETag&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;IsMultipartUploaded&#39;</span><span class="p">,</span> <span class="s1">&#39;ReplicationStatus&#39;</span><span class="p">]}})</span>
+            <span class="s1">&#39;IsMultipartUploaded&#39;</span><span class="p">,</span> <span class="s1">&#39;ReplicationStatus&#39;</span><span class="p">,</span> <span class="s1">&#39;EncryptionStatus&#39;</span><span class="p">]}})</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutInventoryConfiguration&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:GetInventoryConfiguration&#39;</span><span class="p">)</span>
 
@@ -2325,6 +2420,7 @@
         <span class="n">fields</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;fields&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;LastModifiedDate&#39;</span><span class="p">,</span> <span class="s1">&#39;Size&#39;</span><span class="p">])</span>
         <span class="n">versions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;versions&#39;</span><span class="p">,</span> <span class="s1">&#39;Current&#39;</span><span class="p">)</span>
         <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="s1">&#39;enabled&#39;</span><span class="p">)</span>
+        <span class="n">encryption</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;encryption&#39;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span><span class="p">:</span>
             <span class="n">prefix</span> <span class="o">=</span> <span class="s2">&quot;Inventories/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">)</span>
@@ -2339,11 +2435,14 @@
                     <span class="k">raise</span>
             <span class="k">return</span>
 
+        <span class="n">bucket</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">destination</span><span class="p">,</span>
+            <span class="s1">&#39;Format&#39;</span><span class="p">:</span> <span class="s1">&#39;CSV&#39;</span>
+        <span class="p">}</span>
+
         <span class="n">inventory</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;Destination&#39;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s1">&#39;S3BucketDestination&#39;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s1">&#39;Bucket&#39;</span><span class="p">:</span> <span class="s2">&quot;arn:aws:s3:::</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">destination</span><span class="p">,</span>
-                    <span class="s1">&#39;Format&#39;</span><span class="p">:</span> <span class="s1">&#39;CSV&#39;</span><span class="p">}</span>
+                <span class="s1">&#39;S3BucketDestination&#39;</span><span class="p">:</span> <span class="n">bucket</span>
             <span class="p">},</span>
             <span class="s1">&#39;IsEnabled&#39;</span><span class="p">:</span> <span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;enabled&#39;</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span><span class="p">,</span>
             <span class="s1">&#39;Id&#39;</span><span class="p">:</span> <span class="n">inventory_name</span><span class="p">,</span>
@@ -2355,7 +2454,14 @@
         <span class="p">}</span>
 
         <span class="k">if</span> <span class="n">prefix</span><span class="p">:</span>
-            <span class="n">inventory</span><span class="p">[</span><span class="s1">&#39;Destination&#39;</span><span class="p">][</span><span class="s1">&#39;S3BucketDestination&#39;</span><span class="p">][</span><span class="s1">&#39;Prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prefix</span>
+            <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prefix</span>
+
+        <span class="k">if</span> <span class="n">encryption</span><span class="p">:</span>
+            <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Encryption&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">encryption</span><span class="p">:</span> <span class="p">{}}</span>
+            <span class="k">if</span> <span class="n">encryption</span> <span class="o">==</span> <span class="s1">&#39;SSEKMS&#39;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key_id&#39;</span><span class="p">):</span>
+                <span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Encryption&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">encryption</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;KeyId&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key_id&#39;</span><span class="p">]</span>
+                <span class="p">}}</span>
 
         <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_inventory_delta</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">inventory</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
@@ -2684,6 +2790,115 @@
 
         <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_lifecycle_configuration</span><span class="p">(</span>
             <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">LifecycleConfiguration</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Rules&#39;</span><span class="p">:</span> <span class="n">config</span><span class="p">})</span></div></div>
+
+
+<div class="viewcode-block" id="SetBucketEncryption"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-bucket-encryption&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetBucketEncryption</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action enables default encryption on S3 buckets</span>
+
+<span class="sd">    `enabled`: boolean Optional: Defaults to True</span>
+<span class="sd">    `crypto`: aws:kms | AES256` Optional: Defaults to AES256</span>
+<span class="sd">    `key`: arn, alias, or kms id key</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-enable-default-encryption-kms</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-bucket-encryption</span>
+<span class="sd">                  # enabled: true &lt;------ optional (true by default)</span>
+<span class="sd">                    crypto: aws:kms</span>
+<span class="sd">                    key: 1234abcd-12ab-34cd-56ef-1234567890ab</span>
+
+<span class="sd">              - name: s3-enable-default-encryption-kms-alias</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-bucket-encryption</span>
+<span class="sd">                  # enabled: true &lt;------ optional (true by default)</span>
+<span class="sd">                    crypto: aws:kms</span>
+<span class="sd">                    key: alias/some/alias/key</span>
+
+<span class="sd">              - name: s3-enable-default-encryption-aes256</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-bucket-encryption</span>
+<span class="sd">                  # crypto: AES256 &lt;----- optional (AES256 by default)</span>
+<span class="sd">                  # enabled: true &lt;------ optional (true by default)</span>
+
+<span class="sd">              - name: s3-disable-default-encryption</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-bucket-encryption</span>
+<span class="sd">                    enabled: false</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;set-bucket-encryption&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;enabled&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;aws:kms&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;dependencies&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;crypto&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;pattern&#39;</span><span class="p">:</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">}</span>
+                <span class="p">},</span>
+                <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;crypto&#39;</span><span class="p">]</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutEncryptionConfiguration&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:GetEncryptionConfiguration&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;kms:ListAliases&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SetBucketEncryption.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">regions</span> <span class="o">=</span> <span class="p">{</span><span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span> <span class="ow">and</span> <span class="n">key</span><span class="p">:</span>
+            <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_keys</span><span class="p">(</span><span class="n">regions</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Message: </span><span class="si">%s</span><span class="s1"> Bucket: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">(),</span>
+                                   <span class="n">futures</span><span class="p">[</span><span class="n">future</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="SetBucketEncryption.resolve_keys"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.resolve_keys">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regions</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="n">arns</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">arns</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Arn&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Error validating ARNs for set-bucket-encryption: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">arns</span></div>
+
+<div class="viewcode-block" id="SetBucketEncryption.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Rules&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;SSEAlgorithm&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)}}</span>
+        <span class="p">]}</span>
+        <span class="n">region</span> <span class="o">=</span> <span class="n">get_region</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">region</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;Rules&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">]</span>
+                <span class="p">[</span><span class="s1">&#39;KMSMasterKeyID&#39;</span><span class="p">])</span> <span class="o">=</span> <span class="n">keys</span><span class="p">[</span><span class="n">region</span><span class="p">]</span>
+        <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">bucket</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">s3</span><span class="o">.</span><span class="n">delete_bucket_encryption</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+            <span class="k">return</span>
+        <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_encryption</span><span class="p">(</span>
+            <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+            <span class="n">ServerSideEncryptionConfiguration</span><span class="o">=</span><span class="n">config</span>
+        <span class="p">)</span></div></div>
 </pre></div>
 
            </div>
