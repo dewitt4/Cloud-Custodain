@@ -203,8 +203,12 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="MLModel"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ml.MLModel">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ml-model&#39;</span><span class="p">)</span>
@@ -219,6 +223,40 @@
         <span class="c1"># need to specify request-mode dimension as well</span>
         <span class="c1"># dimension = &#39;MLModelId&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteMLModel"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ml.DeleteMLModel">[docs]</a><span class="nd">@MLModel</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteMLModel</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete machine learning model</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of models</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: ml-model-delete</span>
+<span class="sd">                resource: ml-model</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;machinelearning:DeleteMLModel&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteMLModel.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ml.DeleteMLModel.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">models</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_model</span><span class="p">,</span> <span class="n">models</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteMLModel.process_model"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ml.DeleteMLModel.process_model">[docs]</a>    <span class="k">def</span> <span class="nf">process_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;machinelearning&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_ml_model</span><span class="p">(</span><span class="n">MLModelId</span><span class="o">=</span><span class="n">model</span><span class="p">[</span><span class="s1">&#39;MLModelId&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting ML model:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>

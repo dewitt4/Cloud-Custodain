@@ -203,8 +203,12 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="CognitoIdentityPool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.CognitoIdentityPool">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;identity-pool&#39;</span><span class="p">)</span>
@@ -221,6 +225,40 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
 
 
+<div class="viewcode-block" id="DeleteIdentityPool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteIdentityPool">[docs]</a><span class="nd">@CognitoIdentityPool</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteIdentityPool</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete cognito identity pool</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of pools</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: identity-pool-delete</span>
+<span class="sd">                resource: identity-pool</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cognito-identity:DeleteIdentityPool&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteIdentityPool.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteIdentityPool.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pools</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_pool</span><span class="p">,</span> <span class="n">pools</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteIdentityPool.process_pool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteIdentityPool.process_pool">[docs]</a>    <span class="k">def</span> <span class="nf">process_pool</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pool</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cognito-identity&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_identity_pool</span><span class="p">(</span><span class="n">IdentityPoolId</span><span class="o">=</span><span class="n">pool</span><span class="p">[</span><span class="s1">&#39;IdentityPoolId&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting identity pool:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
 <div class="viewcode-block" id="CognitoUserPool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.CognitoUserPool">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;user-pool&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">CognitoUserPool</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
@@ -233,6 +271,40 @@
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;Name&#39;</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteUserPool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteUserPool">[docs]</a><span class="nd">@CognitoUserPool</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteUserPool</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete cognito user pool</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of pools</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: user-pool-delete</span>
+<span class="sd">                resource: user-pool</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cognito-idp:DeleteUserPool&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteUserPool.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteUserPool.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pools</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_pool</span><span class="p">,</span> <span class="n">pools</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteUserPool.process_pool"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cognito.DeleteUserPool.process_pool">[docs]</a>    <span class="k">def</span> <span class="nf">process_pool</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pool</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cognito-idp&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_user_pool</span><span class="p">(</span><span class="n">UserPoolId</span><span class="o">=</span><span class="n">pool</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting user pool:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>

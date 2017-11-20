@@ -203,8 +203,35 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
+
+
+<div class="viewcode-block" id="StateTransitionFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.StateTransitionFilter">[docs]</a><span class="k">class</span> <span class="nc">StateTransitionFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter instances by state.</span>
+
+<span class="sd">    Try to simplify construction for policy authors by automatically</span>
+<span class="sd">    filtering elements (filters or actions) to the instances states</span>
+<span class="sd">    they are valid for. Separate from ec2 class as uses [&#39;status&#39;]</span>
+<span class="sd">    instead of [&#39;State&#39;][&#39;Name&#39;].</span>
+
+<span class="sd">    For more details see http://goo.gl/TZH9Q5</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">()</span>
+
+<div class="viewcode-block" id="StateTransitionFilter.filter_instance_state"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.StateTransitionFilter.filter_instance_state">[docs]</a>    <span class="k">def</span> <span class="nf">filter_instance_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">,</span> <span class="n">states</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">states</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_states</span>
+        <span class="n">orig_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span>
+                   <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">states</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> instances&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">orig_length</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 
 
 <div class="viewcode-block" id="OpsworkStack"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.OpsworkStack">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;opswork-stack&#39;</span><span class="p">)</span>
@@ -221,6 +248,104 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="s2">&quot;StackId&quot;</span></div></div>
 
 
+<div class="viewcode-block" id="DeleteStack"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.DeleteStack">[docs]</a><span class="nd">@OpsworkStack</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteStack</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete Opswork Stack</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of stacks</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: opswork-delete</span>
+<span class="sd">                resource: opswork-stack</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;terminating&#39;</span><span class="p">,</span> <span class="s1">&#39;stopping&#39;</span><span class="p">,</span> <span class="s1">&#39;shutting_down&#39;</span><span class="p">,</span> <span class="s1">&#39;terminated&#39;</span><span class="p">,</span> <span class="s1">&#39;stopped&#39;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;opsworks:DescribeApps&quot;</span><span class="p">,</span> <span class="s2">&quot;opsworks:DescribeLayers&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;opsworks:DescribeInstances&quot;</span><span class="p">,</span> <span class="s2">&quot;opsworks:DeleteStack&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;opsworks:DeleteApp&quot;</span><span class="p">,</span> <span class="s2">&quot;opsworks:DeleteLayer&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;opsworks:DeleteInstance&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DeleteStack.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.DeleteStack.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stacks</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_stack</span><span class="p">,</span> <span class="n">stacks</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteStack.process_stack"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.DeleteStack.process_stack">[docs]</a>    <span class="k">def</span> <span class="nf">process_stack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stack</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;opsworks&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">stack_id</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[</span><span class="s1">&#39;StackId&#39;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">app</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_apps</span><span class="p">(</span><span class="n">StackId</span><span class="o">=</span><span class="n">stack_id</span><span class="p">)[</span><span class="s1">&#39;Apps&#39;</span><span class="p">]:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_app</span><span class="p">(</span><span class="n">AppId</span><span class="o">=</span><span class="n">app</span><span class="p">[</span><span class="s1">&#39;AppId&#39;</span><span class="p">])</span>
+            <span class="n">instances</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_instances</span><span class="p">(</span><span class="n">StackId</span><span class="o">=</span><span class="n">stack_id</span><span class="p">)[</span><span class="s1">&#39;Instances&#39;</span><span class="p">]</span>
+            <span class="n">orig_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+            <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
+            <span class="k">if</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span> <span class="o">!=</span> <span class="n">orig_length</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s2">&quot;All instances must be stopped before deletion. Stack Id: </span><span class="si">%s</span><span class="s2"> Name: </span><span class="si">%s</span><span class="s2">.&quot;</span> <span class="o">%</span>
+                    <span class="p">(</span><span class="n">stack_id</span><span class="p">,</span> <span class="n">stack</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]))</span>
+                <span class="k">return</span>
+            <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+                <span class="n">instance_id</span> <span class="o">=</span> <span class="n">instance</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>
+                <span class="c1"># Validation Exception raised for instances that are stopping when delete is called</span>
+                <span class="n">retryable</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ValidationException&#39;</span><span class="p">),</span>
+                <span class="n">retry</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_retry</span><span class="p">(</span><span class="n">retryable</span><span class="p">,</span> <span class="n">max_attempts</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">delete_instance</span><span class="p">,</span> <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e2</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">e2</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">retryable</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="kc">True</span>
+                    <span class="k">raise</span>
+            <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_layers</span><span class="p">(</span><span class="n">StackId</span><span class="o">=</span><span class="n">stack_id</span><span class="p">)[</span><span class="s1">&#39;Layers&#39;</span><span class="p">]:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_layer</span><span class="p">(</span><span class="n">LayerId</span><span class="o">=</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;LayerId&#39;</span><span class="p">])</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_stack</span><span class="p">(</span><span class="n">StackId</span><span class="o">=</span><span class="n">stack_id</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting stack:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="StopStack"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.StopStack">[docs]</a><span class="nd">@OpsworkStack</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">StopStack</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to stop Opswork Stack (Stops all instances under stack)</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted stopping of stacks</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: opswork-stop</span>
+<span class="sd">                resource: opswork-stack</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - stop</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;opsworks:StopStack&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="StopStack.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.StopStack.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stacks</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_stack</span><span class="p">,</span> <span class="n">stacks</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="StopStack.process_stack"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.StopStack.process_stack">[docs]</a>    <span class="k">def</span> <span class="nf">process_stack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stack</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;opsworks&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">stack_id</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[</span><span class="s1">&#39;StackId&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">stop_stack</span><span class="p">(</span><span class="n">StackId</span><span class="o">=</span><span class="n">stack_id</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception stopping stack:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
 <div class="viewcode-block" id="OpsworksCM"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.OpsworksCM">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;opswork-cm&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">OpsworksCM</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
@@ -232,6 +357,40 @@
         <span class="n">name</span> <span class="o">=</span> <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;ServerName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreatedAt&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="CMDelete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.CMDelete">[docs]</a><span class="nd">@OpsworksCM</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">CMDelete</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete Opswork for Chef Automate server</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of servers</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: opsworks-cm-delete</span>
+<span class="sd">                resource: opswork-cm</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;opsworks-cm:DeleteServer&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="CMDelete.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.CMDelete.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">servers</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_server</span><span class="p">,</span> <span class="n">servers</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="CMDelete.process_server"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.opsworks.CMDelete.process_server">[docs]</a>    <span class="k">def</span> <span class="nf">process_server</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">server</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;opsworkscm&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_server</span><span class="p">(</span><span class="n">ServerName</span><span class="o">=</span><span class="n">server</span><span class="p">[</span><span class="s1">&#39;ServerName&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting server:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>

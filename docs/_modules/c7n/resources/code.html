@@ -203,9 +203,12 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">get_retry</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="CodeRepository"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.CodeRepository">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;codecommit&#39;</span><span class="p">)</span>
@@ -226,6 +229,40 @@
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div></div>
 
 
+<div class="viewcode-block" id="DeleteRepository"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteRepository">[docs]</a><span class="nd">@CodeRepository</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteRepository</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete code commit</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of repos</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: codecommit-delete</span>
+<span class="sd">                resource: codecommit</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;codecommit:DeleteRepository&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteRepository.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteRepository.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">repositories</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_repository</span><span class="p">,</span> <span class="n">repositories</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteRepository.process_repository"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteRepository.process_repository">[docs]</a>    <span class="k">def</span> <span class="nf">process_repository</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">repository</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;codecommit&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_repository</span><span class="p">(</span><span class="n">repositoryName</span><span class="o">=</span><span class="n">repository</span><span class="p">[</span><span class="s1">&#39;repositoryName&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting repo:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
 <div class="viewcode-block" id="CodeBuildProject"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.CodeBuildProject">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;codebuild&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">CodeBuildProject</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
@@ -238,6 +275,40 @@
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;created&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteProject"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteProject">[docs]</a><span class="nd">@CodeBuildProject</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteProject</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to delete code build</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of builds</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: codebuild-delete</span>
+<span class="sd">                resource: codebuild</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;codebuild:DeleteProject&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteProject.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteProject.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">projects</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_project</span><span class="p">,</span> <span class="n">projects</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DeleteProject.process_project"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.DeleteProject.process_project">[docs]</a>    <span class="k">def</span> <span class="nf">process_project</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">project</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;codebuild&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_project</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">project</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Exception deleting project:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="CodeDeployPipeline"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.code.CodeDeployPipeline">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;codepipeline&#39;</span><span class="p">)</span>
