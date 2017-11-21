@@ -231,6 +231,170 @@
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
+<span class="k">def</span> <span class="nf">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">):</span>
+    <span class="c1"># we could try except but some minor runtime cost, basically flag</span>
+    <span class="c1"># invalids values</span>
+    <span class="k">if</span> <span class="s1">&#39;:&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arn</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">arn</span>
+    <span class="k">return</span> <span class="n">arn</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="PolicyChecker"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker">[docs]</a><span class="k">class</span> <span class="nc">PolicyChecker</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    checker_config:</span>
+<span class="sd">      - check_actions: only check one of the specified actions</span>
+<span class="sd">      - everyone_only: only check for wildcard permission grants</span>
+<span class="sd">      - allowed_accounts: permission grants to these accounts are okay</span>
+<span class="sd">      - whitelist_conditions: a list of conditions that are considered</span>
+<span class="sd">            sufficient enough to whitelist the statement.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">checker_config</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checker_config</span> <span class="o">=</span> <span class="n">checker_config</span>
+
+    <span class="c1"># Config properties</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">allowed_accounts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;allowed_accounts&#39;</span><span class="p">,</span> <span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">everyone_only</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;everyone_only&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">check_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;check_actions&#39;</span><span class="p">,</span> <span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">whitelist_conditions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;whitelist_conditions&#39;</span><span class="p">,</span> <span class="p">())</span>
+
+    <span class="c1"># Policy statement handling</span>
+<div class="viewcode-block" id="PolicyChecker.check"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.check">[docs]</a>    <span class="k">def</span> <span class="nf">check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_text</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">policy_text</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+            <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">policy_text</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">policy</span> <span class="o">=</span> <span class="n">policy_text</span>
+
+        <span class="n">violations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">policy</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle_statement</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">violations</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_statement"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_statement">[docs]</a>    <span class="k">def</span> <span class="nf">handle_statement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nb">all</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">handle_principal</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">handle_effect</span><span class="p">(</span><span class="n">s</span><span class="p">),</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">handle_action</span><span class="p">(</span><span class="n">s</span><span class="p">)))</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle_condition</span><span class="p">(</span><span class="n">s</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">s</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_action"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_action">[docs]</a>    <span class="k">def</span> <span class="nf">handle_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_actions</span><span class="p">:</span>
+            <span class="n">actions</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Action&#39;</span><span class="p">)</span>
+            <span class="n">actions</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">actions</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">actions</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">actions</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">check_actions</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_effect"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_effect">[docs]</a>    <span class="k">def</span> <span class="nf">handle_effect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Effect&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Allow&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_principal"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_principal">[docs]</a>    <span class="k">def</span> <span class="nf">handle_principal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;NotPrincipal&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="s1">&#39;Principal&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="c1"># Skip service principals</span>
+        <span class="k">if</span> <span class="s1">&#39;Service&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]:</span>
+            <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;Service&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">],</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">][</span><span class="s1">&#39;AWS&#39;</span><span class="p">]</span>
+
+        <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">p</span>
+        <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">p</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pid</span> <span class="o">==</span> <span class="s1">&#39;*&#39;</span><span class="p">:</span>
+                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">everyone_only</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">elif</span> <span class="n">pid</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:aws:iam::cloudfront:user&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">account_id</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">account_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_accounts</span><span class="p">:</span>
+                    <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="n">principal_ok</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_condition"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_condition">[docs]</a>    <span class="k">def</span> <span class="nf">handle_condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalize_condition</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">op</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">whitelist_conditions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">handler_name</span> <span class="o">=</span> <span class="s2">&quot;handle_</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">key</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+        <span class="n">handler</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handler_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">handler</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;no handler:</span><span class="si">%s</span><span class="s2"> op:</span><span class="si">%s</span><span class="s2"> key:</span><span class="si">%s</span><span class="s2"> value:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">handler_name</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+            <span class="k">return</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="n">handler</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.normalize_condition"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.normalize_condition">[docs]</a>    <span class="k">def</span> <span class="nf">normalize_condition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;Condition&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+        <span class="n">conditions</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;StringEquals&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;StringEqualsIgnoreCase&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;StringLike&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;ArnEquals&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;ArnLike&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;IpAddress&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;NotIpAddress&#39;</span><span class="p">)</span>
+        <span class="n">set_conditions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ForAllValues&#39;</span><span class="p">,</span> <span class="s1">&#39;ForAnyValues&#39;</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Condition&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Multiple conditions present in iam statement&quot;</span>
+        <span class="n">s_cond_op</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">s_cond_op</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">set_conditions</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">s_cond_op</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">s_cond_op</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="n">s_cond_op</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Multiple keys on condition&quot;</span>
+        <span class="n">s_cond_key</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="n">s_cond_op</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">s_cond_value</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="n">s_cond_op</span><span class="p">][</span><span class="n">s_cond_key</span><span class="p">]</span>
+        <span class="n">s_cond_value</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">s_cond_value</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">s_cond_value</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">s_cond_value</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">s_cond_op</span><span class="p">,</span> <span class="n">s_cond_key</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">s_cond_value</span></div>
+
+    <span class="c1"># Condition handlers</span>
+
+    <span class="c1"># kms specific</span>
+<div class="viewcode-block" id="PolicyChecker.handle_kms_calleraccount"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_kms_calleraccount">[docs]</a>    <span class="k">def</span> <span class="nf">handle_kms_calleraccount</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">_account</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allowed_accounts</span><span class="p">))</span></div>
+
+    <span class="c1"># sns default policy</span>
+<div class="viewcode-block" id="PolicyChecker.handle_aws_sourceowner"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_aws_sourceowner">[docs]</a>    <span class="k">def</span> <span class="nf">handle_aws_sourceowner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">_account</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allowed_accounts</span><span class="p">))</span></div>
+
+    <span class="c1"># s3 logging</span>
+<div class="viewcode-block" id="PolicyChecker.handle_aws_sourcearn"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_aws_sourcearn">[docs]</a>    <span class="k">def</span> <span class="nf">handle_aws_sourcearn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">_account</span><span class="p">,</span> <span class="n">values</span><span class="p">))</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allowed_accounts</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="PolicyChecker.handle_aws_sourceip"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.PolicyChecker.handle_aws_sourceip">[docs]</a>    <span class="k">def</span> <span class="nf">handle_aws_sourceip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span></div></div>
+
+
 <div class="viewcode-block" id="CrossAccountAccessFilter"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.CrossAccountAccessFilter">[docs]</a><span class="k">class</span> <span class="nc">CrossAccountAccessFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Check a resource&#39;s embedded iam policy for cross account access.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -250,6 +414,8 @@
     <span class="n">policy_attribute</span> <span class="o">=</span> <span class="s1">&#39;Policy&#39;</span>
     <span class="n">annotation_key</span> <span class="o">=</span> <span class="s1">&#39;CrossAccountViolations&#39;</span>
 
+    <span class="n">checker_factory</span> <span class="o">=</span> <span class="n">PolicyChecker</span>
+
 <div class="viewcode-block" id="CrossAccountAccessFilter.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.CrossAccountAccessFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">everyone_only</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;everyone_only&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conditions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
@@ -257,6 +423,11 @@
             <span class="p">(</span><span class="s2">&quot;aws:sourcevpce&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:sourcevpc&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:userid&quot;</span><span class="p">,</span> <span class="s2">&quot;aws:username&quot;</span><span class="p">)))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">actions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;actions&#39;</span><span class="p">,</span> <span class="p">())</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">accounts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_accounts</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker_factory</span><span class="p">(</span>
+            <span class="p">{</span><span class="s1">&#39;allowed_accounts&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">accounts</span><span class="p">,</span>
+             <span class="s1">&#39;check_actions&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions</span><span class="p">,</span>
+             <span class="s1">&#39;everyone_only&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">everyone_only</span><span class="p">,</span>
+             <span class="s1">&#39;whitelist_conditions&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">conditions</span><span class="p">})</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="CrossAccountAccessFilter.get_accounts"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.CrossAccountAccessFilter.get_accounts">[docs]</a>    <span class="k">def</span> <span class="nf">get_accounts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -275,170 +446,10 @@
         <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_policy</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">p</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">violations</span> <span class="o">=</span> <span class="n">check_cross_account</span><span class="p">(</span>
-            <span class="n">p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">accounts</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">everyone_only</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">conditions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">actions</span><span class="p">)</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">checker</span><span class="o">.</span><span class="n">check</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">violations</span><span class="p">:</span>
             <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">violations</span>
             <span class="k">return</span> <span class="kc">True</span></div>
-
-
-<span class="k">def</span> <span class="nf">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">):</span>
-    <span class="c1"># we could try except but some minor runtime cost, basically flag</span>
-    <span class="c1"># invalids values</span>
-    <span class="k">if</span> <span class="s1">&#39;:&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arn</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">arn</span>
-    <span class="k">return</span> <span class="n">arn</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
-
-
-<div class="viewcode-block" id="check_cross_account"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.iamaccess.check_cross_account">[docs]</a><span class="k">def</span> <span class="nf">check_cross_account</span><span class="p">(</span><span class="n">policy_text</span><span class="p">,</span> <span class="n">allowed_accounts</span><span class="p">,</span> <span class="n">everyone_only</span><span class="p">,</span>
-                        <span class="n">conditions</span><span class="p">,</span> <span class="n">check_actions</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Find cross account access policy grant not explicitly allowed</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">policy_text</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
-        <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">policy_text</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">policy</span> <span class="o">=</span> <span class="n">policy_text</span>
-
-    <span class="n">violations</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]:</span>
-
-        <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Effect&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;Allow&#39;</span><span class="p">:</span>
-            <span class="k">continue</span>
-
-        <span class="k">if</span> <span class="n">check_actions</span><span class="p">:</span>
-            <span class="n">actions</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Action&#39;</span><span class="p">)</span>
-            <span class="n">actions</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">actions</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">actions</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">actions</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">actions</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">check_actions</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
-                    <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="k">break</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
-                <span class="k">continue</span>
-
-        <span class="c1"># Highly suspect in an allow</span>
-        <span class="k">if</span> <span class="s1">&#39;NotPrincipal&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-            <span class="k">continue</span>
-        <span class="c1"># Does this wildcard</span>
-        <span class="k">if</span> <span class="s1">&#39;Principal&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-            <span class="k">continue</span>
-
-        <span class="c1"># Skip relays for events to sns</span>
-        <span class="k">if</span> <span class="s1">&#39;Service&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]:</span>
-            <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;Service&#39;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]:</span>
-                <span class="k">continue</span>
-
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Too many principals </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">s</span>
-
-        <span class="c1"># At this point principal is required?</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">],</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
-            <span class="n">p</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">p</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">][</span><span class="s1">&#39;AWS&#39;</span><span class="p">]</span>
-
-        <span class="n">p</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">p</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">p</span>
-        <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">p</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">pid</span> <span class="o">==</span> <span class="s1">&#39;*&#39;</span><span class="p">:</span>
-                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="k">elif</span> <span class="n">everyone_only</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="k">elif</span> <span class="n">pid</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:aws:iam::cloudfront:user&#39;</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">account_id</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">account_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
-                    <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">False</span>
-
-        <span class="k">if</span> <span class="n">principal_ok</span><span class="p">:</span>
-            <span class="k">continue</span>
-
-        <span class="k">if</span> <span class="s1">&#39;Condition&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-            <span class="k">continue</span>
-
-        <span class="n">whitelist_conditions</span> <span class="o">=</span> <span class="n">conditions</span>
-
-        <span class="k">if</span> <span class="s1">&#39;StringEquals&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="c1"># Default SNS Policy does this</span>
-            <span class="k">if</span> <span class="s1">&#39;AWS:SourceOwner&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">]:</span>
-                <span class="n">so</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">][</span><span class="s1">&#39;AWS:SourceOwner&#39;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">so</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-                    <span class="n">so</span> <span class="o">=</span> <span class="p">[</span><span class="n">so</span><span class="p">]</span>
-                <span class="n">so</span> <span class="o">=</span> <span class="p">[</span><span class="n">pso</span> <span class="k">for</span> <span class="n">pso</span> <span class="ow">in</span> <span class="n">so</span> <span class="k">if</span> <span class="n">pso</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">]</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">so</span><span class="p">:</span>
-                    <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-            <span class="c1"># Default keys in kms do this</span>
-            <span class="k">if</span> <span class="s1">&#39;kms:CallerAccount&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">]:</span>
-                <span class="n">so</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">][</span><span class="s1">&#39;kms:CallerAccount&#39;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="n">so</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
-                    <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="c1"># BEGIN S3 WhiteList</span>
-        <span class="c1"># Note these are transient white lists for s3</span>
-        <span class="c1"># we need to refactor this to verify ip against a</span>
-        <span class="c1"># cidr white list, and verify vpce/vpc against the</span>
-        <span class="c1"># accounts.</span>
-
-            <span class="c1"># For now allow vpce/vpc conditions as sufficient on s3</span>
-            <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;StringEquals&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">whitelist_conditions</span><span class="p">:</span>
-                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="k">if</span> <span class="s1">&#39;StringLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="c1"># For now allow vpce/vpc conditions as sufficient on s3</span>
-            <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span>
-                    <span class="s1">&#39;StringLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">whitelist_conditions</span><span class="p">:</span>
-                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="k">if</span> <span class="s1">&#39;ForAnyValue:StringLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="nb">list</span><span class="p">(</span>
-                <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span>
-                    <span class="s1">&#39;ForAnyValue:StringLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">whitelist_conditions</span><span class="p">:</span>
-                <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="k">if</span> <span class="s1">&#39;IpAddress&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-        <span class="c1"># END S3 WhiteList</span>
-
-        <span class="k">if</span> <span class="s1">&#39;ArnEquals&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="c1"># Other valid arn equals? / are invalids allowed?</span>
-            <span class="c1"># duplicate block from below, inline closure func</span>
-            <span class="c1"># would remove, but slower, else move to class eval</span>
-            <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-
-            <span class="n">keys</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;aws:SourceArn&#39;</span><span class="p">,</span> <span class="s1">&#39;AWS:SourceArn&#39;</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnEquals&#39;</span><span class="p">]:</span>
-                    <span class="n">v</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnEquals&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">v</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">v</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">v</span>
-                <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
-                    <span class="n">aid</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">aid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
-                        <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-        <span class="k">if</span> <span class="s1">&#39;ArnLike&#39;</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">]:</span>
-            <span class="c1"># Other valid arn equals? / are invalids allowed?</span>
-            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;aws:SourceArn&#39;</span><span class="p">,</span> <span class="s1">&#39;AWS:SourceArn&#39;</span><span class="p">):</span>
-                <span class="n">v</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Condition&#39;</span><span class="p">][</span><span class="s1">&#39;ArnLike&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">v</span><span class="p">:</span>
-                    <span class="k">break</span>
-            <span class="n">v</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">v</span><span class="p">,)</span> <span class="ow">or</span> <span class="n">v</span>
-            <span class="n">principal_ok</span> <span class="o">=</span> <span class="kc">True</span>
-            <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="n">v</span><span class="p">:</span>
-                <span class="n">aid</span> <span class="o">=</span> <span class="n">_account</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">aid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_accounts</span><span class="p">:</span>
-                    <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">principal_ok</span><span class="p">:</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">violations</span></div>
 </pre></div>
 
            </div>
