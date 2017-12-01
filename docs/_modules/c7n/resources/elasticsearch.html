@@ -209,12 +209,15 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">Action</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.es&#39;</span><span class="p">)</span>
+<span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;es.filters&#39;</span><span class="p">)</span>
+<span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="ElasticSearchDomain"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchDomain">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;elasticsearch&#39;</span><span class="p">)</span>
@@ -230,6 +233,7 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="s2">&quot;DomainName&quot;</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div>
 
+    <span class="n">filter_registry</span> <span class="o">=</span> <span class="n">filters</span>
     <span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">_account_id</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttled&#39;</span><span class="p">,)))</span>
 
@@ -289,6 +293,108 @@
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;es&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">client</span><span class="o">.</span><span class="n">delete_elasticsearch_domain</span><span class="p">(</span><span class="n">DomainName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">])</span></div></div>
+
+
+<div class="viewcode-block" id="ElasticSearchAddTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchAddTag">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ElasticSearchAddTag</span><span class="p">(</span><span class="n">Tag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to create tag(s) on an existing elasticsearch domain</span>
+
+<span class="sd">        :example:</span>
+
+<span class="sd">            .. code-block: yaml</span>
+
+<span class="sd">                policies:</span>
+<span class="sd">                  - name: es-add-tag</span>
+<span class="sd">                    resource: elasticsearch</span>
+<span class="sd">                    filters:</span>
+<span class="sd">                      - &quot;tag:DesiredTag&quot;: absent</span>
+<span class="sd">                    actions:</span>
+<span class="sd">                      - type: tag</span>
+<span class="sd">                        key: DesiredTag</span>
+<span class="sd">                        value: DesiredValue</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;es:AddTags&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ElasticSearchAddTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchAddTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domains</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;es&#39;</span><span class="p">)</span>
+        <span class="n">tag_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="n">tag_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]})</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domains</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">add_tags</span><span class="p">(</span><span class="n">ARN</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">TagList</span><span class="o">=</span><span class="n">tag_list</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception tagging es domain </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+                <span class="k">continue</span></div></div>
+
+
+<div class="viewcode-block" id="ElasticSearchRemoveTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchRemoveTag">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ElasticSearchRemoveTag</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Removes tag(s) on an existing elasticsearch domain</span>
+
+<span class="sd">            :example:</span>
+
+<span class="sd">                .. code-block: yaml</span>
+
+<span class="sd">                    policies:</span>
+<span class="sd">                      - name: es-remove-tag</span>
+<span class="sd">                        resource: elasticsearch</span>
+<span class="sd">                        filters:</span>
+<span class="sd">                          - &quot;tag:ExpiredTag&quot;: present</span>
+<span class="sd">                        actions:</span>
+<span class="sd">                          - type: remove-tag</span>
+<span class="sd">                            tags: [&#39;ExpiredTag&#39;]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;es:RemoveTags&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ElasticSearchRemoveTag.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchRemoveTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domains</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;es&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domains</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="n">ARN</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception while removing tags from queue </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+                <span class="k">continue</span></div></div>
+
+
+<div class="viewcode-block" id="ElasticSearchMarkForOp"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchMarkForOp">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ElasticSearchMarkForOp</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tag an elasticsearch domain for action later</span>
+
+<span class="sd">        :example:</span>
+
+<span class="sd">            .. code-block: yaml</span>
+
+<span class="sd">                policies:</span>
+<span class="sd">                  - name: es-delete-missing</span>
+<span class="sd">                    resource: elasticsearch</span>
+<span class="sd">                    filters:</span>
+<span class="sd">                      - &quot;tag:DesiredTag&quot;: absent</span>
+<span class="sd">                    actions:</span>
+<span class="sd">                      - type: mark-for-op</span>
+<span class="sd">                        days: 7</span>
+<span class="sd">                        op: delete</span>
+<span class="sd">                        tag: c7n_es_delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;es:AddTags&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ElasticSearchMarkForOp.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchMarkForOp.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domains</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;es&#39;</span><span class="p">)</span>
+        <span class="n">tag_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="n">tag_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]})</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domains</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">add_tags</span><span class="p">(</span><span class="n">ARN</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;ARN&#39;</span><span class="p">],</span> <span class="n">TagList</span><span class="o">=</span><span class="n">tag_list</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception tagging es domain </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+                <span class="k">continue</span></div></div>
 </pre></div>
 
            </div>
