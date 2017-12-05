@@ -204,6 +204,9 @@
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 
 
 <div class="viewcode-block" id="ElasticBeanstalk"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticbeanstalk.ElasticBeanstalk">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;elasticbeanstalk&#39;</span><span class="p">)</span>
@@ -241,6 +244,44 @@
         <span class="p">)</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;EnvironmentNames&#39;</span>
         <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;list&#39;</span></div></div>
+
+
+<div class="viewcode-block" id="Terminate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticbeanstalk.Terminate">[docs]</a><span class="nd">@ElasticBeanstalkEnvironment</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;terminate&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Terminate</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Terminate an ElasticBeanstalk Environment.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: eb-env-termination</span>
+<span class="sd">            resource: elasticbeanstalk-environment</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: marked-for-op</span>
+<span class="sd">                op: terminate</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - terminate</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;terminate&#39;</span><span class="p">,</span>
+        <span class="n">force</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="n">terminate_resources</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+    <span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticbeanstalk:TerminateEnvironment&quot;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="Terminate.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticbeanstalk.Terminate.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">envs</span><span class="p">):</span>
+        <span class="n">force_terminate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">terminate_resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;terminate_resources&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticbeanstalk&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">envs</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">terminate_environment</span><span class="p">(</span>
+                <span class="n">EnvironmentName</span><span class="o">=</span><span class="n">e</span><span class="p">[</span><span class="s2">&quot;EnvironmentName&quot;</span><span class="p">],</span>
+                <span class="n">TerminateResources</span><span class="o">=</span><span class="n">terminate_resources</span><span class="p">,</span>
+                <span class="n">ForceTerminate</span><span class="o">=</span><span class="n">force_terminate</span>
+            <span class="p">)</span></div></div>
 </pre></div>
 
            </div>
