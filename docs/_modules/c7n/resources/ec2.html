@@ -492,6 +492,56 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">operator</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">,</span> <span class="n">volumes</span><span class="p">))</span></div>
 
 
+<div class="viewcode-block" id="DisableApiTermination"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;termination-protected&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DisableApiTermination</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;EC2 instances with ``disableApiTermination`` attribute set</span>
+
+<span class="sd">    Filters EC2 instances with ``disableApiTermination`` attribute set to true.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: termination-protection-enabled</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: termination-protected</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: termination-protection-NOT-enabled</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - not:</span>
+<span class="sd">                - type: termination-protected</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;termination-protected&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeInstanceAttribute&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DisableApiTermination.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">permissions</span><span class="p">)</span>
+        <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
+<div class="viewcode-block" id="DisableApiTermination.is_termination_protection_enabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination.is_termination_protection_enabled">[docs]</a>    <span class="k">def</span> <span class="nf">is_termination_protection_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inst</span><span class="p">):</span>
+        <span class="n">res_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">attr_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">describe_instance_attribute</span><span class="p">,</span>
+            <span class="n">Attribute</span><span class="o">=</span><span class="s1">&#39;disableApiTermination&#39;</span><span class="p">,</span>
+            <span class="n">InstanceId</span><span class="o">=</span><span class="n">inst</span><span class="p">[</span><span class="n">res_id</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">attr_val</span><span class="p">[</span><span class="s1">&#39;DisableApiTermination&#39;</span><span class="p">][</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_termination_protection_enabled</span><span class="p">(</span><span class="n">i</span><span class="p">)</span></div>
+
+
 <div class="viewcode-block" id="InstanceImageBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceImageBase">[docs]</a><span class="k">class</span> <span class="nc">InstanceImageBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
 <div class="viewcode-block" id="InstanceImageBase.prefetch_instance_images"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceImageBase.prefetch_instance_images">[docs]</a>    <span class="k">def</span> <span class="nf">prefetch_instance_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
