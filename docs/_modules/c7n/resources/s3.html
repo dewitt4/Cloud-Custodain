@@ -2311,14 +2311,19 @@
         <span class="s1">&#39;cloudtrail:DescribeTrails&#39;</span><span class="p">,</span>
         <span class="s1">&#39;cloudtrail:GetEventSelectors&#39;</span><span class="p">)</span>
 
-<div class="viewcode-block" id="DataEvents.get_event_buckets"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents.get_event_buckets">[docs]</a>    <span class="k">def</span> <span class="nf">get_event_buckets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">trails</span><span class="p">):</span>
+<div class="viewcode-block" id="DataEvents.get_event_buckets"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents.get_event_buckets">[docs]</a>    <span class="k">def</span> <span class="nf">get_event_buckets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">trails</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return a mapping of bucket name to cloudtrail.</span>
 
 <span class="sd">        For wildcard trails the bucket name is &#39;&#39;.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">regions</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;HomeRegion&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span><span class="p">}</span>
+        <span class="n">clients</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">region</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+            <span class="n">clients</span><span class="p">[</span><span class="n">region</span><span class="p">]</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">region</span><span class="p">)</span>
+
         <span class="n">event_buckets</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">trails</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">events</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">get_event_selectors</span><span class="p">(</span>
+            <span class="k">for</span> <span class="n">events</span> <span class="ow">in</span> <span class="n">clients</span><span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;HomeRegion&#39;</span><span class="p">)]</span><span class="o">.</span><span class="n">get_event_selectors</span><span class="p">(</span>
                     <span class="n">TrailName</span><span class="o">=</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EventSelectors&#39;</span><span class="p">,</span> <span class="p">()):</span>
                 <span class="k">if</span> <span class="s1">&#39;DataResources&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
                     <span class="k">continue</span>
@@ -2331,9 +2336,8 @@
 
 <div class="viewcode-block" id="DataEvents.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.DataEvents.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">trails</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudtrail&#39;</span><span class="p">)</span>
-        <span class="n">event_buckets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_event_buckets</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">trails</span><span class="p">)</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">event_buckets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_event_buckets</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">trails</span><span class="p">)</span>
         <span class="n">ops</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;present&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="p">(</span>
                 <span class="n">x</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">event_buckets</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span> <span class="ow">in</span> <span class="n">event_buckets</span><span class="p">),</span>
