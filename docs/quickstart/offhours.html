@@ -110,6 +110,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#policy-examples">Policy examples</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#resume-during-offhours">Resume During Offhours</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#elasticbeanstalk-efs-and-other-services-with-tag-value-restrictions">ElasticBeanstalk, EFS and Other Services with Tag Value Restrictions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#public-holidays">Public Holidays</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="tagCompliance.html">Example tag compliance policy</a></li>
@@ -216,6 +217,7 @@ support.</li>
 <li>Can be combined with other filters to get a particular set (
 resources with tag, vpc, etc).</li>
 <li>Can be combined with arbitrary actions</li>
+<li>Can omit a set of dates such as public holidays.</li>
 </ul>
 </div>
 <div class="section" id="policy-configuration">
@@ -239,6 +241,10 @@ operates on an opt-out basis, and resources without the tag are acted on by
 the policy.</li>
 <li><strong>onhour</strong>: the default time to start/run resources, specified as 0-23</li>
 <li><strong>offhour</strong>: the default time to stop/suspend resources, specified as 0-23</li>
+<li><strong>skip-days</strong>: a list of dates to skip. Dates must use format YYYY-MM-DD</li>
+<li><strong>skip-days-from</strong>: a list of dates to skip stored at a url. <strong>expr</strong>,
+<strong>format</strong>, and <strong>url</strong> must be passed as parameters. Same syntax as
+<code class="docutils literal"><span class="pre">value_from</span></code>. Can not specify both <strong>skip-days-from</strong> and <strong>skip-days</strong>.</li>
 </ul>
 </div></blockquote>
 <p>This example policy overrides most of the defaults for an offhour policy:</p>
@@ -389,6 +395,30 @@ above. The best current workaround is to define a separate policy with a unique
 <code class="docutils literal"><span class="pre">tag</span></code> name for each unique schedule that you want to use, and then tag
 resources with that tag name and a value of <code class="docutils literal"><span class="pre">on</span></code>. Note that this can only be
 used in opt-in mode, not opt-out.</p>
+</div>
+<div class="section" id="public-holidays">
+<h2>Public Holidays<a class="headerlink" href="#public-holidays" title="Permalink to this headline">¶</a></h2>
+<p>In order to properly implement support for public holidays, make sure to include
+either <strong>skip-days</strong> or <strong>skip-days-from</strong> with your policy. This list
+should contain all of the public holidays you wish to address and must use
+YYYY-MM-DD syntax for its dates. If the date the policy is being run on matches
+any one of those dates, the policy will not return any resources. These dates
+include year as many holidays vary from year to year so year is required to prevent
+errors. A sample policy that would not start stopped instances on a public holiday
+might look like:</p>
+<div class="highlight-yaml"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">onhour-morning-start-skip-holidays</span>
+      <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+      <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">onhour</span>
+          <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">custodian_downtime</span>
+          <span class="l l-Scalar l-Scalar-Plain">default_tz</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">et</span>
+          <span class="l l-Scalar l-Scalar-Plain">onhour</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">6</span>
+          <span class="l l-Scalar l-Scalar-Plain">skip-days</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">[</span><span class="s">&#39;2017-12-25&#39;</span><span class="p p-Indicator">]</span>
+      <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">start</span>
+</pre></div>
+</div>
 </div>
 </div>
 

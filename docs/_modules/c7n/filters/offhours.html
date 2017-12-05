@@ -216,6 +216,7 @@
 <span class="sd">- Can be combined with other filters to get a particular set (</span>
 <span class="sd">  resources with tag, vpc, etc).</span>
 <span class="sd">- Can be combined with arbitrary actions</span>
+<span class="sd">- Can omit a set of dates such as public holidays.</span>
 
 <span class="sd">Policy Configuration</span>
 <span class="sd">====================</span>
@@ -238,6 +239,10 @@
 <span class="sd">   the policy.</span>
 <span class="sd"> - **onhour**: the default time to start/run resources, specified as 0-23</span>
 <span class="sd"> - **offhour**: the default time to stop/suspend resources, specified as 0-23</span>
+<span class="sd"> - **skip-days**: a list of dates to skip. Dates must use format YYYY-MM-DD</span>
+<span class="sd"> - **skip-days-from**: a list of dates to skip stored at a url. **expr**,</span>
+<span class="sd">   **format**, and **url** must be passed as parameters. Same syntax as</span>
+<span class="sd">   ``value_from``. Can not specify both **skip-days-from** and **skip-days**.</span>
 
 <span class="sd">This example policy overrides most of the defaults for an offhour policy:</span>
 
@@ -389,6 +394,32 @@
 <span class="sd">resources with that tag name and a value of ``on``. Note that this can only be</span>
 <span class="sd">used in opt-in mode, not opt-out.</span>
 
+<span class="sd">Public Holidays</span>
+<span class="sd">===============</span>
+
+<span class="sd">In order to properly implement support for public holidays, make sure to include</span>
+<span class="sd">either **skip-days** or **skip-days-from** with your policy. This list</span>
+<span class="sd">should contain all of the public holidays you wish to address and must use</span>
+<span class="sd">YYYY-MM-DD syntax for its dates. If the date the policy is being run on matches</span>
+<span class="sd">any one of those dates, the policy will not return any resources. These dates</span>
+<span class="sd">include year as many holidays vary from year to year so year is required to prevent</span>
+<span class="sd">errors. A sample policy that would not start stopped instances on a public holiday</span>
+<span class="sd">might look like:</span>
+
+<span class="sd">.. code-block:: yaml</span>
+
+<span class="sd">    policies:</span>
+<span class="sd">        - name: onhour-morning-start-skip-holidays</span>
+<span class="sd">          resource: ec2</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - type: onhour</span>
+<span class="sd">              tag: custodian_downtime</span>
+<span class="sd">              default_tz: et</span>
+<span class="sd">              onhour: 6</span>
+<span class="sd">              skip-days: [&#39;2017-12-25&#39;]</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - start</span>
+
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
@@ -401,6 +432,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">dumps</span>
+<span class="kn">from</span> <span class="nn">c7n.resolver</span> <span class="k">import</span> <span class="n">ValuesFrom</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.offhours&#39;</span><span class="p">)</span>
 
@@ -423,6 +455,9 @@
             <span class="s1">&#39;weekends&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;weekends-only&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;opt-out&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;skip-days&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span>
+                <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;pattern&#39;</span><span class="p">:</span> <span class="s1">&#39;^[0-9]</span><span class="si">{4}</span><span class="s1">-[0-9]</span><span class="si">{2}</span><span class="s1">-[0-9]</span><span class="si">{2}</span><span class="s1">&#39;</span><span class="p">}},</span>
+            <span class="s1">&#39;skip-days-from&#39;</span><span class="p">:</span> <span class="n">ValuesFrom</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
         <span class="p">}</span>
     <span class="p">}</span>
 
@@ -484,6 +519,9 @@
         <span class="n">hour</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">hour&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">time_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEFAULT_HR</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">hour</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">VALID_HOURS</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Invalid hour specified </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">hour</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;skip-days&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="s1">&#39;skip-days-from&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot specify two sets of skip days </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="Time.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.offhours.Time.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -564,6 +602,14 @@
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
             <span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">microsecond</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">now_str</span> <span class="o">=</span> <span class="n">now</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;skip-days-from&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">ValuesFrom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;skip-days-from&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">skip_days</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">skip_days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skip-days&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="n">now_str</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_days</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">now</span><span class="p">,</span> <span class="n">schedule</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="Time.match"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.offhours.Time.match">[docs]</a>    <span class="k">def</span> <span class="nf">match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">now</span><span class="p">,</span> <span class="n">schedule</span><span class="p">):</span>
