@@ -2811,8 +2811,119 @@
                 <span class="k">raise</span> <span class="n">e</span></div></div>
 
 
+<div class="viewcode-block" id="KMSKeyResolverMixin"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.KMSKeyResolverMixin">[docs]</a><span class="k">class</span> <span class="nc">KMSKeyResolverMixin</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Builds a dictionary of region specific ARNs&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arns</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
+
+<div class="viewcode-block" id="KMSKeyResolverMixin.resolve_keys"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.KMSKeyResolverMixin.resolve_keys">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;key&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">regions</span> <span class="o">=</span> <span class="p">{</span><span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">arns</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span>
+                    <span class="n">KeyId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Arn&#39;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Error resolving kms ARNs for set-bucket-encryption: </span><span class="si">%s</span><span class="s1"> key: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">e</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="KMSKeyResolverMixin.get_key"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.KMSKeyResolverMixin.get_key">[docs]</a>    <span class="k">def</span> <span class="nf">get_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;key&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">region</span> <span class="o">=</span> <span class="n">get_region</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arns</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">region</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Unable to resolve key </span><span class="si">%s</span><span class="s1"> for bucket </span><span class="si">%s</span><span class="s1"> in region </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                             <span class="n">key</span><span class="p">,</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Name&#39;</span><span class="p">),</span> <span class="n">region</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">key</span></div></div>
+
+
+<div class="viewcode-block" id="BucketEncryption"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketEncryption">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;bucket-encryption&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">BucketEncryption</span><span class="p">(</span><span class="n">KMSKeyResolverMixin</span><span class="p">,</span> <span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters for S3 buckets that have bucket-encryption</span>
+
+<span class="sd">    :example</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: s3-bucket-encryption-AES256</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                region: us-east-1</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: bucket-encryption</span>
+<span class="sd">                    crypto: AES256</span>
+<span class="sd">              - name: s3-bucket-encryption-KMS</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                region: us-east-1</span>
+<span class="sd">                filters</span>
+<span class="sd">                  - type: bucket-encryption</span>
+<span class="sd">                    crypto: aws:kms</span>
+<span class="sd">                    key: alias/some/alias/key</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;bucket-encryption&#39;</span><span class="p">,</span>
+                         <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;crypto&#39;</span><span class="p">],</span>
+                         <span class="n">crypto</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]},</span>
+                         <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:GetBucketEncryption&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:DescribeKey&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BucketEncryption.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resolve_keys</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="n">b</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">future</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Message: </span><span class="si">%s</span><span class="s2"> Bucket: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">(),</span>
+                                   <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">():</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="BucketEncryption.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketEncryption.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">b</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">be</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_bucket_encryption</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+            <span class="n">b</span><span class="p">[</span><span class="s1">&#39;c7n:bucket-encryption&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">be</span>
+            <span class="n">rules</span> <span class="o">=</span> <span class="n">be</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ServerSideEncryptionConfiguration&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Rules&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ServerSideEncryptionConfigurationNotFoundError&#39;</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+        <span class="k">for</span> <span class="n">sse</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_bucket</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="BucketEncryption.filter_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.BucketEncryption.filter_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">filter_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">):</span>
+        <span class="n">allowed</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_key</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="n">crypto</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">)</span>
+        <span class="n">rule</span> <span class="o">=</span> <span class="n">sse</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">)</span>
+        <span class="n">algo</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;SSEAlgorithm&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">crypto</span> <span class="ow">and</span> <span class="n">algo</span> <span class="ow">in</span> <span class="n">allowed</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">if</span> <span class="n">crypto</span> <span class="o">==</span> <span class="s1">&#39;AES256&#39;</span> <span class="ow">and</span> <span class="n">algo</span> <span class="o">==</span> <span class="s1">&#39;AES256&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="n">crypto</span> <span class="o">==</span> <span class="s1">&#39;aws:kms&#39;</span> <span class="ow">and</span> <span class="n">algo</span> <span class="o">==</span> <span class="s1">&#39;aws:kms&#39;</span> <span class="ow">and</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KMSMasterKeyID&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span></div></div>
+
+
 <div class="viewcode-block" id="SetBucketEncryption"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-bucket-encryption&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">SetBucketEncryption</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">SetBucketEncryption</span><span class="p">(</span><span class="n">KMSKeyResolverMixin</span><span class="p">,</span> <span class="n">BucketActionBase</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action enables default encryption on S3 buckets</span>
 
 <span class="sd">    `enabled`: boolean Optional: Defaults to True</span>
@@ -2874,46 +2985,35 @@
     <span class="p">}</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutEncryptionConfiguration&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:GetEncryptionConfiguration&#39;</span><span class="p">,</span>
-                   <span class="s1">&#39;kms:ListAliases&#39;</span><span class="p">)</span>
+                   <span class="s1">&#39;kms:ListAliases&#39;</span><span class="p">,</span> <span class="s1">&#39;s3:DescribeKey&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SetBucketEncryption.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buckets</span><span class="p">):</span>
-        <span class="n">keys</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">regions</span> <span class="o">=</span> <span class="p">{</span><span class="n">get_region</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span> <span class="ow">and</span> <span class="n">key</span><span class="p">:</span>
-            <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_keys</span><span class="p">(</span><span class="n">regions</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resolve_keys</span><span class="p">(</span><span class="n">buckets</span><span class="p">)</span>
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_bucket</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span> <span class="n">b</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">buckets</span><span class="p">}</span>
             <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Message: </span><span class="si">%s</span><span class="s1"> Bucket: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">(),</span>
                                    <span class="n">futures</span><span class="p">[</span><span class="n">future</span><span class="p">][</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span></div>
 
-<div class="viewcode-block" id="SetBucketEncryption.resolve_keys"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.resolve_keys">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regions</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-        <span class="n">arns</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="n">r</span><span class="p">)</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">arns</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Arn&#39;</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Error validating ARNs for set-bucket-encryption: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">arns</span></div>
-
-<div class="viewcode-block" id="SetBucketEncryption.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
-        <span class="n">config</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Rules&#39;</span><span class="p">:</span> <span class="p">[</span>
-            <span class="p">{</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s1">&#39;SSEAlgorithm&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)}}</span>
-        <span class="p">]}</span>
-        <span class="n">region</span> <span class="o">=</span> <span class="n">get_region</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">region</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-            <span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;Rules&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">]</span>
-                <span class="p">[</span><span class="s1">&#39;KMSMasterKeyID&#39;</span><span class="p">])</span> <span class="o">=</span> <span class="n">keys</span><span class="p">[</span><span class="n">region</span><span class="p">]</span>
+<div class="viewcode-block" id="SetBucketEncryption.process_bucket"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.SetBucketEncryption.process_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">process_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bucket</span><span class="p">):</span>
         <span class="n">s3</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">bucket</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
             <span class="n">s3</span><span class="o">.</span><span class="n">delete_bucket_encryption</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
             <span class="k">return</span>
+        <span class="n">algo</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;crypto&#39;</span><span class="p">,</span> <span class="s1">&#39;AES256&#39;</span><span class="p">)</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Rules&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;SSEAlgorithm&#39;</span><span class="p">:</span> <span class="n">algo</span><span class="p">}}</span>
+        <span class="p">]}</span>
+        <span class="k">if</span> <span class="n">algo</span> <span class="o">==</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">:</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_key</span><span class="p">(</span><span class="n">bucket</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;Valid KMS Key required but does not exist&#39;</span><span class="p">)</span>
+            <span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;Rules&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;ApplyServerSideEncryptionByDefault&#39;</span><span class="p">]</span>
+                <span class="p">[</span><span class="s1">&#39;KMSMasterKeyID&#39;</span><span class="p">])</span> <span class="o">=</span> <span class="n">key</span>
         <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_encryption</span><span class="p">(</span>
             <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
             <span class="n">ServerSideEncryptionConfiguration</span><span class="o">=</span><span class="n">config</span>
