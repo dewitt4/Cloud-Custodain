@@ -734,6 +734,41 @@
     <span class="sd">&quot;&quot;&quot;a lambda policy that executes on an asg&#39;s ec2 instance state changes.&quot;&quot;&quot;</span></div>
 
 
+<div class="viewcode-block" id="GuardDutyMode"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.GuardDutyMode">[docs]</a><span class="k">class</span> <span class="nc">GuardDutyMode</span><span class="p">(</span><span class="n">LambdaMode</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Incident Response for AWS Guard Duty&quot;&quot;&quot;</span>
+
+    <span class="n">supported_resources</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;account&#39;</span><span class="p">,</span> <span class="s1">&#39;ec2&#39;</span><span class="p">,</span> <span class="s1">&#39;iam-user&#39;</span><span class="p">)</span>
+
+    <span class="n">id_exprs</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;account&#39;</span><span class="p">:</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;account&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;ec2&#39;</span><span class="p">:</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;detail.resource.instanceDetails.instanceId&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;iam-user&#39;</span><span class="p">:</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;detail.resource.accessKeyDetails.userName&#39;</span><span class="p">)}</span>
+
+<div class="viewcode-block" id="GuardDutyMode.resolve_resources"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.GuardDutyMode.resolve_resources">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="n">rid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id_exprs</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">]</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">([</span><span class="n">rid</span><span class="p">])</span>
+        <span class="c1"># For iam users annotate with the access key specified in the finding event</span>
+        <span class="k">if</span> <span class="n">resources</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span> <span class="o">==</span> <span class="s1">&#39;iam-user&#39;</span><span class="p">:</span>
+            <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:AccessKeys&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;AccessKeyId&#39;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s1">&#39;detail&#39;</span><span class="p">][</span><span class="s1">&#39;resource&#39;</span><span class="p">][</span><span class="s1">&#39;accessKeyDetails&#39;</span><span class="p">][</span><span class="s1">&#39;accessKeyId&#39;</span><span class="p">]}</span>
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="GuardDutyMode.validate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.GuardDutyMode.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">supported_resources</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Policy:</span><span class="si">%s</span><span class="s2"> resource:</span><span class="si">%s</span><span class="s2"> Guard duty mode only supported for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">],</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">supported_resources</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="GuardDutyMode.provision"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.GuardDutyMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ec2&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;resource-filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Instance&#39;</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;iam-user&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;resource-filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;AccessKey&#39;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">GuardDutyMode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">provision</span><span class="p">()</span></div></div>
+
+
 <div class="viewcode-block" id="ConfigRuleMode"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.ConfigRuleMode">[docs]</a><span class="k">class</span> <span class="nc">ConfigRuleMode</span><span class="p">(</span><span class="n">LambdaMode</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;a lambda policy that executes as a config service rule.</span>
 <span class="sd">        http://docs.aws.amazon.com/config/latest/APIReference/API_PutConfigRule.html</span>
@@ -799,6 +834,7 @@
         <span class="s1">&#39;cloudtrail&#39;</span><span class="p">:</span> <span class="n">CloudTrailMode</span><span class="p">,</span>
         <span class="s1">&#39;ec2-instance-state&#39;</span><span class="p">:</span> <span class="n">EC2InstanceState</span><span class="p">,</span>
         <span class="s1">&#39;asg-instance-state&#39;</span><span class="p">:</span> <span class="n">ASGInstanceState</span><span class="p">,</span>
+        <span class="s1">&#39;guard-duty&#39;</span><span class="p">:</span> <span class="n">GuardDutyMode</span><span class="p">,</span>
         <span class="s1">&#39;config-rule&#39;</span><span class="p">:</span> <span class="n">ConfigRuleMode</span><span class="p">}</span>
 
     <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.policy&#39;</span><span class="p">)</span>

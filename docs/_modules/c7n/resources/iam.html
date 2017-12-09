@@ -218,7 +218,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span>
 
 
@@ -261,12 +261,31 @@
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;iam&#39;</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;user&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_users&#39;</span><span class="p">,</span> <span class="s1">&#39;Users&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;UserId&#39;</span>
         <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;UserName&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;UserName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreateDate&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::IAM::User&quot;</span></div></div>
+        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::IAM::User&quot;</span></div>
+
+<div class="viewcode-block" id="User.get_source"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.User.get_source">[docs]</a>    <span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_type</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;describe&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DescribeUser</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">User</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="n">source_type</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DescribeUser"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.DescribeUser">[docs]</a><span class="k">class</span> <span class="nc">DescribeUser</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DescribeUser.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.DescribeUser.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">rid</span> <span class="ow">in</span> <span class="n">resource_ids</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">resources</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">get_user</span><span class="p">(</span><span class="n">UserName</span><span class="o">=</span><span class="n">rid</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;User&#39;</span><span class="p">))</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;NoSuchEntityException&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
 <div class="viewcode-block" id="Policy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.Policy">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;iam-policy&#39;</span><span class="p">)</span>
@@ -285,15 +304,24 @@
 
     <span class="n">arn_path_prefix</span> <span class="o">=</span> <span class="s2">&quot;aws:policy/&quot;</span>
 
-<div class="viewcode-block" id="Policy.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.Policy.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Policy.get_source"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.Policy.get_source">[docs]</a>    <span class="k">def</span> <span class="nf">get_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source_type</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;describe&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">DescribePolicy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">Policy</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="n">source_type</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DescribePolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.DescribePolicy">[docs]</a><span class="k">class</span> <span class="nc">DescribePolicy</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DescribePolicy.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.DescribePolicy.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;iam&#39;</span><span class="p">)</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_ids</span><span class="p">:</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_ids</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">get_policy</span><span class="p">(</span><span class="n">PolicyArn</span><span class="o">=</span><span class="n">r</span><span class="p">)[</span><span class="s1">&#39;Policy&#39;</span><span class="p">])</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;unable to resolve ids </span><span class="si">%s</span><span class="s2">, err: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                             <span class="n">resource_ids</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;NoSuchEntityException&#39;</span><span class="p">:</span>
+                    <span class="k">continue</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -1181,10 +1209,10 @@
             <span class="n">threshold_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">age</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="k">if</span> <span class="s1">&#39;AccessKeys&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
-                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AccessKeys&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_access_keys</span><span class="p">(</span>
+            <span class="k">if</span> <span class="s1">&#39;c7n:AccessKeys&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:AccessKeys&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_access_keys</span><span class="p">(</span>
                     <span class="n">UserName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;UserName&#39;</span><span class="p">])[</span><span class="s1">&#39;AccessKeyMetadata&#39;</span><span class="p">]</span>
-            <span class="n">keys</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;AccessKeys&#39;</span><span class="p">]</span>
+            <span class="n">keys</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:AccessKeys&#39;</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">age</span><span class="p">:</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="p">[</span><span class="s1">&#39;CreateDate&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">threshold_date</span><span class="p">:</span>
