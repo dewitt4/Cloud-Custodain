@@ -1022,6 +1022,48 @@
             <span class="n">CopyTagsToSnapshot</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div></div>
 
 
+<div class="viewcode-block" id="RDSSetPublicAvailability"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSetPublicAvailability">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-public-access&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RDSSetPublicAvailability</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This action allows for toggling an RDS instance</span>
+<span class="sd">    &#39;PubliclyAccessible&#39; flag to true or false</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">        .. code-block: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: disable-rds-public-accessibility</span>
+<span class="sd">                resource: rds</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - PubliclyAccessible: true</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-public-access</span>
+<span class="sd">                    state: false</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s2">&quot;set-public-access&quot;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;rds:ModifyDBInstance&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="RDSSetPublicAvailability.set_accessibility"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSetPublicAvailability.set_accessibility">[docs]</a>    <span class="k">def</span> <span class="nf">set_accessibility</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;rds&#39;</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">modify_db_instance</span><span class="p">(</span>
+            <span class="n">DBInstanceIdentifier</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span>
+            <span class="n">PubliclyAccessible</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="RDSSetPublicAvailability.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSetPublicAvailability.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rds</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">set_accessibility</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rds</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception setting public access on </span><span class="si">%s</span><span class="s2">  </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;DBInstanceIdentifier&#39;</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">rds</span></div></div>
+
+
 <div class="viewcode-block" id="RDSSubscription"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.rds.RDSSubscription">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rds-subscription&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">RDSSubscription</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
