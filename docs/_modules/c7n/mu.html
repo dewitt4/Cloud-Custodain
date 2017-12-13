@@ -414,9 +414,31 @@
     <span class="k">return</span> <span class="n">hasher</span><span class="o">.</span><span class="n">digest</span><span class="p">()</span></div>
 
 
-<div class="viewcode-block" id="custodian_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.custodian_archive">[docs]</a><span class="k">def</span> <span class="nf">custodian_archive</span><span class="p">():</span>
-    <span class="sd">&quot;&quot;&quot;Create a lambda code archive for running custodian.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">PythonPackageArchive</span><span class="p">(</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;pkg_resources&#39;</span><span class="p">,</span> <span class="s1">&#39;ipaddress&#39;</span><span class="p">)</span></div>
+<div class="viewcode-block" id="custodian_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.custodian_archive">[docs]</a><span class="k">def</span> <span class="nf">custodian_archive</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create a lambda code archive for running custodian.</span>
+
+<span class="sd">    Lambda archive currently always includes `c7n, pkg_resources and ipaddress`. Add additional</span>
+<span class="sd">    packages in the mode block</span>
+
+<span class="sd">    Example policy that includes additional packages</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policy:</span>
+<span class="sd">          name: lambda-archive-example</span>
+<span class="sd">          resource: s3</span>
+<span class="sd">          mode:</span>
+<span class="sd">            - packages:</span>
+<span class="sd">              - boto3</span>
+<span class="sd">              - botocore</span>
+
+<span class="sd">    Kwargs:</span>
+<span class="sd">        packages (set): List of additional packages to include in the lambda archive.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">modules</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;pkg_resources&#39;</span><span class="p">,</span> <span class="s1">&#39;ipaddress&#39;</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">packages</span><span class="p">:</span>
+        <span class="n">modules</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">packages</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">PythonPackageArchive</span><span class="p">(</span><span class="o">*</span><span class="n">modules</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="LambdaManager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager">[docs]</a><span class="k">class</span> <span class="nc">LambdaManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -845,7 +867,7 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span> <span class="o">=</span> <span class="n">custodian_archive</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span> <span class="o">=</span> <span class="n">custodian_archive</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">packages</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -899,6 +921,10 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">packages</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;packages&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="PolicyLambda.get_events"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.PolicyLambda.get_events">[docs]</a>    <span class="k">def</span> <span class="nf">get_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">):</span>
         <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
