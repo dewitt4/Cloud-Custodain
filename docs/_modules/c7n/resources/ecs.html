@@ -203,13 +203,17 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span>
-<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 
 
 <div class="viewcode-block" id="ECSCluster"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSCluster">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">ECSCluster</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">ECSCluster</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
 <div class="viewcode-block" id="ECSCluster.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSCluster.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
@@ -227,6 +231,248 @@
 
 <div class="viewcode-block" id="ECSMetrics.get_dimensions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSMetrics.get_dimensions">[docs]</a>    <span class="k">def</span> <span class="nf">get_dimensions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;ClusterName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;clusterName&#39;</span><span class="p">]}]</span></div></div>
+
+
+<div class="viewcode-block" id="ECSClusterResourceDescribeSource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSClusterResourceDescribeSource">[docs]</a><span class="k">class</span> <span class="nc">ECSClusterResourceDescribeSource</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">ChildDescribeSource</span><span class="p">):</span>
+
+    <span class="c1"># We need an additional subclass of describe for ecs cluster.</span>
+    <span class="c1">#</span>
+    <span class="c1"># - Default child query just returns the child resources from</span>
+    <span class="c1">#   enumeration op, for ecs clusters, enumeration just returns</span>
+    <span class="c1">#   resources ids, we also need to retain the parent id for</span>
+    <span class="c1">#   augmentation.</span>
+    <span class="c1">#</span>
+    <span class="c1"># - The default augmentation detail_spec/batch_detail_spec need additional</span>
+    <span class="c1">#   handling for the string resources with parent id.</span>
+    <span class="c1">#</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">ChildResourceQuery</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">capture_parent_id</span> <span class="o">=</span> <span class="kc">True</span>
+
+<div class="viewcode-block" id="ECSClusterResourceDescribeSource.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSClusterResourceDescribeSource.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">parent_child_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">parent_child_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span>
+                <span class="n">max_workers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">services</span> <span class="ow">in</span> <span class="n">parent_child_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">futures</span><span class="p">[</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">process_cluster_resources</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">services</span><span class="p">)</span>
+                <span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">services</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">futures</span><span class="p">:</span>
+                <span class="n">pid</span><span class="p">,</span> <span class="n">services</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s1">&#39;error fetching ecs resources for cluster </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                        <span class="n">pid</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+                    <span class="k">continue</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="ECSServiceDescribeSource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSServiceDescribeSource">[docs]</a><span class="nd">@query</span><span class="o">.</span><span class="n">sources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;describe-ecs-service&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ECSServiceDescribeSource</span><span class="p">(</span><span class="n">ECSClusterResourceDescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ECSServiceDescribeSource.process_cluster_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSServiceDescribeSource.process_cluster_resources">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">cluster_id</span><span class="p">,</span> <span class="n">services</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">services</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_services</span><span class="p">(</span>
+                    <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">services</span><span class="o">=</span><span class="n">service_set</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;services&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="Service"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.Service">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs-service&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Service</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">ChildResourceManager</span><span class="p">):</span>
+
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">10</span>
+
+<div class="viewcode-block" id="Service.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.Service.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;serviceName&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;serviceArn&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_services&#39;</span><span class="p">,</span> <span class="s1">&#39;serviceArns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">parent_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">,</span> <span class="s1">&#39;cluster&#39;</span><span class="p">)</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">source_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;describe&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;describe&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-child&#39;</span><span class="p">):</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="s1">&#39;describe-ecs-service&#39;</span>
+        <span class="k">return</span> <span class="n">source</span></div>
+
+
+<div class="viewcode-block" id="ServiceMetrics"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ServiceMetrics">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ServiceMetrics</span><span class="p">(</span><span class="n">MetricsFilter</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ServiceMetrics.get_dimensions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ServiceMetrics.get_dimensions">[docs]</a>    <span class="k">def</span> <span class="nf">get_dimensions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;ClusterName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;clusterArn&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;ServiceName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;serviceName&#39;</span><span class="p">]}]</span></div></div>
+
+
+<div class="viewcode-block" id="ServiceTaskFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ServiceTaskFilter">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ServiceTaskFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:DescribeTaskDefinition&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;ecs:ListTaskDefinitions&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ServiceTaskFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ServiceTaskFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">task_def_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;taskDefinition&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span>
+        <span class="n">task_def_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span>
+            <span class="s1">&#39;ecs-task-definition&#39;</span><span class="p">)</span>
+
+        <span class="c1"># due to model difference (multi-level containment with</span>
+        <span class="c1"># multi-step resource iteration) and potential volume of</span>
+        <span class="c1"># resources, we break our abstractions a little in the name of</span>
+        <span class="c1"># efficiency wrt api usage.</span>
+
+        <span class="c1"># check to see if task def cache is already populated</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">task_def_manager</span><span class="o">.</span><span class="n">get_cache_key</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+            <span class="n">task_defs</span> <span class="o">=</span> <span class="n">task_def_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="n">task_def_ids</span><span class="p">)</span>
+        <span class="c1"># else just augment the ids</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">task_defs</span> <span class="o">=</span> <span class="n">task_def_manager</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">task_def_ids</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">task_defs</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;taskDefinitionArn&#39;</span><span class="p">]:</span> <span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">task_defs</span><span class="p">}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">ServiceTaskFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_defs</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;taskDefinition&#39;</span><span class="p">]]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">task</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DeleteService"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.DeleteService">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteService</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete service(s).&quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:DeleteService&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteService.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.DeleteService.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,))</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">primary</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;deployments&#39;</span><span class="p">]</span>
+                           <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;PRIMARY&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">primary</span><span class="p">[</span><span class="s1">&#39;desiredCount&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">update_service</span><span class="p">,</span>
+                          <span class="n">cluster</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;clusterArn&#39;</span><span class="p">],</span>
+                          <span class="n">service</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;serviceName&#39;</span><span class="p">],</span>
+                          <span class="n">desiredCount</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">delete_service</span><span class="p">,</span>
+                      <span class="n">cluster</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;clusterArn&#39;</span><span class="p">],</span> <span class="n">service</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;serviceName&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ServiceNotFoundException&#39;</span><span class="p">:</span>
+                    <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="ECSTaskDescribeSource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSTaskDescribeSource">[docs]</a><span class="nd">@query</span><span class="o">.</span><span class="n">sources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;describe-ecs-task&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ECSTaskDescribeSource</span><span class="p">(</span><span class="n">ECSClusterResourceDescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ECSTaskDescribeSource.process_cluster_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSTaskDescribeSource.process_cluster_resources">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">cluster_id</span><span class="p">,</span> <span class="n">tasks</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_tasks</span><span class="p">(</span>
+                    <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">tasks</span><span class="o">=</span><span class="n">tasks</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tasks&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="Task"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.Task">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs-task&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Task</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">ChildResourceManager</span><span class="p">):</span>
+
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">100</span>
+
+<div class="viewcode-block" id="Task.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.Task.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;taskArn&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_tasks&#39;</span><span class="p">,</span> <span class="s1">&#39;taskArns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">parent_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">,</span> <span class="s1">&#39;cluster&#39;</span><span class="p">)</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">source_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;describe&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;describe&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-child&#39;</span><span class="p">):</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="s1">&#39;describe-ecs-task&#39;</span>
+        <span class="k">return</span> <span class="n">source</span></div>
+
+
+<div class="viewcode-block" id="StopTask"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.StopTask">[docs]</a><span class="nd">@Task</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">StopTask</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Stop/Delete a currently running task.&quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:StopTask&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="StopTask.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.StopTask.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,))</span>
+        <span class="n">reason</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reason&#39;</span><span class="p">,</span> <span class="s1">&#39;custodian policy&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">stop_task</span><span class="p">,</span>
+                      <span class="n">cluster</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;clusterArn&#39;</span><span class="p">],</span>
+                      <span class="n">task</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;taskArn&#39;</span><span class="p">],</span>
+                      <span class="n">reason</span><span class="o">=</span><span class="n">reason</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># No error code for not found.</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;The referenced task was not found.&quot;</span><span class="p">:</span>
+                    <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="TaskDefinition"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.TaskDefinition">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs-task-definition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">TaskDefinition</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TaskDefinition.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.TaskDefinition.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;taskDefinitionArn&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_task_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;taskDefinitionArns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">detail_spec</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;describe_task_definition&#39;</span><span class="p">,</span> <span class="s1">&#39;taskDefinition&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;taskDefinition&#39;</span><span class="p">)</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteTaskDefinition"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.DeleteTaskDefinition">[docs]</a><span class="nd">@TaskDefinition</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteTaskDefinition</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete/DeRegister a task definition.</span>
+
+<span class="sd">    The definition will be marked as InActive. Currently running</span>
+<span class="sd">    services and task can still reference, new services &amp; tasks</span>
+<span class="sd">    can&#39;t.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:DeregisterTaskDefinition&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteTaskDefinition.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.DeleteTaskDefinition.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,))</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">deregister_task_definition</span><span class="p">,</span>
+                      <span class="n">taskDefinition</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;taskDefinitionArn&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># No error code for not found.</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span>
+                        <span class="s1">&#39;Message&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;The specified task definition does not exist.&#39;</span><span class="p">:</span>
+                    <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
