@@ -259,7 +259,7 @@
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">set_annotation</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span>
-    <span class="n">dumps</span><span class="p">,</span> <span class="n">format_string_values</span><span class="p">)</span>
+    <span class="n">dumps</span><span class="p">,</span> <span class="n">format_string_values</span><span class="p">,</span> <span class="n">get_account_alias_from_sts</span><span class="p">)</span>
 
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.s3&#39;</span><span class="p">)</span>
@@ -1342,58 +1342,75 @@
 <span class="sd">                    target_bucket: log-bucket</span>
 <span class="sd">                    target_prefix: logs123</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;toggle-logging&#39;</span><span class="p">,</span>
         <span class="n">enabled</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
         <span class="n">target_bucket</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
         <span class="n">target_prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:PutBucketLogging&quot;</span><span class="p">,)</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:PutBucketLogging&quot;</span><span class="p">,</span> <span class="s2">&quot;iam:ListAccountAliases&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ToggleLogging.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleLogging.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_bucket&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;target_bucket must be specified&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="ToggleLogging.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.ToggleLogging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 
+        <span class="c1"># Account name for variable expansion</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">account_name</span> <span class="o">=</span> <span class="n">get_account_alias_from_sts</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
+
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">r</span><span class="p">)</span>
-            <span class="n">target_prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_prefix&#39;</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/&#39;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="s1">&#39;TargetBucket&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]:</span>
-                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">}</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Disabled&#39;</span><span class="p">}</span>
-            <span class="k">if</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Disabled&#39;</span><span class="p">):</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+            <span class="n">is_logging</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">])</span>
+
+            <span class="k">if</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_logging</span><span class="p">:</span>
+                <span class="n">variables</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s1">&#39;account_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                    <span class="s1">&#39;account&#39;</span><span class="p">:</span> <span class="n">account_name</span><span class="p">,</span>
+                    <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                    <span class="s1">&#39;source_bucket_name&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+                    <span class="s1">&#39;target_bucket_name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_bucket&#39;</span><span class="p">),</span>
+                    <span class="s1">&#39;target_prefix&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_prefix&#39;</span><span class="p">),</span>
+                <span class="p">}</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">format_string_values</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">variables</span><span class="p">)</span>
+                <span class="n">target_prefix</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_prefix&#39;</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/&#39;</span><span class="p">)</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_logging</span><span class="p">(</span>
                     <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
                     <span class="n">BucketLoggingStatus</span><span class="o">=</span><span class="p">{</span>
                         <span class="s1">&#39;LoggingEnabled&#39;</span><span class="p">:</span> <span class="p">{</span>
-                            <span class="s1">&#39;TargetBucket&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_bucket&#39;</span><span class="p">),</span>
+                            <span class="s1">&#39;TargetBucket&#39;</span><span class="p">:</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_bucket&#39;</span><span class="p">),</span>
                             <span class="s1">&#39;TargetPrefix&#39;</span><span class="p">:</span> <span class="n">target_prefix</span><span class="p">}})</span>
                 <span class="k">continue</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Logging&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="n">is_logging</span><span class="p">:</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_logging</span><span class="p">(</span>
-                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-                    <span class="n">BucketLoggingStatus</span><span class="o">=</span><span class="p">{})</span>
+                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">BucketLoggingStatus</span><span class="o">=</span><span class="p">{})</span>
                 <span class="k">continue</span></div></div>
 
 
 <div class="viewcode-block" id="AttachLambdaEncrypt"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.AttachLambdaEncrypt">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;attach-encrypt&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">AttachLambdaEncrypt</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action attaches lambda encryption policy to S3 bucket</span>
+<span class="sd">       supports attachment via lambda bucket notification or sns notification</span>
+<span class="sd">       to invoke lambda. a special topic value of `default` will utilize an</span>
+<span class="sd">       extant notification or create one matching the bucket name.</span>
 
-<span class="sd">    supports attachment via lambda bucket notification or sns notification</span>
-<span class="sd">    to invoke lambda. a special topic value of `default` will utilize</span>
-<span class="sd">    an extant notification or create one matching the bucket name.</span>
+<span class="sd">       :example:</span>
 
-<span class="sd">    :example:</span>
 
 <span class="sd">    .. code-block:: yaml</span>
 
-<span class="sd">            policies:</span>
-<span class="sd">              - name: s3-logging-buckets</span>
-<span class="sd">                resource: s3</span>
-<span class="sd">                filters:</span>
-<span class="sd">                  - type: missing-policy-statement</span>
-<span class="sd">                actions:</span>
-<span class="sd">                  - attach-encrypt</span>
+
+<span class="sd">                policies:</span>
+<span class="sd">                  - name: s3-logging-buckets</span>
+<span class="sd">                    resource: s3</span>
+<span class="sd">                    filters:</span>
+<span class="sd">                      - type: missing-policy-statement</span>
+<span class="sd">                    actions:</span>
+<span class="sd">                      - attach-encrypt</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;attach-encrypt&#39;</span><span class="p">,</span>
@@ -1483,6 +1500,7 @@
 <div class="viewcode-block" id="EncryptionRequiredPolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.s3.EncryptionRequiredPolicy">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;encryption-policy&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">EncryptionRequiredPolicy</span><span class="p">(</span><span class="n">BucketActionBase</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to apply an encryption policy to S3 buckets</span>
+
 
 <span class="sd">    :example:</span>
 
