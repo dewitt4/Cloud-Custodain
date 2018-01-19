@@ -206,6 +206,8 @@
 <span class="kn">from</span> <span class="nn">.core</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
 
+<span class="kn">import</span> <span class="nn">jmespath</span>
+
 
 <div class="viewcode-block" id="SecurityGroupFilter"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.SecurityGroupFilter">[docs]</a><span class="k">class</span> <span class="nc">SecurityGroupFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter a resource by its associated security groups.&quot;&quot;&quot;</span>
@@ -263,9 +265,9 @@
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span>
             <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
             <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="p">(</span>
-                <span class="s2">&quot;How to handle missing keys on elements, by default this causes &quot;</span>
+                <span class="s2">&quot;How to handle missing keys on elements, by default this causes&quot;</span>
                 <span class="s2">&quot;resources to be considered not-equal&quot;</span><span class="p">)},</span>
-           <span class="s1">&#39;match&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;equal&#39;</span><span class="p">,</span> <span class="s1">&#39;non-equal&#39;</span><span class="p">],</span>
+           <span class="s1">&#39;match&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;equal&#39;</span><span class="p">,</span> <span class="s1">&#39;not-equal&#39;</span><span class="p">],</span>
                      <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;non-equal&#39;</span><span class="p">},</span>
            <span class="s1">&#39;compare&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span>
@@ -281,7 +283,9 @@
            <span class="s1">&#39;max-cardinality&#39;</span><span class="p">:</span> <span class="p">{</span>
                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
                <span class="s1">&#39;title&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">},</span>
-           <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span>
+           <span class="s1">&#39;ignore&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">}},</span>
+           <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span>
+
            <span class="p">})</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeSecurityGroups&#39;</span><span class="p">,</span> <span class="s1">&#39;ec2:DescribeSubnets&#39;</span><span class="p">)</span>
@@ -317,13 +321,31 @@
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">resource_sgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">related_sg</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sg</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])]</span>
-            <span class="n">resource_subnets</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">related_subnet</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])]</span>
+            <span class="n">resource_sgs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_ignored</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">related_sg</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sg</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])])</span>
+            <span class="n">resource_subnets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_ignored</span><span class="p">([</span>
+                <span class="n">related_subnet</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnet</span><span class="o">.</span><span class="n">get_related_ids</span><span class="p">([</span><span class="n">r</span><span class="p">])])</span>
             <span class="n">found</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">resource_sgs</span><span class="p">,</span> <span class="n">resource_subnets</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">found</span><span class="p">)</span>
 
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="NetworkLocation.filter_ignored"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation.filter_ignored">[docs]</a>    <span class="k">def</span> <span class="nf">filter_ignored</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">ignores</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ignore&#39;</span><span class="p">,</span> <span class="p">())</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="o">==</span> <span class="n">v</span><span class="p">:</span>
+                        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span></div>
 
 <div class="viewcode-block" id="NetworkLocation.process_resource"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.filters.vpc.NetworkLocation.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">resource_sgs</span><span class="p">,</span> <span class="n">resource_subnets</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
