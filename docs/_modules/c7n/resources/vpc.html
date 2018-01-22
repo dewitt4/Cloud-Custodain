@@ -963,6 +963,7 @@
         <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="s1">&#39;PrefixListIds&#39;</span><span class="p">))</span>
     <span class="n">filter_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">,</span> <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">,</span> <span class="s1">&#39;SelfReference&#39;</span><span class="p">))</span>
     <span class="n">attrs</span> <span class="o">=</span> <span class="n">perm_attrs</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">filter_attrs</span><span class="p">)</span>
+    <span class="n">attrs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SGPermission.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">delta</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">attrs</span><span class="p">)</span>
@@ -1025,10 +1026,16 @@
 
 <div class="viewcode-block" id="SGPermission.process_self_reference"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.process_self_reference">[docs]</a>    <span class="k">def</span> <span class="nf">process_self_reference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">,</span> <span class="n">sg_id</span><span class="p">):</span>
         <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">ref_match</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;SelfReference&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ref_match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="s1">&#39;UserIdGroupPairs&#39;</span> <span class="ow">in</span> <span class="n">perm</span> <span class="ow">and</span> <span class="s1">&#39;SelfReference&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
             <span class="n">self_reference</span> <span class="o">=</span> <span class="n">sg_id</span> <span class="ow">in</span> <span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span>
                                        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">perm</span><span class="p">[</span><span class="s1">&#39;UserIdGroupPairs&#39;</span><span class="p">]]</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="n">self_reference</span> <span class="o">&amp;</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;SelfReference&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">ref_match</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">self_reference</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">ref_match</span> <span class="ow">is</span> <span class="kc">True</span> <span class="ow">and</span> <span class="n">self_reference</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="n">found</span></div>
 
 <div class="viewcode-block" id="SGPermission.expand_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.SGPermission.expand_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">expand_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">permissions</span><span class="p">):</span>
@@ -1056,34 +1063,28 @@
                     <span class="k">yield</span> <span class="n">ep</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="k">def</span> <span class="nf">_accumulate</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-            <span class="sd">&#39;&#39;&#39;</span>
-<span class="sd">            Accumulate an intermediate found value into the overall result.</span>
-<span class="sd">            &#39;&#39;&#39;</span>
-            <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">f</span> <span class="o">=</span> <span class="p">(</span><span class="n">f</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">x</span> <span class="o">&amp;</span> <span class="n">f</span> <span class="ow">or</span> <span class="n">x</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">f</span>
-
         <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">sg_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;GroupId&#39;</span><span class="p">]</span>
+        <span class="n">match_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;and&#39;</span> <span class="ow">and</span> <span class="nb">all</span> <span class="ow">or</span> <span class="nb">any</span>
 
         <span class="k">for</span> <span class="n">perm</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expand_permissions</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]):</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">f</span><span class="p">(</span><span class="n">perm</span><span class="p">):</span>
-                    <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-                    <span class="k">break</span>
-            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="n">_accumulate</span><span class="p">(</span><span class="n">found</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_ports</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
-            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="n">_accumulate</span><span class="p">(</span><span class="n">found</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_cidrs</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
-            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="n">_accumulate</span><span class="p">(</span><span class="n">found</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_self_reference</span><span class="p">(</span><span class="n">perm</span><span class="p">,</span> <span class="n">sg_id</span><span class="p">))</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="n">perm_matches</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vfilters</span><span class="p">):</span>
+                <span class="n">perm_matches</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">perm</span><span class="p">))</span>
+            <span class="n">perm_matches</span><span class="p">[</span><span class="s1">&#39;ports&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_ports</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
+            <span class="n">perm_matches</span><span class="p">[</span><span class="s1">&#39;cidrs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_cidrs</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
+            <span class="n">perm_matches</span><span class="p">[</span><span class="s1">&#39;self-refs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_self_reference</span><span class="p">(</span><span class="n">perm</span><span class="p">,</span> <span class="n">sg_id</span><span class="p">)</span>
+
+            <span class="n">perm_match_values</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span>
+                <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="n">perm_matches</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+            <span class="c1"># account for one python behavior any([]) == False, all([]) == True</span>
+            <span class="k">if</span> <span class="n">match_op</span> <span class="o">==</span> <span class="nb">all</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">perm_match_values</span><span class="p">:</span>
                 <span class="k">continue</span>
-            <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
+
+            <span class="n">match</span> <span class="o">=</span> <span class="n">match_op</span><span class="p">(</span><span class="n">perm_match_values</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">perm</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">matched</span><span class="p">:</span>
             <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Matched</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">ip_permissions_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">matched</span>
@@ -1099,6 +1100,7 @@
         <span class="c1"># &#39;additionalProperties&#39;: True,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ingress&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;match-operator&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;Ports&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
             <span class="s1">&#39;SelfReference&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}</span>
         <span class="p">},</span>
@@ -1114,6 +1116,7 @@
         <span class="c1"># &#39;additionalProperties&#39;: True,</span>
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;egress&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;match-operator&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;SelfReference&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}</span>
         <span class="p">},</span>
         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]}</span></div>
