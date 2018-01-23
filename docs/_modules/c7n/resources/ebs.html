@@ -461,12 +461,15 @@
 
 <div class="viewcode-block" id="SnapshotDelete.process_snapshot_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ebs.SnapshotDelete.process_snapshot_set">[docs]</a>    <span class="nd">@worker</span>
     <span class="k">def</span> <span class="nf">process_snapshot_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots_set</span><span class="p">):</span>
+        <span class="n">retry</span> <span class="o">=</span> <span class="n">get_retry</span><span class="p">((</span>
+            <span class="s1">&#39;RequestLimitExceeded&#39;</span><span class="p">,</span> <span class="s1">&#39;Client.RequestLimitExceeded&#39;</span><span class="p">))</span>
+
         <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots_set</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_snapshots</span><span class="p">:</span>
                 <span class="k">continue</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">c</span><span class="o">.</span><span class="n">delete_snapshot</span><span class="p">(</span>
+                <span class="n">retry</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">delete_snapshot</span><span class="p">,</span>
                     <span class="n">SnapshotId</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">],</span>
                     <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">)</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
