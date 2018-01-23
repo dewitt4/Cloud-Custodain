@@ -212,7 +212,7 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">TagDelayedAction</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">Tag</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">)</span>
+    <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">snapshot_identifier</span><span class="p">)</span>
 
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;dynamodb-table.filters&#39;</span><span class="p">)</span>
@@ -290,6 +290,14 @@
         <span class="n">states</span> <span class="o">=</span> <span class="n">states</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_states</span>
         <span class="n">orig_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
         <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span> <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TableStatus&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">states</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> tables&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">orig_count</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+<div class="viewcode-block" id="StatusFilter.filter_backup_state"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.StatusFilter.filter_backup_state">[docs]</a>    <span class="k">def</span> <span class="nf">filter_backup_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tables</span><span class="p">,</span> <span class="n">states</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">states</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_states</span>
+        <span class="n">orig_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">tables</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tables</span> <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;BackupStatus&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">states</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> tables&quot;</span> <span class="o">%</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">orig_count</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">result</span></div></div>
@@ -419,15 +427,129 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">):</span>
             <span class="k">return</span>
 
-        <span class="k">for</span> <span class="n">table_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
-            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-                <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">table_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
                 <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delete_table</span><span class="p">,</span> <span class="n">table_set</span><span class="p">))</span>
-                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
-                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                            <span class="s2">&quot;Exception deleting dynamodb table set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div></div>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception deleting dynamodb table set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span>
+                        <span class="o">%</span> <span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div></div>
+
+
+<div class="viewcode-block" id="CreateBackup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.CreateBackup">[docs]</a><span class="nd">@Table</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;backup&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">CreateBackup</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StatusFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Creates a manual backup of a DynamoDB table. Use of the optional</span>
+<span class="sd">       prefix flag will attach a user specified prefix. Otherwise,</span>
+<span class="sd">       the backup prefix will default to &#39;Backup&#39;.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: dynamodb-create-backup</span>
+<span class="sd">                resource: dynamodb-table</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: backup</span>
+<span class="sd">                    prefix: custom</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_status</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ACTIVE&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;backup&#39;</span><span class="p">,</span>
+                <span class="n">prefix</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dynamodb:CreateBackup&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="CreateBackup.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.CreateBackup.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_table_state</span><span class="p">(</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_status</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dynamodb&#39;</span><span class="p">)</span>
+        <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;prefix&#39;</span><span class="p">,</span> <span class="s1">&#39;Backup&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="n">c</span><span class="o">.</span><span class="n">create_backup</span><span class="p">,</span>
+                    <span class="n">BackupName</span><span class="o">=</span><span class="n">snapshot_identifier</span><span class="p">(</span>
+                        <span class="n">prefix</span><span class="p">,</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TableName&#39;</span><span class="p">]),</span>
+                    <span class="n">TableName</span><span class="o">=</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;TableName&#39;</span><span class="p">])]</span> <span class="o">=</span> <span class="n">t</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="n">t</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Could not complete DynamoDB backup table:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+                <span class="n">arn</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">()[</span><span class="s1">&#39;BackupDetails&#39;</span><span class="p">][</span><span class="s1">&#39;BackupArn&#39;</span><span class="p">]</span>
+                <span class="n">t</span><span class="p">[</span><span class="s1">&#39;c7n:BackupArn&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arn</span></div></div>
+
+
+<div class="viewcode-block" id="Backup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Backup">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;dynamodb-backup&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Backup</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="Backup.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Backup.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;dynamodb&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;table&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_backups&#39;</span><span class="p">,</span> <span class="s1">&#39;BackupSummaries&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">detail_spec</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;Table&#39;</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;TableName&#39;</span>
+        <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;BackupCreationDateTime&#39;</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;TableName&#39;</span>
+        <span class="n">config_type</span> <span class="o">=</span> <span class="s1">&#39;AWS::DynamoDB::Table&#39;</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteBackup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.DeleteBackup">[docs]</a><span class="nd">@Backup</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteBackup</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StatusFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Deletes backups of a DynamoDB table</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: dynamodb-delete-backup</span>
+<span class="sd">                resource: dynamodb-backup</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: age</span>
+<span class="sd">                    days: 28</span>
+<span class="sd">                    op: ge</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_status</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;AVAILABLE&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dynamodb:DeleteBackup&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DeleteBackup.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.DeleteBackup.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backups</span><span class="p">):</span>
+        <span class="n">backups</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_backup_state</span><span class="p">(</span>
+            <span class="n">backups</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_status</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">backups</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="n">c</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dynamodb&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">table_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">backups</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_dynamodb_backups</span><span class="p">(</span><span class="n">table_set</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DeleteBackup.process_dynamodb_backups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.DeleteBackup.process_dynamodb_backups">[docs]</a>    <span class="k">def</span> <span class="nf">process_dynamodb_backups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_set</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">table_set</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">c</span><span class="o">.</span><span class="n">delete_backup</span><span class="p">(</span>
+                    <span class="n">BackupArn</span><span class="o">=</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;BackupArn&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not complete DynamoDB backup table:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span></div></div>
 
 
 <div class="viewcode-block" id="Stream"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.dynamodb.Stream">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;dynamodb-stream&#39;</span><span class="p">)</span>
