@@ -222,7 +222,7 @@
 <span class="kn">from</span> <span class="nn">jsonschema</span> <span class="k">import</span> <span class="n">Draft4Validator</span> <span class="k">as</span> <span class="n">Validator</span>
 <span class="kn">from</span> <span class="nn">jsonschema.exceptions</span> <span class="k">import</span> <span class="n">best_match</span>
 
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.provider</span> <span class="k">import</span> <span class="n">clouds</span>
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">EventFilter</span><span class="p">,</span> <span class="n">AgeFilter</span>
 
@@ -283,7 +283,7 @@
     <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">validator_value</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;$ref&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;$ref&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)[</span><span class="mi">1</span><span class="p">]:</span>
                 <span class="n">found</span> <span class="o">=</span> <span class="n">idx</span>
         <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># error context is a flat list of all validation</span>
@@ -413,11 +413,16 @@
     <span class="p">}</span>
 
     <span class="n">resource_refs</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span> <span class="ow">in</span> <span class="n">resources</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="k">if</span> <span class="n">resource_types</span> <span class="ow">and</span> <span class="n">type_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resource_types</span><span class="p">:</span>
-            <span class="k">continue</span>
-        <span class="n">resource_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="n">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">cloud_name</span><span class="p">,</span> <span class="n">cloud_type</span> <span class="ow">in</span> <span class="n">clouds</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span> <span class="ow">in</span> <span class="n">cloud_type</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">resource_types</span> <span class="ow">and</span> <span class="n">type_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resource_types</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">alias_name</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">r_type_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">cloud_name</span><span class="p">,</span> <span class="n">type_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cloud_name</span> <span class="o">==</span> <span class="s1">&#39;aws&#39;</span><span class="p">:</span>
+                <span class="n">alias_name</span> <span class="o">=</span> <span class="n">type_name</span>
+            <span class="n">resource_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">process_resource</span><span class="p">(</span><span class="n">r_type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">,</span> <span class="n">alias_name</span><span class="p">))</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;$schema&#39;</span><span class="p">:</span> <span class="s1">&#39;http://json-schema.org/schema#&#39;</span><span class="p">,</span>
@@ -439,7 +444,7 @@
     <span class="k">return</span> <span class="n">schema</span></div>
 
 
-<div class="viewcode-block" id="process_resource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.schema.process_resource">[docs]</a><span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">):</span>
+<div class="viewcode-block" id="process_resource"><a class="viewcode-back" href="../../generated/c7n.html#c7n.schema.process_resource">[docs]</a><span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">,</span> <span class="n">alias_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">resource_defs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{},</span> <span class="s1">&#39;filters&#39;</span><span class="p">:</span> <span class="p">{}})</span>
 
     <span class="n">seen_actions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>  <span class="c1"># Aliases get processed once</span>
@@ -515,6 +520,10 @@
         <span class="p">]</span>
     <span class="p">}</span>
 
+    <span class="k">if</span> <span class="n">alias_name</span><span class="p">:</span>
+        <span class="n">resource_policy</span><span class="p">[</span><span class="s1">&#39;allOf&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span>
+            <span class="s1">&#39;resource&#39;</span><span class="p">][</span><span class="s1">&#39;enum&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">alias_name</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="n">type_name</span> <span class="o">==</span> <span class="s1">&#39;ec2&#39;</span><span class="p">:</span>
         <span class="n">resource_policy</span><span class="p">[</span><span class="s1">&#39;allOf&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;query&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
@@ -522,11 +531,21 @@
     <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/resources/</span><span class="si">%s</span><span class="s1">/policy&#39;</span> <span class="o">%</span> <span class="n">type_name</span><span class="p">}</span></div>
 
 
-<div class="viewcode-block" id="resource_vocabulary"><a class="viewcode-back" href="../../generated/c7n.html#c7n.schema.resource_vocabulary">[docs]</a><span class="k">def</span> <span class="nf">resource_vocabulary</span><span class="p">():</span>
+<div class="viewcode-block" id="resource_vocabulary"><a class="viewcode-back" href="../../generated/c7n.html#c7n.schema.resource_vocabulary">[docs]</a><span class="k">def</span> <span class="nf">resource_vocabulary</span><span class="p">(</span><span class="n">cloud_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">qualify_name</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
     <span class="n">vocabulary</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">resources</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">cname</span><span class="p">,</span> <span class="n">ctype</span> <span class="ow">in</span> <span class="n">clouds</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">cloud_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">cloud_name</span> <span class="o">!=</span> <span class="n">cname</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="n">rname</span><span class="p">,</span> <span class="n">rtype</span> <span class="ow">in</span> <span class="n">ctype</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">qualify_name</span><span class="p">:</span>
+                <span class="n">resources</span><span class="p">[</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">.</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">cname</span><span class="p">,</span> <span class="n">rname</span><span class="p">)]</span> <span class="o">=</span> <span class="n">rtype</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">resources</span><span class="p">[</span><span class="n">rname</span><span class="p">]</span> <span class="o">=</span> <span class="n">rtype</span>
+
     <span class="k">for</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span> <span class="ow">in</span> <span class="n">resources</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="n">classes</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{},</span> <span class="s1">&#39;filters&#39;</span><span class="p">:</span> <span class="p">{}}</span>
-
         <span class="n">actions</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">action_name</span><span class="p">,</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">actions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action_name</span><span class="p">)</span>

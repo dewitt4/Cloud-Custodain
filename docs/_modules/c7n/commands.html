@@ -218,7 +218,7 @@
 <span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">PolicyCollection</span><span class="p">,</span> <span class="n">load</span> <span class="k">as</span> <span class="n">policy_load</span>
 <span class="kn">from</span> <span class="nn">c7n.reports</span> <span class="k">import</span> <span class="n">report</span> <span class="k">as</span> <span class="n">do_report</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">Bag</span><span class="p">,</span> <span class="n">dumps</span><span class="p">,</span> <span class="n">load_file</span>
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">provider</span>
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">schema</span>
 
@@ -467,14 +467,23 @@
     <span class="n">load_resources</span><span class="p">()</span>
     <span class="n">components</span> <span class="o">=</span> <span class="n">prefix</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
 
+    <span class="k">if</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">provider</span><span class="o">.</span><span class="n">clouds</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">cloud_provider</span> <span class="o">=</span> <span class="n">components</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">provider_resources</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="n">cloud_provider</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cloud_provider</span> <span class="o">=</span> <span class="s1">&#39;aws&#39;</span>
+        <span class="n">provider_resources</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="s1">&#39;aws&#39;</span><span class="p">)</span>
+        <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;aws.</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
     <span class="c1"># Completions for resource</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="n">choices</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">)]</span>
+        <span class="n">choices</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">provider</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+                   <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">choices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">choices</span> <span class="o">+=</span> <span class="p">[</span><span class="s1">&#39;</span><span class="si">{}{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;.&#39;</span><span class="p">)]</span>
         <span class="k">return</span> <span class="n">choices</span>
 
-    <span class="k">if</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resources</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+    <span class="k">if</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">provider_resources</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
         <span class="k">return</span> <span class="p">[]</span>
 
     <span class="c1"># Completions for category</span>
@@ -487,7 +496,7 @@
 
     <span class="c1"># Completions for item</span>
     <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-        <span class="n">resource_mapping</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resource_vocabulary</span><span class="p">()</span>
+        <span class="n">resource_mapping</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resource_vocabulary</span><span class="p">(</span><span class="n">cloud_provider</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">.</span><span class="si">{}</span><span class="s1">.</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">components</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">x</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">resource_mapping</span><span class="p">[</span><span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="n">components</span><span class="p">[</span><span class="mi">1</span><span class="p">]]]</span>
 
@@ -502,7 +511,6 @@
 
     <span class="n">load_resources</span><span class="p">()</span>
     <span class="n">resource_mapping</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resource_vocabulary</span><span class="p">()</span>
-
     <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">summary</span><span class="p">:</span>
         <span class="n">schema</span><span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="n">resource_mapping</span><span class="p">)</span>
         <span class="k">return</span>
@@ -522,13 +530,21 @@
     <span class="c1">#   - Show class doc string and schema for supplied filter</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">resource</span><span class="p">:</span>
-        <span class="n">resource_list</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;resources&#39;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">resources</span><span class="o">.</span><span class="n">keys</span><span class="p">())}</span>
+        <span class="n">resource_list</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;resources&#39;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">provider</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span><span class="o">.</span><span class="n">keys</span><span class="p">())}</span>
         <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">safe_dump</span><span class="p">(</span><span class="n">resource_list</span><span class="p">,</span> <span class="n">default_flow_style</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
         <span class="k">return</span>
 
-    <span class="c1"># Format is RESOURCE.CATEGORY.ITEM</span>
+    <span class="c1"># Format is [PROVIDER].RESOURCE.CATEGORY.ITEM</span>
+    <span class="c1"># optional provider defaults to aws for compatibility</span>
     <span class="n">components</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">resource</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
-
+    <span class="k">if</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="n">provider</span><span class="o">.</span><span class="n">clouds</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">cloud_provider</span> <span class="o">=</span> <span class="n">components</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">resource_mapping</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resource_vocabulary</span><span class="p">(</span>
+            <span class="n">cloud_provider</span><span class="p">)</span>
+        <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">.</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">cloud_provider</span><span class="p">,</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">resource_mapping</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">resource_vocabulary</span><span class="p">(</span><span class="s1">&#39;aws&#39;</span><span class="p">)</span>
+        <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;aws.</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
     <span class="c1">#</span>
     <span class="c1"># Handle resource</span>
     <span class="c1">#</span>
