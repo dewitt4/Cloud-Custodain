@@ -417,8 +417,8 @@
 <div class="viewcode-block" id="custodian_archive"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.custodian_archive">[docs]</a><span class="k">def</span> <span class="nf">custodian_archive</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Create a lambda code archive for running custodian.</span>
 
-<span class="sd">    Lambda archive currently always includes `c7n` and `pkg_resources`. Add additional</span>
-<span class="sd">    packages in the mode block</span>
+<span class="sd">    Lambda archive currently always includes `c7n` and</span>
+<span class="sd">    `pkg_resources`. Add additional packages in the mode block.</span>
 
 <span class="sd">    Example policy that includes additional packages</span>
 
@@ -431,13 +431,13 @@
 <span class="sd">            packages:</span>
 <span class="sd">              - botocore</span>
 
-<span class="sd">    Kwargs:</span>
-<span class="sd">        packages (set): List of additional packages to include in the lambda archive.</span>
+<span class="sd">    packages: List of additional packages to include in the lambda archive.</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">modules</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;pkg_resources&#39;</span><span class="p">}</span>
     <span class="k">if</span> <span class="n">packages</span><span class="p">:</span>
         <span class="n">modules</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">packages</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">PythonPackageArchive</span><span class="p">(</span><span class="o">*</span><span class="n">modules</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">PythonPackageArchive</span><span class="p">(</span><span class="o">*</span><span class="nb">sorted</span><span class="p">(</span><span class="n">modules</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="LambdaManager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager">[docs]</a><span class="k">class</span> <span class="nc">LambdaManager</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -545,9 +545,23 @@
 
 <div class="viewcode-block" id="LambdaManager.delta_function"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.delta_function">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">delta_function</span><span class="p">(</span><span class="n">old_config</span><span class="p">,</span> <span class="n">new_config</span><span class="p">):</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">new_config</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">old_config</span> <span class="ow">or</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
-                <span class="k">return</span> <span class="kc">True</span></div>
+            <span class="c1"># Vpc needs special handling as a dict with lists</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;VpcConfig&#39;</span> <span class="ow">and</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_config</span> <span class="ow">and</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
+                <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;SubnetIds&#39;</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span>
+                        <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;SubnetIds&#39;</span><span class="p">]):</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">elif</span> <span class="nb">set</span><span class="p">(</span><span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;SecurityGroupIds&#39;</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">set</span><span class="p">(</span>
+                        <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="s1">&#39;SecurityGroupIds&#39;</span><span class="p">]):</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">old_config</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">LAMBDA_EMPTY_VALUES</span> <span class="ow">and</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">==</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
+                    <span class="k">continue</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">elif</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">found</span></div>
 
 <div class="viewcode-block" id="LambdaManager.diff_tags"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaManager.diff_tags">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">diff_tags</span><span class="p">(</span><span class="n">old_tags</span><span class="p">,</span> <span class="n">new_tags</span><span class="p">):</span>
@@ -577,7 +591,8 @@
         <span class="n">changed</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
             <span class="n">old_config</span> <span class="o">=</span> <span class="n">existing</span><span class="p">[</span><span class="s1">&#39;Configuration&#39;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">archive</span><span class="o">.</span><span class="n">get_checksum</span><span class="p">()</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span><span class="s1">&#39;CodeSha256&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">archive</span><span class="o">.</span><span class="n">get_checksum</span><span class="p">()</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span>
+                    <span class="s1">&#39;CodeSha256&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;ascii&#39;</span><span class="p">):</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Updating function </span><span class="si">%s</span><span class="s2"> code&quot;</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                 <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">Publish</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
                 <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">code_ref</span><span class="p">)</span>
@@ -762,16 +777,27 @@
             <span class="s1">&#39;Runtime&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="p">,</span>
             <span class="s1">&#39;Handler&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">handler</span><span class="p">,</span>
             <span class="s1">&#39;Timeout&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
-            <span class="s1">&#39;DeadLetterConfig&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dead_letter_config</span><span class="p">,</span>
+            <span class="s1">&#39;TracingConfig&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracing_config</span><span class="p">,</span>
             <span class="s1">&#39;Environment&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">environment</span><span class="p">,</span>
             <span class="s1">&#39;KMSKeyArn&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kms_key_arn</span><span class="p">,</span>
-            <span class="s1">&#39;TracingConfig&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracing_config</span><span class="p">,</span>
+            <span class="s1">&#39;DeadLetterConfig&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dead_letter_config</span><span class="p">,</span>
+            <span class="s1">&#39;VpcConfig&#39;</span><span class="p">:</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;VpcConfig&#39;</span><span class="p">],</span>
             <span class="s1">&#39;Tags&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">tags</span><span class="p">}</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnets</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">security_groups</span><span class="p">:</span>
             <span class="n">conf</span><span class="p">[</span><span class="s1">&#39;VpcConfig&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s1">&#39;SubnetIds&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">subnets</span><span class="p">,</span>
                 <span class="s1">&#39;SecurityGroupIds&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">security_groups</span><span class="p">}</span>
         <span class="k">return</span> <span class="n">conf</span></div></div>
+
+
+<span class="n">LAMBDA_EMPTY_VALUES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;Environment&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;Variables&#39;</span><span class="p">:</span> <span class="p">{}},</span>
+    <span class="s1">&#39;DeadLetterConfig&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;TargetArn&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;TracingConfig&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;Mode&#39;</span><span class="p">:</span> <span class="s1">&#39;PassThrough&#39;</span><span class="p">},</span>
+    <span class="s1">&#39;VpcConfig&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;SubnetIds&#39;</span><span class="p">:</span> <span class="p">[],</span> <span class="s1">&#39;SecurityGroupIds&#39;</span><span class="p">:</span> <span class="p">[]},</span>
+    <span class="s1">&#39;KMSKeyArn&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+<span class="p">}</span>
 
 
 <div class="viewcode-block" id="LambdaFunction"><a class="viewcode-back" href="../../generated/c7n.html#c7n.mu.LambdaFunction">[docs]</a><span class="k">class</span> <span class="nc">LambdaFunction</span><span class="p">(</span><span class="n">AbstractLambdaFunction</span><span class="p">):</span>
@@ -825,11 +851,13 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">dead_letter_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dead_letter_config&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;dead_letter_config&#39;</span><span class="p">,</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;DeadLetterConfig&#39;</span><span class="p">])</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">environment</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;environment&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;environment&#39;</span><span class="p">,</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;Environment&#39;</span><span class="p">])</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">kms_key_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -837,7 +865,9 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tracing_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tracing_config&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="c1"># Default</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;tracing_config&#39;</span><span class="p">,</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;TracingConfig&#39;</span><span class="p">])</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -903,11 +933,13 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">dead_letter_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;dead_letter_config&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;dead_letter_config&#39;</span><span class="p">,</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;DeadLetterConfig&#39;</span><span class="p">])</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">environment</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;environment&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;environment&#39;</span><span class="p">,</span> <span class="n">LAMBDA_EMPTY_VALUES</span><span class="p">[</span><span class="s1">&#39;Environment&#39;</span><span class="p">])</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">kms_key_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -915,7 +947,9 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tracing_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tracing_config&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="c1"># Default</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s1">&#39;tracing_config&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;Mode&#39;</span><span class="p">:</span> <span class="s1">&#39;PassThrough&#39;</span><span class="p">})</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
