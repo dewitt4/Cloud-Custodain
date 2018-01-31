@@ -207,7 +207,7 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">Action</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">Action</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.vpc</span> <span class="k">import</span> <span class="n">SecurityGroupFilter</span><span class="p">,</span> <span class="n">SubnetFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -277,13 +277,13 @@
 <div class="viewcode-block" id="Subnet"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.Subnet">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Subnet</span><span class="p">(</span><span class="n">SubnetFilter</span><span class="p">):</span>
 
-    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VPCOptions.SubnetIds&quot;</span></div>
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VPCOptions.SubnetIds[]&quot;</span></div>
 
 
 <div class="viewcode-block" id="SecurityGroup"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.SecurityGroup">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;security-group&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">SecurityGroup</span><span class="p">(</span><span class="n">SecurityGroupFilter</span><span class="p">):</span>
 
-    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VPCOptions.SecurityGroupIds&quot;</span></div>
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;VPCOptions.SecurityGroupIds[]&quot;</span></div>
 
 
 <div class="viewcode-block" id="Metrics"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.Metrics">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
@@ -294,6 +294,23 @@
                  <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">},</span>
                 <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;DomainName&#39;</span><span class="p">,</span>
                  <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">]}]</span></div></div>
+
+
+<div class="viewcode-block" id="ElasticSearchModifySG"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchModifySG">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-security-groups&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ElasticSearchModifySG</span><span class="p">(</span><span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Modify security groups on an Elasticsearch domain&quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;es:UpdateElasticsearchDomainConfig&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="ElasticSearchModifySG.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.ElasticSearchModifySG.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">domains</span><span class="p">):</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ElasticSearchModifySG</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_groups</span><span class="p">(</span><span class="n">domains</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;es&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">dx</span><span class="p">,</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">domains</span><span class="p">):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">update_elasticsearch_domain_config</span><span class="p">(</span>
+                <span class="n">DomainName</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;DomainName&#39;</span><span class="p">],</span>
+                <span class="n">VPCOptions</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s1">&#39;SecurityGroupIds&#39;</span><span class="p">:</span> <span class="n">groups</span><span class="p">[</span><span class="n">dx</span><span class="p">]})</span></div></div>
 
 
 <div class="viewcode-block" id="Delete"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticsearch.Delete">[docs]</a><span class="nd">@ElasticSearchDomain</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
