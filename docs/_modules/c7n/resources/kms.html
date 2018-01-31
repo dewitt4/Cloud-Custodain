@@ -227,8 +227,15 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">key_id</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;AliasArn&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyArn&#39;</span><span class="p">)</span>
-            <span class="n">info</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">]</span>
-            <span class="n">r</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">info</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">]</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Access denied describing key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">key_id</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
 
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">tags</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_resource_tags</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
@@ -237,6 +244,8 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                         <span class="s2">&quot;Access denied getting tags for key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                         <span class="n">key_id</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span>
 
             <span class="n">tag_list</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
