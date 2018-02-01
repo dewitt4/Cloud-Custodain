@@ -213,49 +213,13 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
-<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">universal_augment</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.kms&#39;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="KeyBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyBase">[docs]</a><span class="k">class</span> <span class="nc">KeyBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;kms:ListResourceTags&#39;</span><span class="p">,)</span>
-
-<div class="viewcode-block" id="KeyBase.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyBase.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">key_id</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;AliasArn&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyArn&#39;</span><span class="p">)</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">info</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">]</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Access denied describing key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">key_id</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">r</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
-
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">tags</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_resource_tags</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                        <span class="s2">&quot;Access denied getting tags for key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="n">key_id</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span>
-
-            <span class="n">tag_list</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
-                <span class="n">tag_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TagKey&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;TagValue&#39;</span><span class="p">]})</span>
-            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tag_list</span>
-        <span class="k">return</span> <span class="n">resources</span></div></div>
-
-
 <div class="viewcode-block" id="KeyAlias"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyAlias">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">KeyAlias</span><span class="p">(</span><span class="n">KeyBase</span><span class="p">,</span> <span class="n">QueryResourceManager</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">KeyAlias</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
 <div class="viewcode-block" id="KeyAlias.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyAlias.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;kms&#39;</span>
@@ -271,7 +235,7 @@
 
 
 <div class="viewcode-block" id="Key"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.Key">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">Key</span><span class="p">(</span><span class="n">KeyBase</span><span class="p">,</span> <span class="n">QueryResourceManager</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">Key</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
 <div class="viewcode-block" id="Key.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.Key.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;kms&#39;</span>
@@ -280,7 +244,28 @@
         <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;KeyId&quot;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s2">&quot;KeyArn&quot;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">universal_taggable</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="Key.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.Key.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">key_id</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyArn&#39;</span><span class="p">)</span>
+                <span class="n">info</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key_id</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">]</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Access denied when describing key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">key_id</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span>
+
+        <span class="k">return</span> <span class="n">universal_augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="KeyRotationStatus"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KeyRotationStatus">[docs]</a><span class="nd">@Key</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;key-rotation-status&#39;</span><span class="p">)</span>
@@ -307,8 +292,16 @@
 
         <span class="k">def</span> <span class="nf">_key_rotation_status</span><span class="p">(</span><span class="n">resource</span><span class="p">):</span>
             <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
-            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_key_rotation_status</span><span class="p">(</span>
-                <span class="n">KeyId</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">])</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_key_rotation_status</span><span class="p">(</span>
+                    <span class="n">KeyId</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDeniedException&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Access denied when getting rotation status on key:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyArn&#39;</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span>
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">query_resources</span> <span class="o">=</span> <span class="p">[</span>
@@ -317,7 +310,7 @@
                 <span class="s2">&quot;Querying </span><span class="si">%d</span><span class="s2"> kms-keys&#39; rotation status&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">query_resources</span><span class="p">))</span>
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_key_rotation_status</span><span class="p">,</span> <span class="n">query_resources</span><span class="p">))</span>
 
-        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">])]</span></div></div>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;KeyRotationEnabled&#39;</span><span class="p">,{}))]</span></div></div>
 
 
 <div class="viewcode-block" id="KMSCrossAccountAccessFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KMSCrossAccountAccessFilter">[docs]</a><span class="nd">@Key</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
@@ -487,70 +480,6 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">key_id</span><span class="p">,</span>
                 <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyRemoved&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;Statements&#39;</span><span class="p">:</span> <span class="n">found</span><span class="p">}</span></div></div>
-
-
-<div class="viewcode-block" id="TagKmsKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.TagKmsKey">[docs]</a><span class="nd">@Key</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">TagKmsKey</span><span class="p">(</span><span class="n">Tag</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Action to create tag(s) on KMS keys</span>
-
-<span class="sd">    :example:</span>
-
-<span class="sd">    .. code-block:: yaml</span>
-
-<span class="sd">        policies:</span>
-<span class="sd">          - name: tag-kms-keys</span>
-<span class="sd">            resource: kms-key</span>
-<span class="sd">            filters:</span>
-<span class="sd">              - &quot;tag:RequiredTag&quot;: absent</span>
-<span class="sd">            actions:</span>
-<span class="sd">              - type: tag</span>
-<span class="sd">                key: RequiredTag</span>
-<span class="sd">                value: tag-value</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;kms:TagResource&#39;</span><span class="p">,)</span>
-
-<div class="viewcode-block" id="TagKmsKey.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.TagKmsKey.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
-        <span class="n">add_tags</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span><span class="p">:</span>
-            <span class="n">add_tags</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;TagKey&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="s1">&#39;TagValue&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]})</span>
-        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">tag_resource</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">k</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">],</span> <span class="n">Tags</span><span class="o">=</span><span class="n">add_tags</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s1">&#39;Error tagging key: </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="n">k</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span></div></div>
-
-
-<div class="viewcode-block" id="RemoveTagKmsKey"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.RemoveTagKmsKey">[docs]</a><span class="nd">@Key</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">RemoveTagKmsKey</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Action to remove tag(s) on KMS keys</span>
-
-<span class="sd">    :example:</span>
-
-<span class="sd">    .. code-block:: yaml</span>
-
-<span class="sd">        policies:</span>
-<span class="sd">          - name: kms-key-remove-tag</span>
-<span class="sd">            resource: kms-key</span>
-<span class="sd">            filters:</span>
-<span class="sd">              - &quot;tag:ExpiredTag&quot;: present</span>
-<span class="sd">            actions:</span>
-<span class="sd">              - type: remove-tag</span>
-<span class="sd">                tags: [&quot;ExpiredTag&quot;]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;kms:UntagResource&#39;</span><span class="p">,)</span>
-
-<div class="viewcode-block" id="RemoveTagKmsKey.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.RemoveTagKmsKey.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">untag_resource</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">k</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">],</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s1">&#39;Error removing tag(s) </span><span class="si">%s</span><span class="s1"> from key: </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="n">tags</span><span class="p">,</span> <span class="n">k</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span></div></div>
 </pre></div>
 
            </div>
