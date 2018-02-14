@@ -548,6 +548,47 @@
         <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
                 <span class="s2">&quot;Exception modifying queue:</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">e</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="SetRetentionPeriod"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetRetentionPeriod">[docs]</a><span class="nd">@SQS</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-retention-period&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetRetentionPeriod</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to set the retention period on an SQS queue (in seconds)</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: sqs-reduce-long-retention-period</span>
+<span class="sd">            resource: sqs</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: value</span>
+<span class="sd">                key: MessageRetentionPeriod</span>
+<span class="sd">                value_type: integer</span>
+<span class="sd">                value: 345600</span>
+<span class="sd">                op: ge</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-retention-period</span>
+<span class="sd">                period: 86400</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-retention-period&#39;</span><span class="p">,</span>
+        <span class="n">period</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="s1">&#39;exclusiveMinimum&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s1">&#39;maximum&#39;</span><span class="p">:</span> <span class="mi">1209600</span><span class="p">,</span> <span class="s1">&#39;exclusiveMaximum&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sqs:SetQueueAttributes&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="SetRetentionPeriod.process_queue"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetRetentionPeriod.process_queue">[docs]</a>    <span class="k">def</span> <span class="nf">process_queue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sqs&#39;</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">set_queue_attributes</span><span class="p">(</span>
+            <span class="n">QueueUrl</span><span class="o">=</span><span class="n">q</span><span class="p">[</span><span class="s1">&#39;QueueUrl&#39;</span><span class="p">],</span>
+            <span class="n">Attributes</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;MessageRetentionPeriod&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">period</span><span class="p">)})</span></div>
+
+<div class="viewcode-block" id="SetRetentionPeriod.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SetRetentionPeriod.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queues</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">period</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;period&#39;</span><span class="p">,</span> <span class="mi">345600</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_queue</span><span class="p">,</span> <span class="n">queues</span><span class="p">))</span></div></div>
 </pre></div>
 
            </div>
