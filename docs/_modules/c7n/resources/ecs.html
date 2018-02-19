@@ -487,6 +487,40 @@
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span>
                         <span class="s1">&#39;Message&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;The specified task definition does not exist.&#39;</span><span class="p">:</span>
                     <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="ContainerInstance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ContainerInstance">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs-container-instance&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ContainerInstance</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">ChildResourceManager</span><span class="p">):</span>
+
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">100</span>
+
+<div class="viewcode-block" id="ContainerInstance.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ContainerInstance.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;containerInstance&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_container_instances&#39;</span><span class="p">,</span> <span class="s1">&#39;containerInstanceArns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">parent_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">,</span> <span class="s1">&#39;cluster&#39;</span><span class="p">)</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">source_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;describe&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;describe&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-child&#39;</span><span class="p">):</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="s1">&#39;describe-ecs-container-instance&#39;</span>
+        <span class="k">return</span> <span class="n">source</span></div>
+
+
+<div class="viewcode-block" id="ECSContainerInstanceDescribeSource"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSContainerInstanceDescribeSource">[docs]</a><span class="nd">@query</span><span class="o">.</span><span class="n">sources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;describe-ecs-container-instance&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ECSContainerInstanceDescribeSource</span><span class="p">(</span><span class="n">ECSClusterResourceDescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="ECSContainerInstanceDescribeSource.process_cluster_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSContainerInstanceDescribeSource.process_cluster_resources">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">cluster_id</span><span class="p">,</span> <span class="n">container_instances</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">container_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">container_instances</span><span class="p">)</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_container_instances</span><span class="p">(</span>
+                    <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">containerInstances</span><span class="o">=</span><span class="n">container_instances</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 </pre></div>
 
            </div>
