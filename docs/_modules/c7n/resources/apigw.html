@@ -203,6 +203,8 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
@@ -231,16 +233,20 @@
 
     <span class="k">def</span> <span class="nf">_get_account</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;apigateway&#39;</span><span class="p">)</span>
-        <span class="n">account</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_account</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">account</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_account</span><span class="p">()</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;NotFoundException&#39;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="p">[]</span>
         <span class="n">account</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;ResponseMetadata&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">account</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;apigw-settings&#39;</span>
-        <span class="k">return</span> <span class="n">account</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">account</span><span class="p">]</span>
 
 <div class="viewcode-block" id="RestAccount.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.apigw.RestAccount.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_account</span><span class="p">()])</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_account</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="RestAccount.get_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.apigw.RestAccount.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_ids</span><span class="p">):</span>
-        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_account</span><span class="p">()]</span></div></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_account</span><span class="p">()</span></div></div>
 
 
 <span class="n">OP_SCHEMA</span> <span class="o">=</span> <span class="p">{</span>
