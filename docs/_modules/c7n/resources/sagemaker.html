@@ -205,6 +205,8 @@
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
+<span class="kn">import</span> <span class="nn">six</span>
+
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -256,13 +258,104 @@
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;sagemaker&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_training_jobs&#39;</span><span class="p">,</span> <span class="s1">&#39;TrainingJobSummaries&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">detail_spec</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="s1">&#39;describe_training_job&#39;</span><span class="p">,</span> <span class="s1">&#39;TrainingJobName&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;TrainingJobName&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="s1">&#39;describe_training_job&#39;</span><span class="p">,</span> <span class="s1">&#39;TrainingJobName&#39;</span><span class="p">,</span> <span class="s1">&#39;TrainingJobName&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;TrainingJobArn&#39;</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;TrainingJobName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreationTime&#39;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;sagemaker:ListTrainingJobs&#39;</span><span class="p">,</span> <span class="s1">&#39;sagemaker:DescribeTrainingJobs&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;sagemaker:ListTags&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SagemakerJob</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queries</span> <span class="o">=</span> <span class="n">QueryFilter</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">,</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s1">&#39;StatusEquals&#39;</span><span class="p">:</span> <span class="s1">&#39;InProgress&#39;</span><span class="p">}]))</span>
+
+<div class="viewcode-block" id="SagemakerJob.resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.SagemakerJob.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queries</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">q</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">query</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">q</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">query</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+            <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">SagemakerJob</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">query</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SagemakerJob.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.SagemakerJob.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">jobs</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sagemaker&#39;</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">_augment</span><span class="p">(</span><span class="n">j</span><span class="p">):</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_tags</span><span class="p">(</span><span class="n">ResourceArn</span><span class="o">=</span><span class="n">j</span><span class="p">[</span><span class="s1">&#39;TrainingJobArn&#39;</span><span class="p">])[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+            <span class="n">j</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tags</span>
+            <span class="k">return</span> <span class="n">j</span>
+
+        <span class="n">jobs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">SagemakerJob</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_augment</span><span class="p">,</span> <span class="n">jobs</span><span class="p">)))</span></div></div>
+
+
+<span class="n">JOB_FILTERS</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;StatusEquals&#39;</span><span class="p">,</span> <span class="s1">&#39;NameContains&#39;</span><span class="p">,)</span>
+
+
+<div class="viewcode-block" id="QueryFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.QueryFilter">[docs]</a><span class="k">class</span> <span class="nc">QueryFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="QueryFilter.parse"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.QueryFilter.parse">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Training-Job Query Filter Invalid structure </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">d</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">d</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s1">&#39;Training-job query filter invalid structure </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">v</span><span class="p">)</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">query</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="c1"># Cannot filter multiple times on the same key</span>
+                <span class="k">continue</span>
+            <span class="n">names</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">query</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">query</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="n">query</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span> <span class="n">query</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]})</span>
+                <span class="k">continue</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="n">query</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]:</span> <span class="n">query</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]})</span>
+        <span class="k">if</span> <span class="s1">&#39;StatusEquals&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+            <span class="c1"># add default StatusEquals if not included</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;StatusEquals&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;InProgress&#39;</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="QueryFilter.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.QueryFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Training-Job Query Filter Invalid </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">JOB_FILTERS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;tag:&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Training-Job Query Filter invalid filter name </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Training-Job Query Filters must have a value, use tag-key&quot;</span>
+                <span class="s2">&quot; w/ tag name as value for tag present checks&quot;</span>
+                <span class="s2">&quot; </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="QueryFilter.query"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.QueryFilter.query">[docs]</a>    <span class="k">def</span> <span class="nf">query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">}</span></div></div>
 
 
 <div class="viewcode-block" id="SagemakerEndpoint"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.SagemakerEndpoint">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;sagemaker-endpoint&#39;</span><span class="p">)</span>
@@ -389,6 +482,7 @@
 <div class="viewcode-block" id="TagNotebookInstance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.TagNotebookInstance">[docs]</a><span class="nd">@SagemakerEndpoint</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
 <span class="nd">@SagemakerEndpointConfig</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
 <span class="nd">@NotebookInstance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
+<span class="nd">@SagemakerJob</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
 <span class="nd">@Model</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">TagNotebookInstance</span><span class="p">(</span><span class="n">Tag</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Action to create tag(s) on a SageMaker resource</span>
@@ -425,6 +519,15 @@
 <span class="sd">                  - type: tag</span>
 <span class="sd">                    key: required-tag</span>
 <span class="sd">                    value: required-value</span>
+
+<span class="sd">              - name: tag-sagemaker-job</span>
+<span class="sd">                resource: sagemaker-job</span>
+<span class="sd">                filters:</span>
+<span class="sd">                    - &quot;tag:required-tag&quot;: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: tag</span>
+<span class="sd">                    key: required-tag</span>
+<span class="sd">                    value: required-value</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sagemaker:AddTags&#39;</span><span class="p">,)</span>
 
@@ -442,6 +545,7 @@
 <div class="viewcode-block" id="RemoveTagNotebookInstance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sagemaker.RemoveTagNotebookInstance">[docs]</a><span class="nd">@SagemakerEndpoint</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
 <span class="nd">@SagemakerEndpointConfig</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
 <span class="nd">@NotebookInstance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
+<span class="nd">@SagemakerJob</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
 <span class="nd">@Model</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">RemoveTagNotebookInstance</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Remove tag(s) from SageMaker resources</span>
@@ -470,6 +574,14 @@
 
 <span class="sd">              - name: sagemaker-endpoint-config-remove-tag</span>
 <span class="sd">                resource: sagemaker-endpoint-config</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:expired-tag&quot;: present</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: remove-tag</span>
+<span class="sd">                    tags: [&quot;expired-tag&quot;]</span>
+
+<span class="sd">              - name: sagemaker-job-remove-tag</span>
+<span class="sd">                resource: sagemaker-job</span>
 <span class="sd">                filters:</span>
 <span class="sd">                  - &quot;tag:expired-tag&quot;: present</span>
 <span class="sd">                actions:</span>
