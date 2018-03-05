@@ -208,7 +208,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">MetricsFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">group_by</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 
 
@@ -515,12 +515,94 @@
 <div class="viewcode-block" id="ECSContainerInstanceDescribeSource.process_cluster_resources"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.ECSContainerInstanceDescribeSource.process_cluster_resources">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">cluster_id</span><span class="p">,</span> <span class="n">container_instances</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">container_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">container_instances</span><span class="p">)</span>
-            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">describe_container_instances</span><span class="p">(</span>
-                    <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
-                    <span class="n">containerInstances</span><span class="o">=</span><span class="n">container_instances</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_container_instances</span><span class="p">(</span><span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">containerInstances</span><span class="o">=</span><span class="n">container_instances</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="c1"># Many Container Instance API calls require the cluster_id, adding as a</span>
+            <span class="c1"># custodian specific key in the resource</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">i</span><span class="p">[</span><span class="s1">&#39;c7n:cluster&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cluster_id</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="SetState"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.SetState">[docs]</a><span class="nd">@ContainerInstance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-state&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetState</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Updates a container instance to either ACTIVE or DRAINING</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">            - name: drain-container-instances</span>
+<span class="sd">              resource: ecs-container-instance</span>
+<span class="sd">              actions:</span>
+<span class="sd">                - type: set-state</span>
+<span class="sd">                  state: DRAINING</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-state&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">,</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;DRAINING&#39;</span><span class="p">,</span> <span class="s1">&#39;ACTIVE&#39;</span><span class="p">]})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:UpdateContainerInstancesState&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="SetState.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.SetState.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">cluster_map</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="s1">&#39;c7n:cluster&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">cluster_map</span><span class="p">:</span>
+            <span class="n">c_instances</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;containerInstanceArn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">cluster_map</span><span class="p">[</span><span class="n">cluster</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)]</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_cluster</span><span class="p">(</span><span class="n">cluster</span><span class="p">,</span> <span class="n">c_instances</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="SetState.process_cluster"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.SetState.process_cluster">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">c_instances</span><span class="p">):</span>
+        <span class="c1"># Limit on number of container instance that can be updated in a single</span>
+        <span class="c1"># update_container_instances_state call is 10</span>
+        <span class="n">chunk_size</span> <span class="o">=</span> <span class="mi">10</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">c_instances</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_container_instances_state</span><span class="p">(</span>
+                    <span class="n">cluster</span> <span class="o">=</span> <span class="n">cluster</span><span class="p">,</span>
+                    <span class="n">containerInstances</span> <span class="o">=</span> <span class="n">service_set</span><span class="p">,</span>
+                    <span class="n">status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">))</span>
+            <span class="k">except</span> <span class="n">ClientError</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s1">&#39;Failed to update Container Instances State: </span><span class="si">%s</span><span class="s1">, cluster </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span>
+                    <span class="p">(</span><span class="n">service_set</span><span class="p">,</span> <span class="n">cluster</span><span class="p">))</span>
+                <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="UpdateAgent"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.UpdateAgent">[docs]</a><span class="nd">@ContainerInstance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;update-agent&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UpdateAgent</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Updates the agent on a container instance</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;update-agent&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:UpdateContainerAgent&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="UpdateAgent.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.UpdateAgent.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_instance</span><span class="p">(</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;c7n:cluster&#39;</span><span class="p">),</span>
+                <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstanceArn&#39;</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="UpdateAgent.process_instance"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ecs.UpdateAgent.process_instance">[docs]</a>    <span class="k">def</span> <span class="nf">process_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cluster</span><span class="p">,</span> <span class="n">instance</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">update_container_agent</span><span class="p">(</span>
+                <span class="n">cluster</span> <span class="o">=</span> <span class="n">cluster</span><span class="p">,</span>
+                <span class="n">containerInstance</span> <span class="o">=</span> <span class="n">instance</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;NoUpdateAvailableException&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s1">&#39;No update available for Container Instance: </span><span class="si">%s</span><span class="s1">, cluster: </span><span class="si">%s</span><span class="s1">&#39;</span>
+                    <span class="o">%</span> <span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">cluster</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;UpdateInProgressException&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s1">&#39;Container Instance Agent update already in progress: </span><span class="si">%s</span><span class="s1">, cluster </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span>
+                    <span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">cluster</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
