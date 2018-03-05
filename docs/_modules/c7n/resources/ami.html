@@ -319,6 +319,59 @@
             <span class="n">ImageId</span><span class="o">=</span><span class="n">image</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">],</span> <span class="n">Attribute</span><span class="o">=</span><span class="s2">&quot;launchPermission&quot;</span><span class="p">)</span></div></div>
 
 
+<div class="viewcode-block" id="Copy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.Copy">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;copy&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Copy</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to copy AMIs with optional encryption</span>
+
+<span class="sd">    This action can copy AMIs while optionally encrypting or decrypting</span>
+<span class="sd">    the target AMI. It is advised to use in conjunction with a filter.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: ami-ensure-encrypted</span>
+<span class="sd">                resource: ami</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - not:</span>
+<span class="sd">                    - type: encrypted</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: copy</span>
+<span class="sd">                    encrypt: true</span>
+<span class="sd">                    key-id: 00000000-0000-0000-0000-000000000000</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:CopyImage&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;copy&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;encrypt&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;key-id&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="Copy.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.Copy.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">images</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;ec2&#39;</span><span class="p">,</span>
+            <span class="n">region_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;region&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">copy_image</span><span class="p">(</span>
+                <span class="n">Name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="n">image</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]),</span>
+                <span class="n">Description</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;description&#39;</span><span class="p">,</span> <span class="n">image</span><span class="p">[</span><span class="s1">&#39;Description&#39;</span><span class="p">]),</span>
+                <span class="n">SourceRegion</span><span class="o">=</span><span class="n">session</span><span class="o">.</span><span class="n">region_name</span><span class="p">,</span>
+                <span class="n">SourceImageId</span><span class="o">=</span><span class="n">image</span><span class="p">[</span><span class="s1">&#39;ImageId&#39;</span><span class="p">],</span>
+                <span class="n">Encrypted</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;encrypt&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+                <span class="n">KmsKeyId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key-id&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">))</span></div></div>
+
+
 <div class="viewcode-block" id="ImageAgeFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ami.ImageAgeFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;image-age&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">ImageAgeFilter</span><span class="p">(</span><span class="n">AgeFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters images based on the age (in days)</span>
