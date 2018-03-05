@@ -205,7 +205,8 @@
 
 <span class="kn">import</span> <span class="nn">json</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">RemovePolicyBase</span>
+
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">RemovePolicyBase</span><span class="p">,</span> <span class="n">ModifyPolicyBase</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">PolicyChecker</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -390,6 +391,57 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;TopicArn&#39;</span><span class="p">],</span>
                 <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyRemoved&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;Statements&#39;</span><span class="p">:</span> <span class="n">found</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="ModifyPolicyStatement"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sns.ModifyPolicyStatement">[docs]</a><span class="nd">@SNS</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-policy&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ModifyPolicyStatement</span><span class="p">(</span><span class="n">ModifyPolicyBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to modify policy statements from SNS</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">           policies:</span>
+<span class="sd">              - name: sns-cross-account</span>
+<span class="sd">                resource: sns</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: cross-account</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: modify-policy</span>
+<span class="sd">                    add-statements: [statement]</span>
+<span class="sd">                    remove-statements: [statement_id] or * or &#39;matched&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;sns:SetTopicAttributes&#39;</span><span class="p">,</span> <span class="s1">&#39;sns:GetTopicAttributes&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ModifyPolicyStatement.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sns.ModifyPolicyStatement.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">policy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Policy&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">policy_statements</span> <span class="o">=</span> <span class="n">policy</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[])</span>
+
+            <span class="n">new_policy</span><span class="p">,</span> <span class="n">removed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">remove_statements</span><span class="p">(</span>
+                <span class="n">policy_statements</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">new_policy</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">new_policy</span> <span class="o">=</span> <span class="n">policy_statements</span>
+            <span class="n">new_policy</span><span class="p">,</span> <span class="n">added</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_statements</span><span class="p">(</span><span class="n">new_policy</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">removed</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">added</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">results</span> <span class="o">+=</span> <span class="p">{</span>
+                <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;TopicArn&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyModified&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Statements&#39;</span><span class="p">:</span> <span class="n">new_policy</span>
+            <span class="p">}</span>
+            <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;Statement&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_policy</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">set_topic_attributes</span><span class="p">(</span>
+                <span class="n">TopicArn</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;TopicArn&#39;</span><span class="p">],</span>
+                <span class="n">AttributeName</span><span class="o">=</span><span class="s1">&#39;Policy&#39;</span><span class="p">,</span>
+                <span class="n">AttributeValue</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 </pre></div>
 
            </div>
