@@ -204,11 +204,12 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">RemovePolicyBase</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">RemovePolicyBase</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -480,6 +481,51 @@
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">key_id</span><span class="p">,</span>
                 <span class="s1">&#39;State&#39;</span><span class="p">:</span> <span class="s1">&#39;PolicyRemoved&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;Statements&#39;</span><span class="p">:</span> <span class="n">found</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="KmsKeyRotation"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KmsKeyRotation">[docs]</a><span class="nd">@Key</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-rotation&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">KmsKeyRotation</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Toggle KMS key rotation</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policy:</span>
+<span class="sd">          - name: enable-cmk-rotation</span>
+<span class="sd">            resource: kms-key</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: key-rotation-status</span>
+<span class="sd">                key: KeyRotationEnabled</span>
+<span class="sd">                value: False</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-rotation</span>
+<span class="sd">                state: True</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;kms:EnableKeyRotation&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-rotation&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="KmsKeyRotation.set_rotation"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KmsKeyRotation.set_rotation">[docs]</a>    <span class="k">def</span> <span class="nf">set_rotation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">enable_key_rotation</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">])</span>
+            <span class="k">return</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">disable_key_rotation</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="KmsKeyRotation.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.kms.KmsKeyRotation.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">set_rotation</span><span class="p">,</span> <span class="n">k</span><span class="p">)]</span> <span class="o">=</span> <span class="n">k</span>
+
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;error setting key rotation on </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">key</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div></div>
 </pre></div>
 
            </div>
