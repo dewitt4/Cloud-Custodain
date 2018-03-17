@@ -186,7 +186,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n.filters.core</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2015-2017 Capital One Services, LLC</span>
+<span></span><span class="c1"># Copyright 2015-2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -204,6 +204,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">import</span> <span class="nn">copy</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 <span class="kn">import</span> <span class="nn">fnmatch</span>
@@ -400,10 +401,18 @@
         <span class="nb">super</span><span class="p">(</span><span class="n">And</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">registry</span> <span class="o">=</span> <span class="n">registry</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">filters</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="mi">0</span><span class="p">],</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="o">=</span> <span class="n">manager</span>
 
 <div class="viewcode-block" id="And.process"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.And.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">:</span>
+            <span class="n">sweeper</span> <span class="o">=</span> <span class="n">AnnotationSweeper</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span>
+
         <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">filters</span><span class="p">:</span>
             <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">events</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">:</span>
+            <span class="n">sweeper</span><span class="o">.</span><span class="n">sweep</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
         <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
@@ -433,6 +442,7 @@
 <div class="viewcode-block" id="Not.process_set"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.Not.process_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
         <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
         <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
+        <span class="n">sweeper</span> <span class="o">=</span> <span class="n">AnnotationSweeper</span><span class="p">(</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">filters</span><span class="p">:</span>
             <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
@@ -440,7 +450,36 @@
         <span class="n">before</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">resource_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
         <span class="n">after</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="n">resource_type</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">])</span>
         <span class="n">results</span> <span class="o">=</span> <span class="n">before</span> <span class="o">-</span> <span class="n">after</span>
+        <span class="n">sweeper</span><span class="o">.</span><span class="n">sweep</span><span class="p">([])</span>
+
         <span class="k">return</span> <span class="p">[</span><span class="n">resource_map</span><span class="p">[</span><span class="n">r_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">r_id</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="AnnotationSweeper"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.AnnotationSweeper">[docs]</a><span class="k">class</span> <span class="nc">AnnotationSweeper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Support clearing annotations set within a block filter.</span>
+
+<span class="sd">    See https://github.com/capitalone/cloud-custodian/issues/2116</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">id_key</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="n">id_key</span>
+        <span class="n">ra_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">resource_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">ra_map</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="n">id_key</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;c7n&#39;</span><span class="p">)}</span>
+            <span class="n">resource_map</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="n">id_key</span><span class="p">]]</span> <span class="o">=</span> <span class="n">r</span>
+        <span class="c1"># We keep a full copy of the annotation keys to allow restore.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ra_map</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">ra_map</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resource_map</span> <span class="o">=</span> <span class="n">resource_map</span>
+
+<div class="viewcode-block" id="AnnotationSweeper.sweep"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.AnnotationSweeper.sweep">[docs]</a>    <span class="k">def</span> <span class="nf">sweep</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">rid</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ra_map</span><span class="p">)</span><span class="o">.</span><span class="n">difference</span><span class="p">([</span>
+                <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]):</span>
+            <span class="c1"># Clear annotations if the block filter didn&#39;t match</span>
+            <span class="n">akeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_map</span><span class="p">[</span><span class="n">rid</span><span class="p">]</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;c7n&#39;</span><span class="p">)]</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">akeys</span><span class="p">:</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_map</span><span class="p">[</span><span class="n">rid</span><span class="p">][</span><span class="n">k</span><span class="p">]</span>
+            <span class="c1"># Restore annotations that may have existed prior to the block filter.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">resource_map</span><span class="p">[</span><span class="n">rid</span><span class="p">]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ra_map</span><span class="p">[</span><span class="n">rid</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="ValueFilter"><a class="viewcode-back" href="../../../generated/c7n.filters.html#c7n.query.ValueFilter">[docs]</a><span class="k">class</span> <span class="nc">ValueFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
