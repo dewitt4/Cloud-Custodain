@@ -431,6 +431,79 @@
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
+<div class="viewcode-block" id="DhcpOptionsFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DhcpOptionsFilter">[docs]</a><span class="nd">@Vpc</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;dhcp-options&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DhcpOptionsFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter VPCs based on their dhcp options</span>
+
+<span class="sd">     :example:</span>
+
+<span class="sd">     .. code-block: yaml</span>
+
+<span class="sd">        - policies:</span>
+<span class="sd">             - name: vpcs-in-domain</span>
+<span class="sd">               resource: vpc</span>
+<span class="sd">               filters:</span>
+<span class="sd">                 - type: dhcp-options</span>
+<span class="sd">                   domain-name: ec2.internal</span>
+
+<span class="sd">    if an option value is specified as a list, then all elements must be present.</span>
+<span class="sd">    if an option value is specified as a string, then that string must be present.</span>
+
+<span class="sd">    vpcs not matching a given option value can be found via specifying</span>
+<span class="sd">    a `present: false` parameter.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">option_keys</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;domain-name&#39;</span><span class="p">,</span> <span class="s1">&#39;domain-name-servers&#39;</span><span class="p">,</span> <span class="s1">&#39;ntp-servers&#39;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;dhcp-options&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span>
+        <span class="n">k</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;oneOf&#39;</span><span class="p">:</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}},</span>
+            <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}]}</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">option_keys</span><span class="p">})</span>
+    <span class="n">schema</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;present&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeDhcpOptions&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DhcpOptionsFilter.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DhcpOptionsFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">option_keys</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;one of </span><span class="si">%s</span><span class="s2"> required&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">option_keys</span><span class="p">,))</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="DhcpOptionsFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DhcpOptionsFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">option_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DhcpOptionsId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span>
+        <span class="n">options_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">options</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_dhcp_options</span><span class="p">(</span>
+                <span class="n">Filters</span><span class="o">=</span><span class="p">[{</span>
+                    <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;dhcp-options-id&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">option_ids</span><span class="p">}])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DhcpOptions&#39;</span><span class="p">,</span> <span class="p">()):</span>
+            <span class="n">options_map</span><span class="p">[</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;DhcpOptionsId&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">o</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="p">[</span><span class="n">v</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">o</span><span class="p">[</span><span class="s1">&#39;Values&#39;</span><span class="p">]]</span>
+                <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">options</span><span class="p">[</span><span class="s1">&#39;DhcpConfigurations&#39;</span><span class="p">]}</span>
+
+        <span class="k">for</span> <span class="n">vpc</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_vpc</span><span class="p">(</span><span class="n">vpc</span><span class="p">,</span> <span class="n">options_map</span><span class="p">[</span><span class="n">vpc</span><span class="p">[</span><span class="s1">&#39;DhcpOptionsId&#39;</span><span class="p">]]):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vpc</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="DhcpOptionsFilter.process_vpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.DhcpOptionsFilter.process_vpc">[docs]</a>    <span class="k">def</span> <span class="nf">process_vpc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vpc</span><span class="p">,</span> <span class="n">dhcp</span><span class="p">):</span>
+        <span class="n">vpc</span><span class="p">[</span><span class="s1">&#39;c7n:DhcpConfiguration&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dhcp</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">option_keys</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">is_list</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="nb">list</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">dhcp</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">is_list</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">dhcp</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="n">is_list</span> <span class="ow">and</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="o">!=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">dhcp</span><span class="p">[</span><span class="n">k</span><span class="p">]):</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;present&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">found</span>
+        <span class="k">return</span> <span class="n">found</span></div></div>
+
+
 <div class="viewcode-block" id="Subnet"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Subnet">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Subnet</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
