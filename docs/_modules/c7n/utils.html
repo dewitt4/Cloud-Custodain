@@ -206,13 +206,14 @@
 <span class="kn">import</span> <span class="nn">boto3</span>
 <span class="kn">import</span> <span class="nn">copy</span>
 <span class="kn">import</span> <span class="nn">csv</span>
-<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 <span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">re</span>
 <span class="kn">import</span> <span class="nn">threading</span>
 <span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">import</span> <span class="nn">six</span>
@@ -677,6 +678,38 @@
         <span class="k">return</span> <span class="n">obj</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">obj</span></div>
+
+
+<div class="viewcode-block" id="FormatDate"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.FormatDate">[docs]</a><span class="k">class</span> <span class="nc">FormatDate</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;a datetime wrapper with extended pyformat syntax&quot;&quot;&quot;</span>
+
+    <span class="n">date_increment</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;\+[0-9]+[Mdh]&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_d</span> <span class="o">=</span> <span class="n">d</span>
+
+<div class="viewcode-block" id="FormatDate.utcnow"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.FormatDate.utcnow">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">utcnow</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">())</span></div>
+
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_d</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__format__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_d</span>
+        <span class="n">increments</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_increment</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">increments</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;M&#39;</span><span class="p">:</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;minutes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;h&#39;</span><span class="p">:</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;hours&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;d&#39;</span><span class="p">:</span>
+                <span class="n">p</span><span class="p">[</span><span class="s1">&#39;days&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">d</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="o">**</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">increments</span><span class="p">:</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_increment</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">d</span><span class="o">.</span><span class="fm">__format__</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span></div>
 </pre></div>
 
            </div>
