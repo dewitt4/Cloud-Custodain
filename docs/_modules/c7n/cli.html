@@ -221,9 +221,7 @@
 <div class="viewcode-block" id="setproctitle"><a class="viewcode-back" href="../../generated/c7n.html#c7n.cli.setproctitle">[docs]</a>    <span class="k">def</span> <span class="nf">setproctitle</span><span class="p">(</span><span class="n">t</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 <span class="kn">from</span> <span class="nn">c7n.commands</span> <span class="k">import</span> <span class="n">schema_completer</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">get_account_id_from_sts</span>
 
 <span class="n">DEFAULT_REGION</span> <span class="o">=</span> <span class="s1">&#39;us-east-1&#39;</span>
 
@@ -298,43 +296,6 @@
             <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Cache validity in minutes (default </span><span class="si">%(default)i</span><span class="s2">)&quot;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--cache&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">SUPPRESS</span><span class="p">)</span>
-
-
-<span class="k">def</span> <span class="nf">_default_region</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
-    <span class="n">marker</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>
-    <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;regions&#39;</span><span class="p">,</span> <span class="n">marker</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="n">marker</span><span class="p">:</span>
-        <span class="k">return</span>
-
-    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">return</span>
-
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">regions</span> <span class="o">=</span> <span class="p">[</span><span class="n">utils</span><span class="o">.</span><span class="n">get_profile_session</span><span class="p">(</span><span class="n">options</span><span class="p">)</span><span class="o">.</span><span class="n">region_name</span><span class="p">]</span>
-    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Could not determine default region&#39;</span><span class="p">)</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">regions</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
-
-    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">regions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;No default region set. Specify a default via AWS_DEFAULT_REGION &#39;</span>
-                  <span class="s1">&#39;or setting a region in ~/.aws/config&#39;</span><span class="p">)</span>
-        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-
-    <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;using default region:</span><span class="si">%s</span><span class="s2"> from boto&quot;</span> <span class="o">%</span> <span class="n">options</span><span class="o">.</span><span class="n">regions</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-
-
-<span class="k">def</span> <span class="nf">_default_account_id</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">:</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">options</span><span class="o">.</span><span class="n">account_id</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
-            <span class="k">return</span>
-        <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
-            <span class="k">pass</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">session</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_profile_session</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">account_id</span> <span class="o">=</span> <span class="n">get_account_id_from_sts</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-        <span class="n">options</span><span class="o">.</span><span class="n">account_id</span> <span class="o">=</span> <span class="kc">None</span>
 
 
 <span class="k">def</span> <span class="nf">_report_options</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
@@ -567,10 +528,6 @@
     <span class="c1"># Support the deprecated -c option</span>
     <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;config&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">options</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
-
-    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">subparser</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;report&#39;</span><span class="p">,</span> <span class="s1">&#39;logs&#39;</span><span class="p">,</span> <span class="s1">&#39;metrics&#39;</span><span class="p">,</span> <span class="s1">&#39;run&#39;</span><span class="p">):</span>
-        <span class="n">_default_region</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
-        <span class="n">_default_account_id</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">command</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">command</span>

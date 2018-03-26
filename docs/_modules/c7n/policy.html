@@ -201,7 +201,6 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
-<span class="kn">import</span> <span class="nn">copy</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">fnmatch</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
@@ -209,7 +208,6 @@
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
-<span class="kn">import</span> <span class="nn">boto3</span>
 <span class="kn">from</span> <span class="nn">botocore.client</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">import</span> <span class="nn">jmespath</span>
 <span class="kn">import</span> <span class="nn">six</span>
@@ -217,10 +215,9 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">EventAction</span>
 <span class="kn">from</span> <span class="nn">c7n.cwe</span> <span class="k">import</span> <span class="n">CloudWatchEvents</span>
 <span class="kn">from</span> <span class="nn">c7n.ctx</span> <span class="k">import</span> <span class="n">ExecutionContext</span>
-<span class="kn">from</span> <span class="nn">c7n.credentials</span> <span class="k">import</span> <span class="n">SessionFactory</span>
-<span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">DEFAULT_NAMESPACE</span>
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
+<span class="kn">from</span> <span class="nn">c7n.provider</span> <span class="k">import</span> <span class="n">clouds</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">mu</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
@@ -269,35 +266,6 @@
     <span class="k">return</span> <span class="n">collection</span></div>
 
 
-<div class="viewcode-block" id="get_service_region_map"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.get_service_region_map">[docs]</a><span class="k">def</span> <span class="nf">get_service_region_map</span><span class="p">(</span><span class="n">regions</span><span class="p">,</span> <span class="n">resource_types</span><span class="p">):</span>
-    <span class="c1"># we&#39;re not interacting with the apis just using the sdk meta information.</span>
-    <span class="n">session</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span>
-        <span class="n">region_name</span><span class="o">=</span><span class="s1">&#39;us-east-1&#39;</span><span class="p">,</span>
-        <span class="n">aws_access_key_id</span><span class="o">=</span><span class="s1">&#39;never&#39;</span><span class="p">,</span>
-        <span class="n">aws_secret_access_key</span><span class="o">=</span><span class="s1">&#39;found&#39;</span><span class="p">)</span>
-
-    <span class="n">resource_service_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">:</span> <span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">service</span>
-                            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_types</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="s1">&#39;account&#39;</span><span class="p">}</span>
-    <span class="c1"># support for govcloud and china, we only utilize these regions if they</span>
-    <span class="c1"># are explicitly passed in on the cli.</span>
-    <span class="n">partition_regions</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;aws-cn&#39;</span><span class="p">,</span> <span class="s1">&#39;aws-us-gov&#39;</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">session</span><span class="o">.</span><span class="n">get_available_regions</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">,</span> <span class="n">partition_name</span><span class="o">=</span><span class="n">p</span><span class="p">):</span>
-            <span class="n">partition_regions</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span>
-
-    <span class="n">partitions</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;aws&#39;</span><span class="p">]</span>
-    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">partition_regions</span><span class="p">:</span>
-            <span class="n">partitions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">partition_regions</span><span class="p">[</span><span class="n">r</span><span class="p">])</span>
-
-    <span class="n">service_region_map</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="n">resource_service_map</span><span class="o">.</span><span class="n">values</span><span class="p">())):</span>
-        <span class="k">for</span> <span class="n">partition</span> <span class="ow">in</span> <span class="n">partitions</span><span class="p">:</span>
-            <span class="n">service_region_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
-                <span class="n">session</span><span class="o">.</span><span class="n">get_available_regions</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">partition_name</span><span class="o">=</span><span class="n">partition</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">service_region_map</span><span class="p">,</span> <span class="n">resource_service_map</span></div>
-
-
 <div class="viewcode-block" id="PolicyCollection"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection">[docs]</a><span class="k">class</span> <span class="nc">PolicyCollection</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
     <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;c7n.policies&#39;</span><span class="p">)</span>
@@ -315,58 +283,6 @@
 
     <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">PolicyCollection</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policies</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">policies</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
-
-<div class="viewcode-block" id="PolicyCollection.expand_regions"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.expand_regions">[docs]</a>    <span class="k">def</span> <span class="nf">expand_regions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regions</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Return a set of policies targetted to the given regions.</span>
-
-<span class="sd">        Supports symbolic regions like &#39;all&#39;. This will automatically</span>
-<span class="sd">        filter out policies if their being targetted to a region that</span>
-<span class="sd">        does not support the service. Global services will target a</span>
-<span class="sd">        single region (us-east-1 if only all specified, else first</span>
-<span class="sd">        region in the list).</span>
-
-<span class="sd">        Note for region partitions (govcloud and china) an explicit</span>
-<span class="sd">        region from the partition must be passed in.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">policies</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">service_region_map</span><span class="p">,</span> <span class="n">resource_service_map</span> <span class="o">=</span> <span class="n">get_service_region_map</span><span class="p">(</span>
-            <span class="n">regions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_types</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">policies</span><span class="p">:</span>
-            <span class="n">available_regions</span> <span class="o">=</span> <span class="n">service_region_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
-                <span class="n">resource_service_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">resource_type</span><span class="p">),</span> <span class="p">())</span>
-
-            <span class="c1"># its a global service/endpoint, use user provided region</span>
-            <span class="c1"># or us-east-1.</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">available_regions</span> <span class="ow">and</span> <span class="n">regions</span><span class="p">:</span>
-                <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">regions</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="s1">&#39;all&#39;</span><span class="p">]</span>
-                <span class="n">candidate</span> <span class="o">=</span> <span class="n">candidates</span> <span class="ow">and</span> <span class="n">candidates</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="s1">&#39;us-east-1&#39;</span>
-                <span class="n">svc_regions</span> <span class="o">=</span> <span class="p">[</span><span class="n">candidate</span><span class="p">]</span>
-            <span class="k">elif</span> <span class="s1">&#39;all&#39;</span> <span class="ow">in</span> <span class="n">regions</span><span class="p">:</span>
-                <span class="n">svc_regions</span> <span class="o">=</span> <span class="n">available_regions</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">svc_regions</span> <span class="o">=</span> <span class="n">regions</span>
-
-            <span class="k">for</span> <span class="n">region</span> <span class="ow">in</span> <span class="n">svc_regions</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">available_regions</span> <span class="ow">and</span> <span class="n">region</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available_regions</span><span class="p">:</span>
-                    <span class="n">level</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;all&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">regions</span> <span class="ow">and</span>
-                             <span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span> <span class="ow">or</span> <span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
-                        <span class="n">level</span><span class="p">,</span> <span class="s2">&quot;policy:</span><span class="si">%s</span><span class="s2"> resources:</span><span class="si">%s</span><span class="s2"> not available in region:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="n">region</span><span class="p">)</span>
-                    <span class="k">continue</span>
-                <span class="n">options_copy</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
-                <span class="n">options_copy</span><span class="o">.</span><span class="n">region</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">region</span><span class="p">)</span>
-
-                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">regions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="s1">&#39;all&#39;</span> <span class="ow">in</span> <span class="n">regions</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;output_dir&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
-                    <span class="n">options_copy</span><span class="o">.</span><span class="n">output_dir</span> <span class="o">=</span> <span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">output_dir</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">region</span><span class="p">)</span>
-
-                <span class="n">policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="n">Policy</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">options_copy</span><span class="p">,</span>
-                           <span class="n">session_factory</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()))</span>
-        <span class="k">return</span> <span class="n">PolicyCollection</span><span class="p">(</span><span class="n">policies</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="PolicyCollection.filter"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.PolicyCollection.filter">[docs]</a>    <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">resource_type</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
@@ -881,11 +797,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
         <span class="k">assert</span> <span class="s2">&quot;name&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
         <span class="k">if</span> <span class="n">session_factory</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">session_factory</span> <span class="o">=</span> <span class="n">SessionFactory</span><span class="p">(</span>
-                <span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
-                <span class="n">options</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
-                <span class="n">options</span><span class="o">.</span><span class="n">assume_role</span><span class="p">,</span>
-                <span class="n">options</span><span class="o">.</span><span class="n">external_id</span><span class="p">)</span>
+            <span class="n">session_factory</span> <span class="o">=</span> <span class="n">clouds</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">provider_name</span><span class="p">]()</span><span class="o">.</span><span class="n">get_session_factory</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">()</span>
@@ -901,6 +813,14 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">resource_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;resource&#39;</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">provider_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;.&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="p">:</span>
+            <span class="n">provider_name</span><span class="p">,</span> <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">provider_name</span> <span class="o">=</span> <span class="s1">&#39;aws&#39;</span>
+        <span class="k">return</span> <span class="n">provider_name</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">region</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -985,7 +905,14 @@
 
 <div class="viewcode-block" id="Policy.get_resource_manager"><a class="viewcode-back" href="../../generated/c7n.html#c7n.policy.Policy.get_resource_manager">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resource&#39;</span><span class="p">)</span>
-        <span class="n">factory</span> <span class="o">=</span> <span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource_type</span><span class="p">)</span>
+
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">clouds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">provider_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">provider</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid cloud provider: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider_name</span><span class="p">)</span>
+
+        <span class="n">factory</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="n">resource_type</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">factory</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
                 <span class="s2">&quot;Invalid resource type: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource_type</span><span class="p">)</span>
