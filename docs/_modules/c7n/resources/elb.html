@@ -231,7 +231,6 @@
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;elb.filters&#39;</span><span class="p">)</span>
 <span class="n">actions</span> <span class="o">=</span> <span class="n">ActionRegistry</span><span class="p">(</span><span class="s1">&#39;elb.actions&#39;</span><span class="p">)</span>
 
-<span class="n">actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-shield&#39;</span><span class="p">,</span> <span class="n">SetShieldProtection</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag-count&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagCountFilter</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span> <span class="n">tags</span><span class="o">.</span><span class="n">TagActionFilter</span><span class="p">)</span>
 <span class="n">filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-enabled&#39;</span><span class="p">,</span> <span class="n">IsShieldProtected</span><span class="p">)</span>
@@ -321,6 +320,17 @@
 
     <span class="k">with</span> <span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
         <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">process_tags</span><span class="p">,</span> <span class="n">chunks</span><span class="p">(</span><span class="n">elbs</span><span class="p">,</span> <span class="mi">20</span><span class="p">)))</span>
+
+
+<div class="viewcode-block" id="SetELBShieldProtection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.SetELBShieldProtection">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-shield&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetELBShieldProtection</span><span class="p">(</span><span class="n">SetShieldProtection</span><span class="p">):</span>
+
+<div class="viewcode-block" id="SetELBShieldProtection.clear_stale"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.SetELBShieldProtection.clear_stale">[docs]</a>    <span class="k">def</span> <span class="nf">clear_stale</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">protections</span><span class="p">):</span>
+        <span class="c1"># elbs arns need extra discrimination to distinguish</span>
+        <span class="c1"># from app load balancer arns. See https://goo.gl/pE7TQb</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SetELBShieldProtection</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">clear_stale</span><span class="p">(</span>
+            <span class="n">client</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">protections</span> <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elb.TagDelayedAction">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;mark-for-op&#39;</span><span class="p">)</span>
