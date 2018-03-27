@@ -188,7 +188,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n.resources.batch</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2017 Capital One Services, LLC</span>
+<span></span><span class="c1"># Copyright 2017-2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -205,6 +205,8 @@
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="ComputeEnvironment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.ComputeEnvironment">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;batch-compute&#39;</span><span class="p">)</span>
@@ -231,6 +233,115 @@
         <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;jobDefinitionName&quot;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span>
             <span class="s1">&#39;describe_job_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;jobDefinitions&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="StateTransitionFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.StateTransitionFilter">[docs]</a><span class="k">class</span> <span class="nc">StateTransitionFilter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter resources by state.</span>
+
+<span class="sd">    Try to simplify construction for policy authors by automatically</span>
+<span class="sd">    filtering elements (filters or actions) to the resource states</span>
+<span class="sd">    they are valid for.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">()</span>
+
+<div class="viewcode-block" id="StateTransitionFilter.filter_resource_state"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.StateTransitionFilter.filter_resource_state">[docs]</a>    <span class="k">def</span> <span class="nf">filter_resource_state</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">states</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">states</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_states</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">states</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resources</span>
+        <span class="n">orig_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="ow">in</span> <span class="n">states</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">orig_length</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> implicitly filtered </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> resources with valid </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span> <span class="n">orig_length</span><span class="p">,</span> <span class="n">key</span><span class="o">.</span><span class="n">lower</span><span class="p">()))</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="UpdateComputeEnvironment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.UpdateComputeEnvironment">[docs]</a><span class="nd">@ComputeEnvironment</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;update-environment&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UpdateComputeEnvironment</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Updates an AWS batch compute environment</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: update-environments</span>
+<span class="sd">            resource: batch-compute</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - computeResources.desiredvCpus: 0</span>
+<span class="sd">              - state: ENABLED</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: update-environment</span>
+<span class="sd">                state: DISABLED</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;update-environment&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;computeEnvironment&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ENABLED&#39;</span><span class="p">,</span> <span class="s1">&#39;DISABLED&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;computeResources&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+                <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;minvCpus&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;maxvCpus&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+                    <span class="s1">&#39;desiredvCpus&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;serviceRole&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;batch:UpdateComputeEnvironment&#39;</span><span class="p">,)</span>
+    <span class="n">valid_origin_status</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;VALID&#39;</span><span class="p">,</span> <span class="s1">&#39;INVALID&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="UpdateComputeEnvironment.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.UpdateComputeEnvironment.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resource_state</span><span class="p">(</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_status</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;batch&#39;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;computeEnvironment&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;computeEnvironmentName&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">update_compute_environment</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteComputeEnvironment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.DeleteComputeEnvironment">[docs]</a><span class="nd">@ComputeEnvironment</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteComputeEnvironment</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Delete an AWS batch compute environment</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: delete-environments</span>
+<span class="sd">            resource: batch-compute</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - computeResources.desiredvCpus: 0</span>
+<span class="sd">            action:</span>
+<span class="sd">              - type: delete</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;batch:DeleteComputeEnvironment&#39;</span><span class="p">,)</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;DISABLED&#39;</span><span class="p">,)</span>
+    <span class="n">valid_origin_status</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;VALID&#39;</span><span class="p">,</span> <span class="s1">&#39;INVALID&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DeleteComputeEnvironment.delete_environment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.DeleteComputeEnvironment.delete_environment">[docs]</a>    <span class="k">def</span> <span class="nf">delete_environment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;batch&#39;</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">delete_compute_environment</span><span class="p">(</span>
+            <span class="n">computeEnvironment</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;computeEnvironmentName&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="DeleteComputeEnvironment.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.batch.DeleteComputeEnvironment.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resource_state</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">filter_resource_state</span><span class="p">(</span>
+                <span class="n">resources</span><span class="p">,</span> <span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_states</span><span class="p">),</span>
+            <span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">valid_origin_status</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delete_environment</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div></div>
 </pre></div>
 
            </div>
