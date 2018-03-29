@@ -1514,6 +1514,112 @@
         <span class="k">return</span> <span class="n">instances</span></div></div>
 
 
+<div class="viewcode-block" id="PropagateSpotTags"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.PropagateSpotTags">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;propagate-spot-tags&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">PropagateSpotTags</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Propagate Tags that are set at Spot Request level to EC2 instances.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-spot-instances</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - State.Name: pending</span>
+<span class="sd">            - instanceLifecycle: spot</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - type: propagate-spot-tags</span>
+<span class="sd">              only_tags:</span>
+<span class="sd">                - Name</span>
+<span class="sd">                - BillingTag</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;propagate-spot-tags&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;only_tags&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;ec2:DescribeInstances&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2:DescribeSpotInstanceRequests&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2:DescribeTags&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ec2:CreateTags&#39;</span><span class="p">)</span>
+
+    <span class="n">MAX_TAG_COUNT</span> <span class="o">=</span> <span class="mi">50</span>
+
+<div class="viewcode-block" id="PropagateSpotTags.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.PropagateSpotTags.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="n">instances</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span> <span class="k">if</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceLifecycle&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;spot&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> no spot instances found, implicit filter by action&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">()))</span>
+            <span class="k">return</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+
+        <span class="n">request_instance_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+            <span class="n">request_instance_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="n">i</span><span class="p">[</span><span class="s1">&#39;SpotInstanceRequestId&#39;</span><span class="p">],</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="c1"># ... and describe the corresponding spot requests ...</span>
+        <span class="n">requests</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_spot_instance_requests</span><span class="p">(</span>
+            <span class="n">Filters</span><span class="o">=</span><span class="p">[{</span>
+                <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;spot-instance-request-id&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">request_instance_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())}])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;SpotInstanceRequests&#39;</span><span class="p">,</span> <span class="p">[])</span>
+
+        <span class="n">updated</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">requests</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">updated</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_request_instances</span><span class="p">(</span>
+                    <span class="n">client</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">request_instance_map</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;SpotInstanceRequestId&#39;</span><span class="p">]]))</span>
+        <span class="k">return</span> <span class="n">updated</span></div>
+
+<div class="viewcode-block" id="PropagateSpotTags.process_request_instances"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.PropagateSpotTags.process_request_instances">[docs]</a>    <span class="k">def</span> <span class="nf">process_request_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">request</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+        <span class="c1"># Now we find the tags we can copy : either all, either those</span>
+        <span class="c1"># indicated with &#39;only_tags&#39; parameter.</span>
+        <span class="n">copy_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;only_tags&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">request_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">request</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;aws:&#39;</span><span class="p">)}</span>
+        <span class="k">if</span> <span class="n">copy_keys</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">copy_keys</span><span class="p">)</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">request_tags</span><span class="p">):</span>
+                <span class="k">del</span> <span class="n">request_tags</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+
+        <span class="n">update_instances</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
+            <span class="n">instance_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+            <span class="c1"># We may overwrite tags, but if the operation changes no tag,</span>
+            <span class="c1"># we will not proceed.</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">request_tags</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">instance_tags</span> <span class="ow">or</span> <span class="n">instance_tags</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">v</span><span class="p">:</span>
+                    <span class="n">update_instances</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">])</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">instance_tags</span><span class="p">)</span> <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">request_tags</span><span class="p">))</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">MAX_TAG_COUNT</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> instance:</span><span class="si">%s</span><span class="s2"> too many tags to copy (&gt; 50)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                        <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]))</span>
+                <span class="k">continue</span>
+
+        <span class="k">for</span> <span class="n">iset</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">update_instances</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">create_tags</span><span class="p">(</span>
+                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">,</span>
+                <span class="n">Resources</span><span class="o">=</span><span class="n">iset</span><span class="p">,</span>
+                <span class="n">Tags</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">request_tags</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> tags updated on instances:</span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                <span class="n">update_instances</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">update_instances</span></div></div>
+
+
 <span class="c1"># Valid EC2 Query Filters</span>
 <span class="c1"># http://docs.aws.amazon.com/AWSEC2/latest/CommandLineReference/ApiReference-cmd-DescribeInstances.html</span>
 <span class="n">EC2_VALID_FILTERS</span> <span class="o">=</span> <span class="p">{</span>
