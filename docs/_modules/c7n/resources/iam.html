@@ -217,8 +217,10 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.iamaccess</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span>
+<span class="kn">from</span> <span class="nn">c7n.resolver</span> <span class="k">import</span> <span class="n">ValuesFrom</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span>
 
 
@@ -439,6 +441,8 @@
 <span class="k">class</span> <span class="nc">UsedIamRole</span><span class="p">(</span><span class="n">IamRoleUsage</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter IAM roles that are either being used or not</span>
 
+<span class="sd">    Checks for usage on EC2, Lambda, ECS only</span>
+
 <span class="sd">    :example:</span>
 
 <span class="sd">    .. code-block:: yaml</span>
@@ -472,6 +476,8 @@
 <span class="sd">    This filter has been deprecated. Please use the &#39;used&#39; filter</span>
 <span class="sd">    with the &#39;state&#39; attribute to get unused iam roles</span>
 
+<span class="sd">    Checks for usage on EC2, Lambda, ECS only</span>
+
 <span class="sd">    :example:</span>
 
 <span class="sd">    .. code-block:: yaml</span>
@@ -488,6 +494,19 @@
 
 <div class="viewcode-block" id="UnusedIamRole.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.UnusedIamRole.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">UsedIamRole</span><span class="p">({</span><span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="RoleCrossAccountAccess"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.RoleCrossAccountAccess">[docs]</a><span class="nd">@Role</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RoleCrossAccountAccess</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
+
+    <span class="n">policy_attribute</span> <span class="o">=</span> <span class="s1">&#39;AssumeRolePolicyDocument&#39;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;iam:ListRoles&#39;</span><span class="p">,)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;cross-account&#39;</span><span class="p">,</span>
+        <span class="c1"># white list accounts</span>
+        <span class="n">whitelist_from</span><span class="o">=</span><span class="n">ValuesFrom</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">whitelist</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span></div>
 
 
 <div class="viewcode-block" id="IamRoleInlinePolicy"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.iam.IamRoleInlinePolicy">[docs]</a><span class="nd">@Role</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;has-inline-policy&#39;</span><span class="p">)</span>
