@@ -203,6 +203,7 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
@@ -443,6 +444,56 @@
         <span class="n">last_write</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">last_timestamp</span> <span class="o">/</span> <span class="mf">1000.0</span><span class="p">)</span>
         <span class="n">group</span><span class="p">[</span><span class="s1">&#39;lastWrite&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">last_write</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_threshold</span> <span class="o">&gt;</span> <span class="n">last_write</span></div>
+
+
+<div class="viewcode-block" id="LogCrossAccountFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cw.LogCrossAccountFilter">[docs]</a><span class="nd">@LogGroup</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">LogCrossAccountFilter</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;cross-account&#39;</span><span class="p">,</span>
+        <span class="c1"># white list accounts</span>
+        <span class="n">whitelist_from</span><span class="o">=</span><span class="n">ValuesFrom</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">whitelist</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;logs:DescribeSubscriptionFilters&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="LogCrossAccountFilter.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cw.LogCrossAccountFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
+        <span class="n">accounts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_accounts</span><span class="p">()</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">rset</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">50</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">rset</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Error checking log groups cross-account </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+                    <span class="k">continue</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="LogCrossAccountFilter.process_resource_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cw.LogCrossAccountFilter.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">accounts</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">filters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_subscription_filters</span><span class="p">,</span>
+                <span class="n">logGroupName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subscriptionFilters&#39;</span><span class="p">,</span> <span class="p">())</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">filters</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s1">&#39;destinationArn&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">account_id</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;destinationArn&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">5</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">account_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">accounts</span><span class="p">:</span>
+                    <span class="n">r</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;c7n:CrossAccountViolations&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">account_id</span><span class="p">)</span>
+                    <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 </pre></div>
 
            </div>
