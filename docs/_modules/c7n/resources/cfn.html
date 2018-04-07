@@ -205,6 +205,8 @@
 
 <span class="kn">import</span> <span class="nn">logging</span>
 
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
+
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -260,6 +262,52 @@
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudformation&#39;</span><span class="p">)</span>
         <span class="n">client</span><span class="o">.</span><span class="n">delete_stack</span><span class="p">(</span><span class="n">StackName</span><span class="o">=</span><span class="n">stack</span><span class="p">[</span><span class="s1">&#39;StackName&#39;</span><span class="p">])</span></div></div>
+
+
+<div class="viewcode-block" id="SetProtection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cfn.SetProtection">[docs]</a><span class="nd">@CloudFormation</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-protection&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetProtection</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to disable termination protection</span>
+
+<span class="sd">    It is recommended to use a filter to avoid unwanted deletion of stacks</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: cloudformation-disable-protection</span>
+<span class="sd">                resource: cfn</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - StackStatus: CREATE_COMPLETE</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-protection</span>
+<span class="sd">                    state: False</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-protection&#39;</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudformation:UpdateStack&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="SetProtection.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cfn.SetProtection.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stacks</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudformation&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">stacks</span><span class="p">:</span>
+                <span class="n">futures</span><span class="p">[</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_stacks</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">s</span><span class="p">)]</span> <span class="o">=</span> <span class="n">s</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="n">s</span> <span class="o">=</span> <span class="n">futures</span><span class="p">[</span><span class="n">f</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Error updating protection stack:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">s</span><span class="p">[</span><span class="s1">&#39;StackName&#39;</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="SetProtection.process_stacks"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cfn.SetProtection.process_stacks">[docs]</a>    <span class="k">def</span> <span class="nf">process_stacks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">stack</span><span class="p">):</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">update_termination_protection</span><span class="p">(</span>
+            <span class="n">EnableTerminationProtection</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+            <span class="n">StackName</span><span class="o">=</span><span class="n">stack</span><span class="p">[</span><span class="s1">&#39;StackName&#39;</span><span class="p">])</span></div></div>
 
 
 <div class="viewcode-block" id="CloudFormationAddTag"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.cfn.CloudFormationAddTag">[docs]</a><span class="nd">@CloudFormation</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
