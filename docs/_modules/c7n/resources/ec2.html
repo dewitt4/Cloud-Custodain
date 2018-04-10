@@ -528,18 +528,19 @@
         <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">())</span>
         <span class="k">return</span> <span class="n">perms</span></div>
 
-<div class="viewcode-block" id="DisableApiTermination.is_termination_protection_enabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination.is_termination_protection_enabled">[docs]</a>    <span class="k">def</span> <span class="nf">is_termination_protection_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inst</span><span class="p">):</span>
-        <span class="n">res_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="DisableApiTermination.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_termination_protection_enabled</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">r</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="DisableApiTermination.is_termination_protection_enabled"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.DisableApiTermination.is_termination_protection_enabled">[docs]</a>    <span class="k">def</span> <span class="nf">is_termination_protection_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">inst</span><span class="p">):</span>
         <span class="n">attr_val</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
             <span class="n">client</span><span class="o">.</span><span class="n">describe_instance_attribute</span><span class="p">,</span>
             <span class="n">Attribute</span><span class="o">=</span><span class="s1">&#39;disableApiTermination&#39;</span><span class="p">,</span>
-            <span class="n">InstanceId</span><span class="o">=</span><span class="n">inst</span><span class="p">[</span><span class="n">res_id</span><span class="p">]</span>
+            <span class="n">InstanceId</span><span class="o">=</span><span class="n">inst</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="n">attr_val</span><span class="p">[</span><span class="s1">&#39;DisableApiTermination&#39;</span><span class="p">][</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span></div>
-
-    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_termination_protection_enabled</span><span class="p">(</span><span class="n">i</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">attr_val</span><span class="p">[</span><span class="s1">&#39;DisableApiTermination&#39;</span><span class="p">][</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span></div></div>
 
 
 <div class="viewcode-block" id="InstanceImageBase"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceImageBase">[docs]</a><span class="k">class</span> <span class="nc">InstanceImageBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -1234,24 +1235,22 @@
         <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
             <span class="k">return</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Disabling termination protection on instances&quot;</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">disable_deletion_protection</span><span class="p">(</span>
+                <span class="n">client</span><span class="p">,</span>
                 <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span> <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;InstanceLifecycle&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;spot&#39;</span><span class="p">])</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
         <span class="c1"># limit batch sizes to avoid api limits</span>
         <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">utils</span><span class="o">.</span><span class="n">chunks</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">terminate_instances</span><span class="p">,</span>
                 <span class="n">InstanceIds</span><span class="o">=</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">])</span></div>
 
-<div class="viewcode-block" id="Terminate.disable_deletion_protection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Terminate.disable_deletion_protection">[docs]</a>    <span class="k">def</span> <span class="nf">disable_deletion_protection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
+<div class="viewcode-block" id="Terminate.disable_deletion_protection"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Terminate.disable_deletion_protection">[docs]</a>    <span class="k">def</span> <span class="nf">disable_deletion_protection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
 
-        <span class="nd">@utils</span><span class="o">.</span><span class="n">worker</span>
         <span class="k">def</span> <span class="nf">process_instance</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
                     <span class="n">client</span><span class="o">.</span><span class="n">modify_instance_attribute</span><span class="p">,</span>
@@ -1290,32 +1289,37 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:CreateSnapshot&#39;</span><span class="p">,</span> <span class="s1">&#39;ec2:CreateTags&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="Snapshot.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-                <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_volume_set</span><span class="p">,</span> <span class="n">resource</span><span class="p">))</span>
-                <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
-                    <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
-                            <span class="s2">&quot;Exception creating snapshot set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                                <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">process_volume_set</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="k">raise</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="s2">&quot;Exception creating snapshot set </span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">()))</span></div>
 
-<div class="viewcode-block" id="Snapshot.process_volume_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.process_volume_set">[docs]</a>    <span class="nd">@utils</span><span class="o">.</span><span class="n">worker</span>
-    <span class="k">def</span> <span class="nf">process_volume_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="n">c</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+<div class="viewcode-block" id="Snapshot.process_volume_set"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.process_volume_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_volume_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">block_device</span> <span class="ow">in</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;BlockDeviceMappings&#39;</span><span class="p">]:</span>
             <span class="k">if</span> <span class="s1">&#39;Ebs&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">block_device</span><span class="p">:</span>
                 <span class="k">continue</span>
             <span class="n">volume_id</span> <span class="o">=</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]</span>
             <span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;Automated,Backup,</span><span class="si">%s</span><span class="s2">,</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span>
-                <span class="n">volume_id</span><span class="p">)</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">],</span> <span class="n">volume_id</span><span class="p">)</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshot_tags</span><span class="p">(</span><span class="n">resource</span><span class="p">,</span> <span class="n">block_device</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-                    <span class="n">c</span><span class="o">.</span><span class="n">create_snapshot</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">create_snapshot</span><span class="p">,</span>
                     <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">,</span>
                     <span class="n">VolumeId</span><span class="o">=</span><span class="n">volume_id</span><span class="p">,</span>
-                    <span class="n">Description</span><span class="o">=</span><span class="n">description</span><span class="p">)</span>
+                    <span class="n">Description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+                    <span class="n">TagSpecifications</span><span class="o">=</span><span class="p">[{</span>
+                        <span class="s1">&#39;ResourceType&#39;</span><span class="p">:</span> <span class="s1">&#39;snapshot&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;Tags&#39;</span><span class="p">:</span> <span class="n">tags</span><span class="p">}])</span>
             <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;IncorrectState&#39;</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
@@ -1323,36 +1327,30 @@
                             <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
                             <span class="n">volume_id</span><span class="p">))</span>
                     <span class="k">continue</span>
-                <span class="k">raise</span>
+                <span class="k">raise</span></div>
 
-            <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;Name&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">volume_id</span><span class="p">},</span>
-                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]},</span>
-                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;DeviceName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;DeviceName&#39;</span><span class="p">]},</span>
-                <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;custodian_snapshot&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">}</span>
-            <span class="p">]</span>
+<div class="viewcode-block" id="Snapshot.get_snapshot_tags"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.Snapshot.get_snapshot_tags">[docs]</a>    <span class="k">def</span> <span class="nf">get_snapshot_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">block_device</span><span class="p">):</span>
+        <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;Name&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;InstanceId&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;DeviceName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;DeviceName&#39;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="s1">&#39;custodian_snapshot&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="s1">&#39;&#39;</span><span class="p">}]</span>
 
-            <span class="n">copy_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;copy-tags&#39;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">if</span> <span class="n">copy_keys</span><span class="p">:</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[]):</span>
-                    <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">copy_keys</span><span class="p">:</span>
-                        <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="n">copy_keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;copy-tags&#39;</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">copy_keys</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">copy_keys</span><span class="p">:</span>
+                    <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">40</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                     <span class="s2">&quot;action:</span><span class="si">%s</span><span class="s2"> volume:</span><span class="si">%s</span><span class="s2"> too many tags to copy&quot;</span> <span class="o">%</span> <span class="p">(</span>
                         <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
-                        <span class="n">volume_id</span><span class="p">))</span>
+                        <span class="n">block_device</span><span class="p">[</span><span class="s1">&#39;Ebs&#39;</span><span class="p">][</span><span class="s1">&#39;VolumeId&#39;</span><span class="p">]))</span>
                 <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
-
             <span class="n">tags</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-                <span class="n">c</span><span class="o">.</span><span class="n">create_tags</span><span class="p">,</span>
-                <span class="n">DryRun</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">dryrun</span><span class="p">,</span>
-                <span class="n">Resources</span><span class="o">=</span><span class="p">[</span>
-                    <span class="n">response</span><span class="p">[</span><span class="s1">&#39;SnapshotId&#39;</span><span class="p">]],</span>
-                <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
+        <span class="k">return</span> <span class="n">tags</span></div></div>
 
 
 <div class="viewcode-block" id="EC2ModifyVpcSecurityGroups"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.EC2ModifyVpcSecurityGroups">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-security-groups&#39;</span><span class="p">)</span>
