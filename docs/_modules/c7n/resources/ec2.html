@@ -1685,6 +1685,74 @@
             <span class="n">value</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="InstanceAttribute"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAttribute">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;instance-attribute&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">InstanceAttribute</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;EC2 Instance Value FIlter on a given instance attribute.</span>
+
+<span class="sd">    Filters EC2 Instances with the given instance attribute</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-unoptimized-ebs</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: instance-attribute</span>
+<span class="sd">                attribute: ebsOptimized</span>
+<span class="sd">                key: &quot;Value&quot;</span>
+<span class="sd">                value: false</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">valid_attrs</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;instanceType&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;kernel&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ramdisk&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;userData&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;disableApiTermination&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;instanceInitiatedShutdownBehavior&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;rootDeviceName&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;blockDeviceMapping&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;productCodes&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;sourceDestCheck&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;groupSet&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;ebsOptimized&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;sriovNetSupport&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;enaSupport&#39;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;instance-attribute&#39;</span><span class="p">,</span>
+        <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">attribute</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="n">valid_attrs</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;attribute&#39;</span><span class="p">,))</span>
+
+<div class="viewcode-block" id="InstanceAttribute.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAttribute.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="s1">&#39;ec2:DescribeInstanceAttribute&#39;</span><span class="p">,)</span></div>
+
+<div class="viewcode-block" id="InstanceAttribute.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAttribute.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">attribute</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;attribute&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_instance_attribute</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">attribute</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">resource</span> <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;c7n:attribute-</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">attribute</span><span class="p">])]</span></div>
+
+<div class="viewcode-block" id="InstanceAttribute.get_instance_attribute"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.ec2.InstanceAttribute.get_instance_attribute">[docs]</a>    <span class="k">def</span> <span class="nf">get_instance_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">attribute</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">instance_id</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span>
+            <span class="n">fetched_attribute</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">describe_instance_attribute</span><span class="p">,</span>
+                <span class="n">Attribute</span><span class="o">=</span><span class="n">attribute</span><span class="p">,</span>
+                <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">)</span>
+            <span class="n">keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">fetched_attribute</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">keys</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;ResponseMetadata&#39;</span><span class="p">)</span>
+            <span class="n">keys</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">)</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;c7n:attribute-</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">attribute</span><span class="p">]</span> <span class="o">=</span> <span class="n">fetched_attribute</span><span class="p">[</span>
+                <span class="n">keys</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span></div></div>
 </pre></div>
 
            </div>
