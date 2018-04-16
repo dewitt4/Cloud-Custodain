@@ -653,7 +653,15 @@
         <span class="n">record</span><span class="o">.</span><span class="n">message</span> <span class="o">=</span> <span class="n">record</span><span class="o">.</span><span class="n">getMessage</span><span class="p">()</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">usesTime</span><span class="p">():</span>
             <span class="n">record</span><span class="o">.</span><span class="n">asctime</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">formatTime</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">datefmt</span><span class="p">)</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fmt</span> <span class="o">%</span> <span class="n">record</span><span class="o">.</span><span class="vm">__dict__</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fmt</span> <span class="o">%</span> <span class="n">record</span><span class="o">.</span><span class="vm">__dict__</span>
+        <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># Issue 25664. The logger name may be Unicode. Try again ...</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">record</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">record</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+                <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fmt</span> <span class="o">%</span> <span class="n">record</span><span class="o">.</span><span class="vm">__dict__</span>
+            <span class="k">except</span> <span class="ne">UnicodeDecodeError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
         <span class="k">if</span> <span class="n">record</span><span class="o">.</span><span class="n">exc_info</span><span class="p">:</span>
             <span class="c1"># Cache the traceback text to avoid converting it multiple times</span>
             <span class="c1"># (it&#39;s constant anyway)</span>
@@ -1402,7 +1410,7 @@
 
 <span class="sd">        logger.log(level, &quot;We have a %s&quot;, &quot;mysterious problem&quot;, exc_info=1)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">long</span><span class="p">)):</span>
             <span class="k">if</span> <span class="n">raiseExceptions</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;level must be an integer&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
