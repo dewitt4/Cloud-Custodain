@@ -214,7 +214,7 @@
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
-<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">TagDelayedAction</span><span class="p">,</span> <span class="n">universal_augment</span>
 
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;sqs.filters&#39;</span><span class="p">)</span>
@@ -249,33 +249,11 @@
         <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;sqs:GetQueueAttributes&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">perms</span></div>
 
+<div class="viewcode-block" id="SQS.get_arns"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SQS.get_arns">[docs]</a>    <span class="k">def</span> <span class="nf">get_arns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;QueueArn&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span></div>
+
 <div class="viewcode-block" id="SQS.augment"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.SQS.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-
-        <span class="k">def</span> <span class="nf">_augment</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sqs&#39;</span><span class="p">)</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">queue</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_queue_attributes</span><span class="p">(</span>
-                    <span class="n">QueueUrl</span><span class="o">=</span><span class="n">r</span><span class="p">,</span>
-                    <span class="n">AttributeNames</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;All&#39;</span><span class="p">])[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span>
-                <span class="c1"># Augment Tags</span>
-                <span class="n">tag_dict</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_queue_tags</span><span class="p">(</span>
-                    <span class="n">QueueUrl</span><span class="o">=</span><span class="n">r</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Denied access to sqs </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">r</span><span class="p">)</span>
-                    <span class="k">return</span>
-                <span class="k">raise</span>
-            <span class="n">tag_list</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">tag_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="n">tag_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">})</span>
-
-            <span class="n">queue</span><span class="p">[</span><span class="s1">&#39;QueueUrl&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span>
-            <span class="n">queue</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tag_list</span>
-            <span class="k">return</span> <span class="n">queue</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;retrieving details for </span><span class="si">%d</span><span class="s1"> queues&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_augment</span><span class="p">,</span> <span class="n">resources</span><span class="p">)))</span></div></div>
+        <span class="k">return</span> <span class="n">universal_augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">super</span><span class="p">(</span><span class="n">SQS</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span></div></div>
 
 
 <div class="viewcode-block" id="MetricsFilter"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.sqs.MetricsFilter">[docs]</a><span class="nd">@SQS</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
