@@ -228,6 +228,7 @@
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">parse_cidr</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 
 
 <div class="viewcode-block" id="Vpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Vpc">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
@@ -1797,6 +1798,111 @@
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;KeyName&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+
+
+<div class="viewcode-block" id="CreateFlowLogs"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.CreateFlowLogs">[docs]</a><span class="nd">@Vpc</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-flow-log&#39;</span><span class="p">)</span>
+<span class="nd">@Subnet</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-flow-log&#39;</span><span class="p">)</span>
+<span class="nd">@NetworkInterface</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-flow-log&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">CreateFlowLogs</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create flow logs for a network resource</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: vpc-enable-flow-logs</span>
+<span class="sd">            resource: vpc</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: flow-logs</span>
+<span class="sd">                enabled: false</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-flow-log</span>
+<span class="sd">                DeliverLogsPermissionArn: arn:iam:role</span>
+<span class="sd">                LogGroupName: /custodian/vpc/flowlogs/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:CreateFlowLogs&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;set-flow-log&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;DeliverLogsPermissionArn&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;LogGroupName&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;TrafficType&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ACCEPT&#39;</span><span class="p">,</span> <span class="s1">&#39;REJECT&#39;</span><span class="p">,</span> <span class="s1">&#39;ALL&#39;</span><span class="p">]}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="n">RESOURCE_ALIAS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;vpc&#39;</span><span class="p">:</span> <span class="s1">&#39;VPC&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;subnet&#39;</span><span class="p">:</span> <span class="s1">&#39;Subnet&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;eni&#39;</span><span class="p">:</span> <span class="s1">&#39;NetworkInterface&#39;</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="CreateFlowLogs.validate"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.CreateFlowLogs.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;DeliverLogsPermissionArn&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;DeliverLogsPermissionArn required when &#39;</span>
+                                 <span class="s1">&#39;creating flow-logs&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogGroupName&#39;</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;LogGroupName required when &#39;</span>
+                                 <span class="s1">&#39;creating flow-logs&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="CreateFlowLogs.delete_flow_logs"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.CreateFlowLogs.delete_flow_logs">[docs]</a>    <span class="k">def</span> <span class="nf">delete_flow_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">rids</span><span class="p">):</span>
+        <span class="n">flow_logs</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_flow_logs</span><span class="p">(</span>
+            <span class="n">Filters</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;resource-id&#39;</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">rids</span><span class="p">}])[</span><span class="s1">&#39;FlowLogs&#39;</span><span class="p">]</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">delete_flow_logs</span><span class="p">(</span>
+                <span class="n">FlowLogIds</span><span class="o">=</span><span class="p">[</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;FlowLogId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">flow_logs</span><span class="p">])</span>
+
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Unsuccessful&#39;</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception: delete flow-log for </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1"> on </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ResourceId&#39;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;InvalidParameterValue&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;delete flow-log: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span></div>
+
+<div class="viewcode-block" id="CreateFlowLogs.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.CreateFlowLogs.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">):</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">)</span>
+
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span>
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;ResourceIds&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">delete_flow_logs</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;ResourceIds&#39;</span><span class="p">])</span>
+            <span class="k">return</span>
+
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;ResourceType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">RESOURCE_ALIAS</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">type</span><span class="p">]</span>
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;TrafficType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;TrafficType&#39;</span><span class="p">,</span> <span class="s1">&#39;ALL&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">create_flow_logs</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Unsuccessful&#39;</span><span class="p">]:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception: create flow-log for </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ResourceId&#39;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;FlowLogAlreadyExists&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="s1">&#39;Exception: create flow-log: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                    <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span></div></div>
 </pre></div>
 
            </div>
