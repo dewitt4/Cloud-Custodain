@@ -219,6 +219,7 @@
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<span class="kn">from</span> <span class="nn">dateutil</span> <span class="k">import</span> <span class="n">zoneinfo</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzutc</span>
 
@@ -226,6 +227,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span> <span class="k">as</span> <span class="n">Action</span><span class="p">,</span> <span class="n">AutoTagUser</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">FilterValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 
 <span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;maid_status&quot;</span>
@@ -427,6 +429,12 @@
 <span class="sd">    be sending a final notice email a few days before terminating an</span>
 <span class="sd">    instance, or snapshotting a volume prior to deletion.</span>
 
+<span class="sd">    The optional &#39;skew_hours&#39; parameter provides for incrementing the current</span>
+<span class="sd">    time a number of hours into the future.</span>
+
+<span class="sd">    Optionally, the &#39;tz&#39; parameter can get used to specify the timezone</span>
+<span class="sd">    in which to interpret the clock (default value is &#39;utc&#39;)</span>
+
 <span class="sd">    .. code-block :: yaml</span>
 
 <span class="sd">      - policies:</span>
@@ -439,6 +447,7 @@
 <span class="sd">              tag: custodian_status</span>
 <span class="sd">              op: stop</span>
 <span class="sd">              # Another optional tag is skew</span>
+<span class="sd">              tz: utc</span>
 <span class="sd">          actions:</span>
 <span class="sd">            - stop</span>
 
@@ -446,7 +455,9 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;marked-for-op&#39;</span><span class="p">,</span>
         <span class="n">tag</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">tz</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
         <span class="n">skew</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+        <span class="n">skew_hours</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
         <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
 
     <span class="n">current_date</span> <span class="o">=</span> <span class="kc">None</span>
@@ -455,12 +466,19 @@
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">and</span> <span class="n">op</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Invalid marked-for-op op:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">op</span><span class="p">)</span>
+
+        <span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span><span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tz</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid timezone specified &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
         <span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">)</span>
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;stop&#39;</span><span class="p">)</span>
         <span class="n">skew</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skew&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">skew_hours</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;skew_hours&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span><span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
 
         <span class="n">v</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">()):</span>
@@ -488,7 +506,13 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
 
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="n">action_date</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">skew</span><span class="p">))</span></div>
+        <span class="k">if</span> <span class="n">action_date</span><span class="o">.</span><span class="n">tzinfo</span><span class="p">:</span>
+            <span class="c1"># if action_date is timezone aware, set to timezone provided</span>
+            <span class="n">action_date</span> <span class="o">=</span> <span class="n">action_date</span><span class="o">.</span><span class="n">astimezone</span><span class="p">(</span><span class="n">tz</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tz</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">&gt;=</span> <span class="p">(</span>
+            <span class="n">action_date</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">skew</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="n">skew_hours</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="TagCountFilter"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.TagCountFilter">[docs]</a><span class="k">class</span> <span class="nc">TagCountFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
@@ -725,6 +749,9 @@
 <div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Tag resources for future action.</span>
 
+<span class="sd">    The optional &#39;tz&#39; parameter can be used to adjust the clock to align</span>
+<span class="sd">    with a given timezone. The default value is &#39;utc&#39;.</span>
+
 <span class="sd">    .. code-block :: yaml</span>
 
 <span class="sd">      - policies:</span>
@@ -737,6 +764,7 @@
 <span class="sd">              tag: custodian_status</span>
 <span class="sd">              op: stop</span>
 <span class="sd">              # Another optional tag is skew</span>
+<span class="sd">              tz: utc</span>
 <span class="sd">          actions:</span>
 <span class="sd">            - stop</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -746,6 +774,8 @@
         <span class="n">tag</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
         <span class="n">msg</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
         <span class="n">days</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;exclusiveMinimum&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="n">hours</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">,</span> <span class="s1">&#39;minimum&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;exclusiveMinimum&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="n">tz</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
         <span class="n">op</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:CreateTags&#39;</span><span class="p">,)</span>
@@ -762,7 +792,20 @@
                 <span class="s2">&quot;mark-for-op specifies invalid op:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">op</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
+<div class="viewcode-block" id="TagDelayedAction.generate_timestamp"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.TagDelayedAction.generate_timestamp">[docs]</a>    <span class="k">def</span> <span class="nf">generate_timestamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">minute</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">days</span> <span class="o">==</span> <span class="n">hours</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># maintains default value of days being 4 if nothing is provided</span>
+            <span class="n">days</span> <span class="o">=</span> <span class="mi">4</span>
+        <span class="n">action_date</span> <span class="o">=</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="n">hours</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">action_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1"> %H%M %Z&#39;</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="TagDelayedAction.process"><a class="viewcode-back" href="../../generated/c7n.html#c7n.tags.TagDelayedAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span>
+            <span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid timezone specified </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">id_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span>
 
         <span class="c1"># Move this to policy? / no resources bypasses actions?</span>
@@ -773,15 +816,15 @@
 
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;stop&#39;</span><span class="p">)</span>
         <span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">)</span>
-        <span class="n">date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="n">days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">hours</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hours&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">action_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_timestamp</span><span class="p">(</span><span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="p">)</span>
 
-        <span class="n">n</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">tzutc</span><span class="p">())</span>
-        <span class="n">action_date</span> <span class="o">=</span> <span class="n">n</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">date</span><span class="p">)</span>
         <span class="n">msg</span> <span class="o">=</span> <span class="n">msg_tmpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="o">=</span><span class="n">action_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">))</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="o">=</span><span class="n">action_date</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Tagging </span><span class="si">%d</span><span class="s2"> resources for </span><span class="si">%s</span><span class="s2"> on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)))</span>
+            <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="p">))</span>
 
         <span class="n">tags</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">tag</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}]</span>
 
@@ -905,8 +948,8 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
-                <span class="n">action</span>    <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span>
-                <span class="n">value</span>     <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
+                <span class="n">action</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;action&#39;</span><span class="p">)</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)</span>
                 <span class="n">new_value</span> <span class="o">=</span> <span class="kc">False</span>
                 <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="s1">&#39;lower&#39;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">r</span><span class="o">.</span><span class="n">islower</span><span class="p">():</span>
                     <span class="n">new_value</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
