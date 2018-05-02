@@ -224,6 +224,7 @@
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">format_event</span><span class="p">,</span> <span class="n">get_account_id_from_sts</span>
 <span class="kn">from</span> <span class="nn">c7n.config</span> <span class="k">import</span> <span class="n">Config</span>
 
+<span class="kn">import</span> <span class="nn">boto3</span>
 
 <span class="n">logging</span><span class="o">.</span><span class="n">root</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
 <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;botocore&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
@@ -231,15 +232,14 @@
 
 
 <span class="n">account_id</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="k">try</span><span class="p">:</span>
-    <span class="kn">import</span> <span class="nn">boto3</span>
-    <span class="n">session</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
-    <span class="n">account_id</span> <span class="o">=</span> <span class="n">get_account_id_from_sts</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
-<span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-    <span class="k">pass</span>
 
 
 <div class="viewcode-block" id="dispatch_event"><a class="viewcode-back" href="../../generated/c7n.html#c7n.handler.dispatch_event">[docs]</a><span class="k">def</span> <span class="nf">dispatch_event</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+
+    <span class="k">global</span> <span class="n">account_id</span>
+    <span class="k">if</span> <span class="n">account_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+        <span class="n">account_id</span> <span class="o">=</span> <span class="n">get_account_id_from_sts</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
 
     <span class="n">error</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;detail&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;errorCode&#39;</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">error</span><span class="p">:</span>
@@ -273,7 +273,8 @@
     <span class="n">options_overrides</span> <span class="o">=</span> <span class="n">policy_config</span><span class="p">[</span>
         <span class="s1">&#39;policies&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;execution-options&#39;</span><span class="p">,</span> <span class="p">{})</span>
     <span class="n">options_overrides</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">account_id</span>
-    <span class="n">options_overrides</span><span class="p">[</span><span class="s1">&#39;output_dir&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">output_dir</span>
+    <span class="k">if</span> <span class="s1">&#39;output_dir&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">options_overrides</span><span class="p">:</span>
+        <span class="n">options_overrides</span><span class="p">[</span><span class="s1">&#39;output_dir&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">output_dir</span>
     <span class="n">options</span> <span class="o">=</span> <span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="o">**</span><span class="n">options_overrides</span><span class="p">)</span>
 
     <span class="n">load_resources</span><span class="p">()</span>
