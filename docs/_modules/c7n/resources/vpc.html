@@ -216,6 +216,8 @@
 
 <span class="kn">import</span> <span class="nn">jmespath</span>
 
+<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">BotoClientError</span>
+
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">DefaultVpcBase</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">)</span>
@@ -1650,10 +1652,10 @@
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
-<div class="viewcode-block" id="Address"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Address">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;network-addr&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">Address</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="NetworkAddress"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkAddress">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;network-addr&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">NetworkAddress</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
-<div class="viewcode-block" id="Address.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Address.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="NetworkAddress.resource_type"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkAddress.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ec2&#39;</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;network-addr&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;describe_addresses&#39;</span><span class="p">,</span> <span class="s1">&#39;Addresses&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -1664,6 +1666,66 @@
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::EC2::EIP&quot;</span></div></div>
+
+
+<div class="viewcode-block" id="AddressRelease"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AddressRelease">[docs]</a><span class="nd">@NetworkAddress</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;release&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">AddressRelease</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to release elastic IP address(es)</span>
+
+<span class="sd">    Use the force option to cause any attached elastic IPs to</span>
+<span class="sd">    also be released.  Otherwise, only unattached elastic IPs</span>
+<span class="sd">    will be released.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: release-network-addr</span>
+<span class="sd">                resource: network-addr</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - AllocationId: ...</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: release</span>
+<span class="sd">                    force: true|false</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;release&#39;</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ec2:ReleaseAddress&#39;</span><span class="p">,</span><span class="s1">&#39;ec2:DisassociateAddress&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="AddressRelease.process_attached"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AddressRelease.process_attached">[docs]</a>    <span class="k">def</span> <span class="nf">process_attached</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">associated_addrs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">aa</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">associated_addrs</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">disassociate_address</span><span class="p">(</span><span class="n">AssociationId</span><span class="o">=</span><span class="n">aa</span><span class="p">[</span><span class="s1">&#39;AssociationId&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">BotoClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># If its already been diassociated ignore, else raise.</span>
+                <span class="k">if</span> <span class="ow">not</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;InvalidAssocationID.NotFound&#39;</span> <span class="ow">and</span>
+                       <span class="n">aa</span><span class="p">[</span><span class="s1">&#39;AssocationId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">]):</span>
+                    <span class="k">raise</span> <span class="n">e</span>
+                <span class="n">associated_addrs</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">aa</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">associated_addrs</span></div>
+
+<div class="viewcode-block" id="AddressRelease.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AddressRelease.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network_addrs</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">force</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">)</span>
+        <span class="n">assoc_addrs</span> <span class="o">=</span> <span class="p">[</span><span class="n">addr</span> <span class="k">for</span> <span class="n">addr</span> <span class="ow">in</span> <span class="n">network_addrs</span> <span class="k">if</span> <span class="s1">&#39;AssociationId&#39;</span> <span class="ow">in</span> <span class="n">addr</span><span class="p">]</span>
+        <span class="n">unassoc_addrs</span> <span class="o">=</span> <span class="p">[</span><span class="n">addr</span> <span class="k">for</span> <span class="n">addr</span> <span class="ow">in</span> <span class="n">network_addrs</span> <span class="k">if</span> <span class="s1">&#39;AssociationId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">addr</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">assoc_addrs</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">force</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Filtered </span><span class="si">%d</span><span class="s2"> attached eips of </span><span class="si">%d</span><span class="s2"> eips. Use &#39;force: true&#39; to release them.&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">assoc_addrs</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">network_addrs</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">assoc_addrs</span><span class="p">)</span> <span class="ow">and</span> <span class="n">force</span><span class="p">:</span>
+            <span class="n">unassoc_addrs</span> <span class="o">=</span> <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span>
+                <span class="n">unassoc_addrs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_attached</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">assoc_addrs</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">unassoc_addrs</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">release_address</span><span class="p">(</span><span class="n">AllocationId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;AllocationId&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">BotoClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="c1"># If its already been released, ignore, else raise.</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;InvalidAllocationID.NotFound&#39;</span><span class="p">:</span>
+                    <span class="k">raise</span></div></div>
 
 
 <div class="viewcode-block" id="CustomerGateway"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.CustomerGateway">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;customer-gateway&#39;</span><span class="p">)</span>
