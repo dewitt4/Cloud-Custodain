@@ -224,12 +224,17 @@
 <span class="kn">import</span> <span class="nn">os</span>
 
 <span class="kn">from</span> <span class="nn">boto3.s3.transfer</span> <span class="k">import</span> <span class="n">S3Transfer</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">get_retry</span>
+
+<span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.log</span> <span class="k">import</span> <span class="n">CloudWatchLogHandler</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">get_retry</span>
 
 <span class="n">DEFAULT_NAMESPACE</span> <span class="o">=</span> <span class="s2">&quot;CloudMaid&quot;</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.output&#39;</span><span class="p">)</span>
+
+
+<span class="n">blob_outputs</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.blob-outputs&#39;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="MetricsOutput"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.MetricsOutput">[docs]</a><span class="k">class</span> <span class="nc">MetricsOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -359,10 +364,11 @@
 
 <div class="viewcode-block" id="FSOutput.select"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.FSOutput.select">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;s3://&#39;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">S3Output</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">DirectoryOutput</span></div>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">blob_outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">://&#39;</span> <span class="o">%</span> <span class="n">k</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">blob_outputs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+        <span class="c1"># Fall back local disk</span>
+        <span class="k">return</span> <span class="n">blob_outputs</span><span class="p">[</span><span class="s1">&#39;file&#39;</span><span class="p">]</span></div>
 
 <div class="viewcode-block" id="FSOutput.join"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.FSOutput.join">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="o">*</span><span class="n">parts</span><span class="p">):</span>
@@ -385,13 +391,11 @@
                 <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">fp</span> <span class="o">+</span> <span class="s2">&quot;.gz&quot;</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">,</span> <span class="n">compresslevel</span><span class="o">=</span><span class="mi">7</span><span class="p">)</span> <span class="k">as</span> <span class="n">zfh</span><span class="p">:</span>
                     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sfh</span><span class="p">:</span>
                         <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">sfh</span><span class="p">,</span> <span class="n">zfh</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">2</span><span class="o">**</span><span class="mi">15</span><span class="p">)</span>
-                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span></div>
-
-<div class="viewcode-block" id="FSOutput.use_s3"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.FSOutput.use_s3">[docs]</a>    <span class="k">def</span> <span class="nf">use_s3</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>  <span class="c1"># pragma: no cover</span></div></div>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="DirectoryOutput"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.DirectoryOutput">[docs]</a><span class="k">class</span> <span class="nc">DirectoryOutput</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
+<div class="viewcode-block" id="DirectoryOutput"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.DirectoryOutput">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;file&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DirectoryOutput</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
 
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">()</span>
 
@@ -402,13 +406,11 @@
                 <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to dir:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span>
-
-<div class="viewcode-block" id="DirectoryOutput.use_s3"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.DirectoryOutput.use_s3">[docs]</a>    <span class="k">def</span> <span class="nf">use_s3</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="kc">False</span></div></div>
+        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to dir:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="S3Output"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.S3Output">[docs]</a><span class="k">class</span> <span class="nc">S3Output</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
+<div class="viewcode-block" id="S3Output"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.S3Output">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">S3Output</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Usage:</span>
 
@@ -463,13 +465,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span><span class="o">.</span><span class="n">upload_file</span><span class="p">(</span>
                     <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span>
                     <span class="n">extra_args</span><span class="o">=</span><span class="p">{</span>
-                        <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="s1">&#39;AES256&#39;</span><span class="p">})</span></div>
-
-<div class="viewcode-block" id="S3Output.use_s3"><a class="viewcode-back" href="../../generated/c7n.html#c7n.output.S3Output.use_s3">[docs]</a>    <span class="k">def</span> <span class="nf">use_s3</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="kc">True</span></div></div>
-
-
-<span class="n">s3_join</span> <span class="o">=</span> <span class="n">S3Output</span><span class="o">.</span><span class="n">join</span>
+                        <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="s1">&#39;AES256&#39;</span><span class="p">})</span></div></div>
 </pre></div>
 
            </div>
