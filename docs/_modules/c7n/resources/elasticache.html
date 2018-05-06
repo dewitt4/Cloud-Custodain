@@ -413,7 +413,7 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;elasticache:CreateSnapshot&#39;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="SnapshotElastiCacheCluster.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.SnapshotElastiCacheCluster.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
             <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">_cluster_eligible_for_snapshot</span><span class="p">(</span><span class="n">cluster</span><span class="p">):</span>
@@ -624,7 +624,7 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;copy-cluster-tags&#39;</span><span class="p">,</span>
         <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="s1">&#39;minItems&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
-        <span class="n">required</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,))</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,))</span>
 
 <div class="viewcode-block" id="CopyClusterTags.get_permissions"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.CopyClusterTags.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">perms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cache-cluster&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span>
@@ -632,27 +632,52 @@
         <span class="k">return</span> <span class="n">perms</span></div>
 
 <div class="viewcode-block" id="CopyClusterTags.process"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.elasticache.CopyClusterTags.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">):</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Modifying </span><span class="si">%d</span><span class="s2"> ElastiCache snapshots&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">snapshots</span><span class="p">))</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elasticache&#39;</span><span class="p">)</span>
-        <span class="n">clusters</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">cluster</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]:</span> <span class="n">cluster</span> <span class="k">for</span> <span class="n">cluster</span> <span class="ow">in</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cache-cluster&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()}</span>
+        <span class="n">clusters</span> <span class="o">=</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]:</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;cache-cluster&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()}</span>
+        <span class="n">copyable_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">snapshots</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+            <span class="c1"># For replicated/sharded clusters it is possible for each</span>
+            <span class="c1"># shard to have separate tags, we go ahead and tag the</span>
+            <span class="c1"># snap with the union of tags with overlaps getting the</span>
+            <span class="c1"># last value (arbitrary if mismatched).</span>
+            <span class="k">if</span> <span class="s1">&#39;CacheClusterId&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">s</span><span class="p">:</span>
+                <span class="n">cluster_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">ns</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">ns</span> <span class="ow">in</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;NodeSnapshots&#39;</span><span class="p">]]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">cluster_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]]</span>
+
+            <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">cid</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">cluster_ids</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">cid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">cluster_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">[</span><span class="n">cid</span><span class="p">][</span><span class="s1">&#39;Tags&#39;</span><span class="p">]}</span>
+                <span class="n">snap_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">())}</span>
+
+                <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cluster_tags</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">copyable_tags</span> <span class="ow">and</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">copyable_tags</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;aws:&#39;</span><span class="p">):</span>
+                        <span class="k">continue</span>
+                    <span class="k">if</span> <span class="n">snap_tags</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="n">v</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">copy_tags</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">copy_tags</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">copy_tags</span><span class="p">)</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">snap_tags</span><span class="p">)))</span> <span class="o">&gt;</span> <span class="mi">50</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">&quot;Cant copy tags, max tag limit hit on snapshot:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
                 <span class="k">continue</span>
 
             <span class="n">arn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SnapshotName&#39;</span><span class="p">])</span>
-            <span class="n">tags_cluster</span> <span class="o">=</span> <span class="n">clusters</span><span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;CacheClusterId&#39;</span><span class="p">]][</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
-            <span class="n">only_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">[])</span>  <span class="c1"># Specify tags to copy</span>
-            <span class="n">extant_tags</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Tags&#39;</span><span class="p">,</span> <span class="p">())}</span>
-            <span class="n">copy_tags</span> <span class="o">=</span> <span class="p">[]</span>
-
-            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags_cluster</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">only_tags</span> <span class="ow">and</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">extant_tags</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">],</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
-                    <span class="n">copy_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">,</span> <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">copy_tags</span><span class="p">)</span></div></div>
+                <span class="n">client</span><span class="o">.</span><span class="n">add_tags_to_resource</span><span class="p">,</span>
+                <span class="n">ResourceName</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span>
+                <span class="n">Tags</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">copy_tags</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span></div></div>
 
 
 <span class="k">def</span> <span class="nf">_cluster_eligible_for_snapshot</span><span class="p">(</span><span class="n">cluster</span><span class="p">):</span>
