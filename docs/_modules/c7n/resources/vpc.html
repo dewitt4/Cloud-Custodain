@@ -214,7 +214,7 @@
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">zlib</span>
-
+<span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">jmespath</span>
 
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">BotoClientError</span>
@@ -230,8 +230,9 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span><span class="p">,</span> <span class="n">resolver</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
-    <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">parse_cidr</span><span class="p">)</span>
+    <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">parse_cidr</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">c7n.resources.shield</span> <span class="k">import</span> <span class="n">IsShieldProtected</span><span class="p">,</span> <span class="n">SetShieldProtection</span>
 
 
 <div class="viewcode-block" id="Vpc"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.Vpc">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
@@ -1666,7 +1667,33 @@
         <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;list&#39;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::EC2::EIP&quot;</span></div></div>
+        <span class="n">config_type</span> <span class="o">=</span> <span class="s2">&quot;AWS::EC2::EIP&quot;</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">generate_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="n">generate_arn</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">service</span><span class="p">,</span>
+                <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="n">resource_type</span><span class="o">=</span><span class="s1">&#39;eip-allocation&#39;</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span>
+
+<div class="viewcode-block" id="NetworkAddress.get_arn"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkAddress.get_arn">[docs]</a>    <span class="k">def</span> <span class="nf">get_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="NetworkAddress.get_arns"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.NetworkAddress.get_arns">[docs]</a>    <span class="k">def</span> <span class="nf">get_arns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">):</span>
+        <span class="n">arns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resource_set</span><span class="p">:</span>
+            <span class="n">_id</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_model</span><span class="p">()</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="n">arns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_arn</span><span class="p">(</span><span class="n">_id</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">arns</span></div></div>
+
+
+<span class="n">NetworkAddress</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;shield-enabled&#39;</span><span class="p">,</span> <span class="n">IsShieldProtected</span><span class="p">)</span>
+<span class="n">NetworkAddress</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-shield&#39;</span><span class="p">,</span> <span class="n">SetShieldProtection</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="AddressRelease"><a class="viewcode-back" href="../../../generated/c7n.resources.html#c7n.resources.vpc.AddressRelease">[docs]</a><span class="nd">@NetworkAddress</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;release&#39;</span><span class="p">)</span>
