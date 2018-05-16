@@ -226,6 +226,7 @@
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 
 <span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span> <span class="k">as</span> <span class="n">Action</span><span class="p">,</span> <span class="n">AutoTagUser</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">FilterValidationError</span>
@@ -233,12 +234,6 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 
 <span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;maid_status&quot;</span>
-
-<span class="n">universal_tag_retry</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_retry</span><span class="p">((</span>
-    <span class="s1">&#39;Throttled&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;RequestLimitExceeded&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;Client.RequestLimitExceeded&#39;</span>
-<span class="p">))</span>
 
 
 <div class="viewcode-block" id="register_ec2_tags"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.register_ec2_tags">[docs]</a><span class="k">def</span> <span class="nf">register_ec2_tags</span><span class="p">(</span><span class="n">filters</span><span class="p">,</span> <span class="n">actions</span><span class="p">):</span>
@@ -1016,19 +1011,8 @@
 
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span>
-            <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
-            <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">,</span> <span class="p">()):</span>
-            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Resource:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;StatusCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;StatusCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorMessage:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorMessage&#39;</span><span class="p">]))</span></div></div>
+        <span class="k">return</span> <span class="n">universal_retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span> <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="UniversalUntag"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.UniversalUntag">[docs]</a><span class="k">class</span> <span class="nc">UniversalUntag</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
@@ -1042,22 +1026,9 @@
 <div class="viewcode-block" id="UniversalUntag.process_resource_set"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.UniversalUntag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;resourcegroupstaggingapi&#39;</span><span class="p">)</span>
-
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
-
-        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">untag_resources</span><span class="p">,</span>
-            <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
-            <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">,</span> <span class="p">()):</span>
-            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Resource:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;StatusCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;StatusCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorMessage:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorMessage&#39;</span><span class="p">]))</span></div></div>
+        <span class="k">return</span> <span class="n">universal_retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">untag_resources</span><span class="p">,</span> <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span> <span class="n">TagKeys</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="UniversalTagDelayedAction"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.UniversalTagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">UniversalTagDelayedAction</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">):</span>
@@ -1121,20 +1092,48 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;resourcegroupstaggingapi&#39;</span><span class="p">)</span>
 
         <span class="n">arns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arns</span><span class="p">(</span><span class="n">resource_set</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">universal_retry</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span> <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span> <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span></div></div>
 
-        <span class="n">response</span> <span class="o">=</span> <span class="n">universal_tag_retry</span><span class="p">(</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">tag_resources</span><span class="p">,</span>
-            <span class="n">ResourceARNList</span><span class="o">=</span><span class="n">arns</span><span class="p">,</span>
-            <span class="n">Tags</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
 
-        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">,</span> <span class="p">()):</span>
-            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Resource:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;StatusCode:</span><span class="si">{}</span><span class="s2"> &quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;StatusCode&#39;</span><span class="p">])</span> <span class="o">+</span>
-                            <span class="s2">&quot;ErrorMessage:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-                            <span class="n">response</span><span class="p">[</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">][</span><span class="n">f</span><span class="p">][</span><span class="s1">&#39;ErrorMessage&#39;</span><span class="p">]))</span></div></div>
+<div class="viewcode-block" id="universal_retry"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.universal_retry">[docs]</a><span class="k">def</span> <span class="nf">universal_retry</span><span class="p">(</span><span class="n">method</span><span class="p">,</span> <span class="n">ResourceARNList</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Retry support for resourcegroup tagging apis.</span>
+
+<span class="sd">    The resource group tagging api typically returns a 200 status code</span>
+<span class="sd">    with embedded resource specific errors. To enable resource specific</span>
+<span class="sd">    retry on throttles, we extract those, perform backoff w/ jitter and</span>
+<span class="sd">    continue. Other errors are immediately raised.</span>
+
+<span class="sd">    We do not aggregate unified resource responses across retries, only the</span>
+<span class="sd">    last successful response is returned for a subset of the resources if</span>
+<span class="sd">    a retry is performed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">max_attempts</span> <span class="o">=</span> <span class="mi">6</span>
+
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">delay</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+            <span class="n">utils</span><span class="o">.</span><span class="n">backoff_delays</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">2</span> <span class="o">**</span> <span class="mi">8</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="kc">True</span><span class="p">)):</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">method</span><span class="p">(</span><span class="n">ResourceARNList</span><span class="o">=</span><span class="n">ResourceARNList</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
+        <span class="n">failures</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FailedResourcesMap&#39;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">failures</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">response</span>
+
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">throttles</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">f_arn</span> <span class="ow">in</span> <span class="n">failures</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">failures</span><span class="p">[</span><span class="n">f_arn</span><span class="p">][</span><span class="s1">&#39;ErrorCode&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ThrottlingException&#39;</span><span class="p">:</span>
+                <span class="n">throttles</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f_arn</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="n">f_arn</span><span class="p">]</span> <span class="o">=</span> <span class="n">failures</span><span class="p">[</span><span class="n">f_arn</span><span class="p">][</span><span class="s1">&#39;ErrorCode&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Resource Tag Errors </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">errors</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="n">max_attempts</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Resource Tag Throttled </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">throttles</span><span class="p">)))</span>
+
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+        <span class="n">ResourceARNList</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">throttles</span><span class="p">)</span></div>
 </pre></div>
 
            </div>
