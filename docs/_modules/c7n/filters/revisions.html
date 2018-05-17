@@ -222,7 +222,8 @@
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 <span class="kn">from</span> <span class="nn">dateutil.tz</span> <span class="k">import</span> <span class="n">tzlocal</span><span class="p">,</span> <span class="n">tzutc</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
 
@@ -263,13 +264,14 @@
 <div class="viewcode-block" id="Diff.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.revisions.Diff.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="s1">&#39;selector&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;selector&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;date&#39;</span><span class="p">:</span>
             <span class="k">if</span> <span class="s1">&#39;selector_value&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                    <span class="s2">&quot;Date version selector requires specification of date&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;Date version selector requires specification of date on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">parse_date</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;selector_value&#39;</span><span class="p">])</span>
             <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                    <span class="s2">&quot;Invalid date for selector_value&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;Invalid date for selector_value on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
 
         <span class="k">elif</span> <span class="s1">&#39;selector&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;selector&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;locked&#39;</span><span class="p">:</span>
             <span class="n">idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;filters&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
@@ -280,8 +282,9 @@
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">)</span> <span class="ow">and</span> <span class="n">n</span> <span class="o">==</span> <span class="s1">&#39;locked&#39;</span><span class="p">:</span>
                     <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                    <span class="s2">&quot;locked selector needs previous use of is-locked filter&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;locked selector needs previous use of is-locked filter on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="Diff.process"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.revisions.Diff.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>

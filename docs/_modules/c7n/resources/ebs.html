@@ -224,9 +224,10 @@
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span> <span class="k">as</span> <span class="n">parse_date</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">CrossAccountAccessFilter</span><span class="p">,</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">AgeFilter</span><span class="p">,</span> <span class="n">ValueFilter</span><span class="p">,</span>
-    <span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="n">FilterValidationError</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
+    <span class="n">ANNOTATION_KEY</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.health</span> <span class="k">import</span> <span class="n">HealthEventFilter</span>
 
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -412,12 +413,6 @@
 <div class="viewcode-block" id="SnapshotSkipAmiSnapshots.get_permissions"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ebs.SnapshotSkipAmiSnapshots.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">AMI</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="SnapshotSkipAmiSnapshots.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ebs.SnapshotSkipAmiSnapshots.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span> <span class="nb">bool</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                <span class="s2">&quot;invalid config: expected boolean value&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span></div>
-
 <div class="viewcode-block" id="SnapshotSkipAmiSnapshots.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ebs.SnapshotSkipAmiSnapshots.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="n">resources</span> <span class="o">=</span> <span class="n">_filter_ami_snapshots</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">snapshots</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
@@ -525,8 +520,9 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;encrypted&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
             <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;target_key&#39;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                    <span class="s2">&quot;Encrypted snapshot copy requires kms key&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s2">&quot;Encrypted snapshot copy requires kms key on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">,))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="CopySnapshot.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ebs.CopySnapshot.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
@@ -1425,10 +1421,10 @@
 
 <div class="viewcode-block" id="ModifyVolume.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ebs.ModifyVolume.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="s1">&#39;modifyable&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filters&#39;</span><span class="p">,</span> <span class="p">()):</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
                 <span class="s2">&quot;modify action requires modifyable filter in policy&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;size-percent&#39;</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">100</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;shrink&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">((</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">((</span>
                 <span class="s2">&quot;shrinking volumes requires os/fs support &quot;</span>
                 <span class="s2">&quot;or data-loss may ensue, use `shrink: true` to override&quot;</span><span class="p">))</span>
         <span class="k">return</span> <span class="bp">self</span></div>

@@ -229,7 +229,8 @@
 <span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span> <span class="k">as</span> <span class="n">Action</span><span class="p">,</span> <span class="n">AutoTagUser</span>
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span><span class="p">,</span> <span class="n">FilterValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">OPERATORS</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 
@@ -462,12 +463,14 @@
 <div class="viewcode-block" id="TagActionFilter.validate"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.TagActionFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">and</span> <span class="n">op</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Invalid marked-for-op op:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">op</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid marked-for-op op:</span><span class="si">%s</span><span class="s2"> in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
 
         <span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span><span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tz</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                <span class="s2">&quot;Invalid timezone specified &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">))</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid timezone specified &#39;</span><span class="si">%s</span><span class="s2">&#39; in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
@@ -563,8 +566,9 @@
 
 <div class="viewcode-block" id="Tag.validate"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.Tag.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                <span class="s2">&quot;Can&#39;t specify both key and tag, choose one&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Can&#39;t specify both key and tag, choose one in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">,))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="Tag.process"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.Tag.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
@@ -785,14 +789,16 @@
 <div class="viewcode-block" id="TagDelayedAction.validate"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.TagDelayedAction.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span> <span class="ow">and</span> <span class="n">op</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                <span class="s2">&quot;mark-for-op specifies invalid op:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">op</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;mark-for-op specifies invalid op:</span><span class="si">%s</span><span class="s2"> in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">op</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span>
             <span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
-                <span class="s2">&quot;Invalid timezone specified </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid timezone specified </span><span class="si">%s</span><span class="s2"> in </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">tz</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="TagDelayedAction.generate_timestamp"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.tags.TagDelayedAction.generate_timestamp">[docs]</a>    <span class="k">def</span> <span class="nf">generate_timestamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="p">):</span>
