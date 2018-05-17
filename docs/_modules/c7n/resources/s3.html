@@ -2955,18 +2955,25 @@
 <span class="sd">                region: us-east-1</span>
 <span class="sd">                filters:</span>
 <span class="sd">                  - type: bucket-encryption</span>
+<span class="sd">                    state: True</span>
 <span class="sd">                    crypto: AES256</span>
 <span class="sd">              - name: s3-bucket-encryption-KMS</span>
 <span class="sd">                resource: s3</span>
 <span class="sd">                region: us-east-1</span>
 <span class="sd">                filters</span>
 <span class="sd">                  - type: bucket-encryption</span>
+<span class="sd">                    state: True</span>
 <span class="sd">                    crypto: aws:kms</span>
 <span class="sd">                    key: alias/some/alias/key</span>
-
+<span class="sd">              - name: s3-bucket-encryption-off</span>
+<span class="sd">                resource: s3</span>
+<span class="sd">                region: us-east-1</span>
+<span class="sd">                filters</span>
+<span class="sd">                  - type: bucket-encryption</span>
+<span class="sd">                    state: False</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;bucket-encryption&#39;</span><span class="p">,</span>
-                         <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;crypto&#39;</span><span class="p">],</span>
+                         <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
                          <span class="n">crypto</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]},</span>
                          <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">})</span>
 
@@ -2998,9 +3005,16 @@
             <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ServerSideEncryptionConfigurationNotFoundError&#39;</span><span class="p">:</span>
                 <span class="k">raise</span>
 
-        <span class="k">for</span> <span class="n">sse</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_bucket</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">):</span>
-                <span class="k">return</span> <span class="kc">True</span></div>
+        <span class="c1"># default `state` to True as previous impl assumed state == True</span>
+        <span class="c1"># to preserve backwards compatibility</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">sse</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_bucket</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">sse</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+                <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_bucket</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span></div>
 
 <div class="viewcode-block" id="BucketEncryption.filter_bucket"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.s3.BucketEncryption.filter_bucket">[docs]</a>    <span class="k">def</span> <span class="nf">filter_bucket</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">sse</span><span class="p">):</span>
         <span class="n">allowed</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;AES256&#39;</span><span class="p">,</span> <span class="s1">&#39;aws:kms&#39;</span><span class="p">]</span>
