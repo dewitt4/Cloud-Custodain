@@ -218,7 +218,7 @@
 <span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">ModifyVpcSecurityGroupsAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
@@ -870,6 +870,72 @@
                         <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span>
                     <span class="k">continue</span>
                 <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="DaxUpdateCluster"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxUpdateCluster">[docs]</a><span class="nd">@DynamoDbAccelerator</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;update-cluster&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DaxUpdateCluster</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Updates a DAX cluster configuration</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: dax-update-cluster</span>
+<span class="sd">            resource: dax</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - ParameterGroup.ParameterGroupName: &#39;default.dax1.0&#39;</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: update-cluster</span>
+<span class="sd">                ParameterGroupName: &#39;testparamgroup&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;additionalProperties&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;update-cluster&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;Description&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;PreferredMaintenanceWindow&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;NotificationTopicArn&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;NotificationTopicStatus&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;ParameterGroupName&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dax:UpdateCluster&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DaxUpdateCluster.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxUpdateCluster.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dax&#39;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">]</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_cluster</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">(</span>
+                        <span class="s1">&#39;ClusterNotFoundFault&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;InvalidClusterStateFault&#39;</span><span class="p">):</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s1">&#39;Exception updating dax cluster </span><span class="si">%s</span><span class="s1">: </span><span class="se">\n</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="DaxModifySecurityGroup"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxModifySecurityGroup">[docs]</a><span class="nd">@DynamoDbAccelerator</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;modify-security-groups&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DaxModifySecurityGroup</span><span class="p">(</span><span class="n">ModifyVpcSecurityGroupsAction</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;dax:UpdateCluster&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="DaxModifySecurityGroup.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxModifySecurityGroup.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dax&#39;</span><span class="p">)</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">DaxModifySecurityGroup</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_groups</span><span class="p">(</span>
+            <span class="n">resources</span><span class="p">,</span> <span class="n">metadata_key</span><span class="o">=</span><span class="s1">&#39;SecurityGroupIdentifier&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">resources</span><span class="p">):</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">update_cluster</span><span class="p">(</span>
+                <span class="n">ClusterName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">],</span>
+                <span class="n">SecurityGroupIds</span><span class="o">=</span><span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span></div></div>
 </pre></div>
 
            </div>
