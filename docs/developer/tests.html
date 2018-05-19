@@ -120,9 +120,8 @@
 <li class="toctree-l1"><a class="reference internal" href="installing.html">Installing for Developers</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Testing for Developers</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#running-tests">Running tests</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#ratcheting-down-python-3-6-tests">Ratcheting down Python 3.6 Tests</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#decorating-tests">Decorating tests</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#writing-placebo-tests">Writing Placebo Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#writing-placebo-tests-for-aws-resources">Writing Placebo Tests for AWS Resources</a></li>
 </ul>
 </li>
 </ul>
@@ -220,25 +219,21 @@ $ open coverage/index.html
 $ gnome-open coverage/index.html
 </pre></div>
 </div>
+<p>Linting can be run with:</p>
+<div class="highlight-bash"><div class="highlight"><pre><span></span>$ make lint
+</pre></div>
 </div>
-<div class="section" id="ratcheting-down-python-3-6-tests">
-<h2>Ratcheting down Python 3.6 Tests<a class="headerlink" href="#ratcheting-down-python-3-6-tests" title="Permalink to this headline">¶</a></h2>
-<p>We are in the process of porting Custodian to run on both Python 3.6 in
-addition to 2.7. As part of this process, we record tests that are known to
-fail under Python 3.6 in a file called <code class="docutils literal"><span class="pre">ratchet.txt</span></code>, and we require these
-and only these tests to fail under the <code class="docutils literal"><span class="pre">py36</span></code> environment during continuous
-integration. If you make changes that fix some failing tests under Python 3.6,
-then the <code class="docutils literal"><span class="pre">py36</span></code> test environment will remove the newly pasing tests from the
-<code class="docutils literal"><span class="pre">ratchet.txt</span></code> file and will fail with a message prompting you to commit the
-changes to <code class="docutils literal"><span class="pre">ratchet.txt</span></code>.</p>
 </div>
 <div class="section" id="decorating-tests">
 <h2>Decorating tests<a class="headerlink" href="#decorating-tests" title="Permalink to this headline">¶</a></h2>
 <p>The <code class="docutils literal"><span class="pre">functional</span></code> decorator marks tests that don’t require any pre-existing
 AWS context, and can therefore be run cleanly against live AWS.</p>
 </div>
-<div class="section" id="writing-placebo-tests">
-<h2>Writing Placebo Tests<a class="headerlink" href="#writing-placebo-tests" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="writing-placebo-tests-for-aws-resources">
+<h2>Writing Placebo Tests for AWS Resources<a class="headerlink" href="#writing-placebo-tests-for-aws-resources" title="Permalink to this headline">¶</a></h2>
+<p>Note: These instructions are only for recording data in AWS. For Azure, GCP, or
+other cloud providers, see the corresponding documentation for information on how
+to record data there.</p>
 <p>The <a class="reference external" href="http://placebo.readthedocs.io/en/latest/">Placebo</a> library is used to
 record and replay AWS responses so that tests can run locally, and in a fraction
 of the time it would take to interact with live AWS services.</p>
@@ -307,6 +302,19 @@ test is run while <cite>record_flight_data</cite> is in place.</p>
 <p>Now when the test is run it will use the data previously recorded and will not
 contact AWS.  When committing your test, don’t forget to include the
 <cite>tests/data/placebo/test_example</cite> directory!</p>
+<p>Note: if it’s necessary to delay CLI calls due to delays in the time it takes
+for an attribute on a resource to be reflected in an API call or any other reason,
+use <code class="docutils literal"><span class="pre">self.recording</span></code> to only sleep when recording json like so:</p>
+<blockquote>
+<div><div class="highlight-python"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">time</span>
+
+<span class="o">...</span>
+
+<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">recording</span><span class="p">:</span>
+  <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+</div></blockquote>
 </div>
 </div>
 
