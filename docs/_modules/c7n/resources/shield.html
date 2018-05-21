@@ -331,13 +331,21 @@
         <span class="c1"># Get all resources unfiltered</span>
         <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">type</span><span class="p">)</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
         <span class="n">resource_arns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_arn</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span>
-        <span class="n">protections</span> <span class="o">=</span> <span class="p">{</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]:</span> <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">protections</span><span class="p">}</span>
+
+        <span class="n">pmap</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Only process stale resources in region for non global resources.</span>
+        <span class="n">global_resource</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">resource_type</span><span class="p">,</span> <span class="s1">&#39;global_resource&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">protections</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">global_resource</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">region</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]:</span>
+                <span class="k">continue</span>
+            <span class="n">pmap</span><span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;ResourceArn&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">p</span>
+
         <span class="c1"># Find any protections for resources that don&#39;t exist</span>
-        <span class="n">stale</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">protections</span><span class="p">)</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">resource_arns</span><span class="p">)</span>
+        <span class="n">stale</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">pmap</span><span class="p">)</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">resource_arns</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;clearing </span><span class="si">%d</span><span class="s2"> stale protections&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">stale</span><span class="p">))</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">stale</span><span class="p">:</span>
             <span class="n">client</span><span class="o">.</span><span class="n">delete_protection</span><span class="p">(</span>
-                <span class="n">ProtectionId</span><span class="o">=</span><span class="n">protections</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span></div></div>
+                <span class="n">ProtectionId</span><span class="o">=</span><span class="n">pmap</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span></div></div>
 </pre></div>
 
            </div>
