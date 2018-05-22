@@ -225,7 +225,7 @@
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">TagDelayedAction</span><span class="p">,</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">TagActionFilter</span><span class="p">,</span> <span class="n">Tag</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">local_session</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">snapshot_identifier</span><span class="p">)</span>
-<span class="kn">from</span> <span class="nn">c7n.filters.vpc</span> <span class="k">import</span> <span class="n">SecurityGroupFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.vpc</span> <span class="k">import</span> <span class="n">SecurityGroupFilter</span><span class="p">,</span> <span class="n">SubnetFilter</span>
 
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;dynamodb-table.filters&#39;</span><span class="p">)</span>
@@ -936,6 +936,39 @@
             <span class="n">client</span><span class="o">.</span><span class="n">update_cluster</span><span class="p">(</span>
                 <span class="n">ClusterName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;ClusterName&#39;</span><span class="p">],</span>
                 <span class="n">SecurityGroupIds</span><span class="o">=</span><span class="n">groups</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span></div></div>
+
+
+<div class="viewcode-block" id="DaxSubnetFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxSubnetFilter">[docs]</a><span class="nd">@DynamoDbAccelerator</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;subnet&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DaxSubnetFilter</span><span class="p">(</span><span class="n">SubnetFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters DAX clusters based on their associated subnet group</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: dax-no-auto-public</span>
+<span class="sd">            resource: dax</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: subnet</span>
+<span class="sd">                key: MapPublicIpOnLaunch</span>
+<span class="sd">                value: False</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="DaxSubnetFilter.get_related_ids"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxSubnetFilter.get_related_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_related_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">group_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">group_ids</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SubnetIdentifier&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span>
+                 <span class="bp">self</span><span class="o">.</span><span class="n">groups</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;SubnetGroup&#39;</span><span class="p">]][</span><span class="s1">&#39;Subnets&#39;</span><span class="p">]])</span>
+        <span class="k">return</span> <span class="n">group_ids</span></div>
+
+<div class="viewcode-block" id="DaxSubnetFilter.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.dynamodb.DaxSubnetFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;dax&#39;</span><span class="p">)</span>
+        <span class="n">subnet_groups</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_subnet_groups</span><span class="p">()[</span><span class="s1">&#39;SubnetGroups&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">groups</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;SubnetGroupName&#39;</span><span class="p">]:</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">subnet_groups</span><span class="p">}</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">DaxSubnetFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
