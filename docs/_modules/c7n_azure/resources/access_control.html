@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>c7n_azure.resources.vnet &mdash; Cloud Custodian  documentation</title>
+  <title>c7n_azure.resources.access_control &mdash; Cloud Custodian  documentation</title>
   
 
   
@@ -178,7 +178,7 @@
         
           <li><a href="../../index.html">Module code</a> &raquo;</li>
         
-      <li>c7n_azure.resources.vnet</li>
+      <li>c7n_azure.resources.access_control</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -195,7 +195,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for c7n_azure.resources.vnet</h1><div class="highlight"><pre>
+  <h1>Source code for c7n_azure.resources.access_control</h1><div class="highlight"><pre>
 <span></span><span class="c1"># Copyright 2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
@@ -210,17 +210,76 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
-<span class="kn">from</span> <span class="nn">c7n_azure.resources.arm</span> <span class="k">import</span> <span class="n">ArmResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
-<div class="viewcode-block" id="Vnet"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.vnet.Vnet">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vnet&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">Vnet</span><span class="p">(</span><span class="n">ArmResourceManager</span><span class="p">):</span>
+<div class="viewcode-block" id="RoleAssignment"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;roleassignment&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RoleAssignment</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
-<div class="viewcode-block" id="Vnet.resource_type"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.vnet.Vnet.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">ArmResourceManager</span><span class="o">.</span><span class="n">resource_type</span><span class="p">):</span>
-        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;azure.mgmt.network&#39;</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="s1">&#39;NetworkManagementClient&#39;</span>
-        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;virtual_networks&#39;</span><span class="p">,</span> <span class="s1">&#39;list_all&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div></div>
+<div class="viewcode-block" id="RoleAssignment.resource_type"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;azure.mgmt.authorization&#39;</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="s1">&#39;AuthorizationManagementClient&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_assignments&#39;</span><span class="p">,</span> <span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">get_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_assignments&#39;</span><span class="p">,</span> <span class="s1">&#39;get_by_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;id&#39;</span>
+        <span class="n">default_report_fields</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.scope&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.roleDefinitionId&#39;</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="RoleDefinition"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleDefinition">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;roledefinition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RoleDefinition</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RoleDefinition.resource_type"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleDefinition.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">Session</span><span class="p">()</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;azure.mgmt.authorization&#39;</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="s1">&#39;AuthorizationManagementClient&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="s1">&#39;/subscriptions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">))</span>
+        <span class="n">get_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;get_by_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;roleDefinition&#39;</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;id&#39;</span>
+        <span class="n">default_report_fields</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;id&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.roleName&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.description&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.type&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;properties.permissions&#39;</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="UserRole"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.UserRole">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UserRole</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters role assignments based on role definitions</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">        .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">               - name: assignments-by-role-definition</span>
+<span class="sd">                 resource: azure.roleassignment</span>
+<span class="sd">                 filters:</span>
+<span class="sd">                    - type: role</span>
+<span class="sd">                      key: properties.roleName</span>
+<span class="sd">                      op: in</span>
+<span class="sd">                      value: Owner</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+    <span class="n">RelatedResource</span> <span class="o">=</span> <span class="s2">&quot;c7n_azure.resources.access_control.RoleDefinition&quot;</span>
+    <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;properties.roleDefinitionId&quot;</span></div>
 </pre></div>
 
            </div>
