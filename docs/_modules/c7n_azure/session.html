@@ -223,53 +223,62 @@
 <div class="viewcode-block" id="Session"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session">[docs]</a><span class="k">class</span> <span class="nc">Session</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Creates a session using available authentication type.</span>
+
+<span class="sd">        Auth priority:</span>
+<span class="sd">        1. Token Auth</span>
+<span class="sd">        2. Tenant Auth</span>
+<span class="sd">        3. Azure CLI Auth</span>
+
+<span class="sd">        :param subscription_id: If provided, overrides environment variables.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.session&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_provider_cache</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">subscription_id</span>
         <span class="n">tenant_auth_variables</span> <span class="o">=</span> <span class="p">[</span>
             <span class="s1">&#39;AZURE_TENANT_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">,</span>
             <span class="s1">&#39;AZURE_CLIENT_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;AZURE_CLIENT_SECRET&#39;</span>
         <span class="p">]</span>
         <span class="n">token_auth_variables</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;AZURE_ACCESS_TOKEN&#39;</span><span class="p">,</span> <span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
 
-        <span class="c1"># If the user has specified they want to auth with Azure CLI</span>
-        <span class="c1"># then load up the cached CLI credentials</span>
-        <span class="k">if</span> <span class="s1">&#39;AZURE_CLI_AUTH&#39;</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">:</span>
-            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="p">,</span>
-             <span class="n">subscription_id</span><span class="p">,</span>
-             <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="p">)</span> <span class="o">=</span> <span class="n">Profile</span><span class="p">()</span><span class="o">.</span><span class="n">get_login_credentials</span><span class="p">(</span>
-                <span class="n">resource</span><span class="o">=</span><span class="n">AZURE_PUBLIC_CLOUD</span><span class="o">.</span><span class="n">endpoints</span><span class="o">.</span><span class="n">active_directory_resource_id</span><span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">subscription_id</span>
-            <span class="k">return</span>
-
-        <span class="c1"># Try to do token auth which supports unit tests or other integrations</span>
-        <span class="c1"># which want to pass an existing token</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">token_auth_variables</span><span class="p">):</span>
+            <span class="c1"># Token authentication</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="o">=</span> <span class="n">BasicTokenAuthentication</span><span class="p">(</span>
                 <span class="n">token</span><span class="o">=</span><span class="p">{</span>
                     <span class="s1">&#39;access_token&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_ACCESS_TOKEN&#39;</span><span class="p">]</span>
                 <span class="p">})</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
-            <span class="k">return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with Token Authentication&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Set credentials with environment variables if all</span>
-        <span class="c1"># required variables are present</span>
-        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tenant_auth_variables</span><span class="p">):</span>
-
+        <span class="k">elif</span> <span class="nb">all</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">tenant_auth_variables</span><span class="p">):</span>
+            <span class="c1"># Tenant (service principal) authentication</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="o">=</span> <span class="n">ServicePrincipalCredentials</span><span class="p">(</span>
                 <span class="n">client_id</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_CLIENT_ID&#39;</span><span class="p">],</span>
                 <span class="n">secret</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_CLIENT_SECRET&#39;</span><span class="p">],</span>
                 <span class="n">tenant</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_TENANT_ID&#39;</span><span class="p">]</span>
             <span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_TENANT_ID&#39;</span><span class="p">]</span>
-            <span class="k">return</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with Service Principal Authentication&quot;</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Unable to locate credentials for Azure session.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Azure CLI authentication</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="p">,</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">,</span>
+             <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="p">)</span> <span class="o">=</span> <span class="n">Profile</span><span class="p">()</span><span class="o">.</span><span class="n">get_login_credentials</span><span class="p">(</span>
+                <span class="n">resource</span><span class="o">=</span><span class="n">AZURE_PUBLIC_CLOUD</span><span class="o">.</span><span class="n">endpoints</span><span class="o">.</span><span class="n">active_directory_resource_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with Azure CLI Authentication&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Let provided id parameter override everything else</span>
+        <span class="k">if</span> <span class="n">subscription_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">subscription_id</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Session using Subscription ID: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Unable to locate credentials for Azure session.&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Session.client"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session.client">[docs]</a>    <span class="k">def</span> <span class="nf">client</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
         <span class="n">service_name</span><span class="p">,</span> <span class="n">client_name</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
