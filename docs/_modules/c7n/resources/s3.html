@@ -1384,26 +1384,33 @@
         <span class="n">enabled</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;s3:PutBucketVersioning&quot;</span><span class="p">,)</span>
 
+<div class="viewcode-block" id="ToggleVersioning.process_versioning"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.s3.ToggleVersioning.process_versioning">[docs]</a>    <span class="k">def</span> <span class="nf">process_versioning</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">state</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span>
+            <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">resource</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_versioning</span><span class="p">(</span>
+                <span class="n">Bucket</span><span class="o">=</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
+                <span class="n">VersioningConfiguration</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="n">state</span><span class="p">})</span>
+        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="s2">&quot;Unable to put bucket versioning on bucket </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+                <span class="k">raise</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Access Denied Bucket:</span><span class="si">%s</span><span class="s2"> while put bucket versioning&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span></div>
+
     <span class="c1"># mfa delete enablement looks like it needs the serial and a current token.</span>
 <div class="viewcode-block" id="ToggleVersioning.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.s3.ToggleVersioning.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;enabled&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">bucket_client</span><span class="p">(</span>
-                <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">),</span> <span class="n">r</span><span class="p">)</span>
             <span class="k">if</span> <span class="s1">&#39;Versioning&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Versioning&#39;</span><span class="p">]:</span>
                 <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Versioning&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">}</span>
             <span class="k">if</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="p">(</span>
                     <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Versioning&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">):</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_versioning</span><span class="p">(</span>
-                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-                    <span class="n">VersioningConfiguration</span><span class="o">=</span><span class="p">{</span>
-                        <span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">})</span>
-                <span class="k">continue</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_versioning</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">enabled</span> <span class="ow">and</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Versioning&#39;</span><span class="p">][</span><span class="s1">&#39;Status&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Enabled&#39;</span><span class="p">:</span>
-                <span class="n">client</span><span class="o">.</span><span class="n">put_bucket_versioning</span><span class="p">(</span>
-                    <span class="n">Bucket</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span>
-                    <span class="n">VersioningConfiguration</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Status&#39;</span><span class="p">:</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">})</span></div></div>
+                <span class="bp">self</span><span class="o">.</span><span class="n">process_versioning</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s1">&#39;Suspended&#39;</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="ToggleLogging"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.s3.ToggleLogging">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;toggle-logging&#39;</span><span class="p">)</span>
