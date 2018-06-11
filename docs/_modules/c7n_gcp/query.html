@@ -275,7 +275,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">query</span> <span class="o">=</span> <span class="n">ResourceQuery</span><span class="p">(</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
 
 <div class="viewcode-block" id="DescribeSource.get_resources"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.query.DescribeSource.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">)</span></div>
+        <span class="k">if</span> <span class="n">query</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">,</span> <span class="o">**</span><span class="n">query</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="DescribeSource.get_permissions"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.query.DescribeSource.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">()</span></div>
@@ -317,10 +319,15 @@
     <span class="k">def</span> <span class="nf">source_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-gcp&#39;</span><span class="p">)</span>
 
+<div class="viewcode-block" id="QueryResourceManager.get_resource_query"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.query.QueryResourceManager.get_resource_query">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_query</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;query&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;filter&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;query&#39;</span><span class="p">)}</span></div>
+
 <div class="viewcode-block" id="QueryResourceManager.resources"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.query.QueryResourceManager.resources">[docs]</a>    <span class="k">def</span> <span class="nf">resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_key</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">query</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_resource_query</span><span class="p">()</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_key</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="n">query</span><span class="p">))</span>
+            <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="n">q</span><span class="p">))</span>
         <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">error</span> <span class="o">=</span> <span class="n">extract_error</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">error</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -332,6 +339,7 @@
                     <span class="bp">self</span><span class="o">.</span><span class="n">resource_type</span><span class="o">.</span><span class="n">service</span><span class="p">,</span>
                     <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">())</span>
                 <span class="k">return</span> <span class="p">[]</span>
+            <span class="k">raise</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
 

@@ -211,7 +211,15 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-<span class="sd">&quot;&quot;&quot;Base GCP client which uses the discovery API.&quot;&quot;&quot;</span>
+<span class="sd">&quot;&quot;&quot;Base GCP client which uses the discovery API.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c1"># modifications (c7n)</span>
+<span class="c1"># - flight recorder support</span>
+<span class="c1"># - env creds sourcing</span>
+<span class="c1"># - various minor bug fixes</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
+
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">threading</span>
 <span class="kn">from</span> <span class="nn">googleapiclient</span> <span class="k">import</span> <span class="n">discovery</span>
@@ -270,7 +278,7 @@
        <span class="n">wait_exponential_max</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
        <span class="n">stop_max_attempt_number</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
 <span class="k">def</span> <span class="nf">_create_service_api</span><span class="p">(</span><span class="n">credentials</span><span class="p">,</span> <span class="n">service_name</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">developer_key</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                        <span class="n">cache_discovery</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                        <span class="n">cache_discovery</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">http</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Builds and returns a cloud API service object.</span>
 
 <span class="sd">    Args:</span>
@@ -297,7 +305,13 @@
         <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="n">version</span><span class="p">,</span>
         <span class="s1">&#39;developerKey&#39;</span><span class="p">:</span> <span class="n">developer_key</span><span class="p">,</span>
         <span class="s1">&#39;cache_discovery&#39;</span><span class="p">:</span> <span class="n">cache_discovery</span><span class="p">,</span>
-        <span class="s1">&#39;credentials&#39;</span><span class="p">:</span> <span class="n">credentials</span><span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span> <span class="n">http</span><span class="p">:</span>
+        <span class="n">discovery_kwargs</span><span class="p">[</span><span class="s1">&#39;http&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">http</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">discovery_kwargs</span><span class="p">[</span><span class="s1">&#39;credentials&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">credentials</span>
+
     <span class="k">return</span> <span class="n">discovery</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="o">**</span><span class="n">discovery_kwargs</span><span class="p">)</span>
 
 
@@ -332,6 +346,7 @@
                  <span class="n">quota_max_calls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">quota_period</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">use_rate_limiter</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">http</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">project_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Constructor.</span>
@@ -359,6 +374,7 @@
                                              <span class="n">period</span><span class="o">=</span><span class="n">quota_period</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_rate_limiter</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_http</span> <span class="o">=</span> <span class="n">http</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span> <span class="o">=</span> <span class="n">project_id</span>
 
@@ -368,8 +384,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            str: The object representation.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="s1">&#39;&lt;GCPSession: name=</span><span class="si">%s</span><span class="s1">, versions=</span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">versions</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s1">&#39;&lt;gcp-session: http=</span><span class="si">%s</span><span class="s1">&gt;&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_http</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="Session.get_default_project"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.client.Session.get_default_project">[docs]</a>    <span class="k">def</span> <span class="nf">get_default_project</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">:</span>
@@ -399,20 +414,21 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            object: An instance of repository_class.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-
         <span class="n">service</span> <span class="o">=</span> <span class="n">_create_service_api</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_credentials</span><span class="p">,</span>
             <span class="n">service_name</span><span class="p">,</span>
             <span class="n">version</span><span class="p">,</span>
             <span class="n">kw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;developer_key&#39;</span><span class="p">),</span>
-            <span class="n">kw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;cache_discovery&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+            <span class="n">kw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;cache_discovery&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_http</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">ServiceClient</span><span class="p">(</span>
             <span class="n">gcp_service</span><span class="o">=</span><span class="n">service</span><span class="p">,</span>
             <span class="n">component</span><span class="o">=</span><span class="n">component</span><span class="p">,</span>
             <span class="n">credentials</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_credentials</span><span class="p">,</span>
             <span class="n">rate_limiter</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_rate_limiter</span><span class="p">,</span>
-            <span class="n">use_cached_http</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_use_cached_http</span><span class="p">)</span></div></div>
+            <span class="n">use_cached_http</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_use_cached_http</span><span class="p">,</span>
+            <span class="n">http</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_http</span><span class="p">)</span></div></div>
 
 
 <span class="c1"># pylint: disable=too-many-instance-attributes, too-many-arguments</span>
@@ -423,7 +439,7 @@
                  <span class="n">num_retries</span><span class="o">=</span><span class="n">NUM_HTTP_RETRIES</span><span class="p">,</span> <span class="n">key_field</span><span class="o">=</span><span class="s1">&#39;project&#39;</span><span class="p">,</span>
                  <span class="n">entity_field</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">list_key_field</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">get_key_field</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">max_results_field</span><span class="o">=</span><span class="s1">&#39;maxResults&#39;</span><span class="p">,</span> <span class="n">search_query_field</span><span class="o">=</span><span class="s1">&#39;query&#39;</span><span class="p">,</span>
-                 <span class="n">rate_limiter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_cached_http</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+                 <span class="n">rate_limiter</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_cached_http</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">http</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Constructor.</span>
 
 <span class="sd">        Args:</span>
@@ -478,6 +494,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_use_cached_http</span> <span class="o">=</span> <span class="n">use_cached_http</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_local</span> <span class="o">=</span> <span class="n">LOCAL_THREAD</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_http_replay</span> <span class="o">=</span> <span class="n">http</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">http</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -487,6 +504,11 @@
 <span class="sd">            httplib2.Http: An Http instance authorized by the credentials.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_use_cached_http</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="p">,</span> <span class="s1">&#39;http&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">http</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_http_replay</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># httplib2 instance is not thread safe.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_credentials</span><span class="o">.</span><span class="n">authorize</span><span class="p">(</span><span class="n">http</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_http_replay</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">http</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_http_replay</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local</span><span class="o">.</span><span class="n">http</span>
 
         <span class="n">http</span> <span class="o">=</span> <span class="n">httplib2</span><span class="o">.</span><span class="n">Http</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">HTTP_REQUEST_TIMEOUT</span><span class="p">)</span>
