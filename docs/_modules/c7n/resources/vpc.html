@@ -1046,12 +1046,26 @@
 <span class="sd">          op: in</span>
 <span class="sd">          value: x.y.z</span>
 
+<span class="sd">    `Cidr` can match ipv4 rules and `CidrV6` can match ipv6 rules.  In</span>
+<span class="sd">    this example we are blocking global inbound connections to SSH or</span>
+<span class="sd">    RDP.</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">      - type: ingress</span>
+<span class="sd">        Ports: [22, 3389]</span>
+<span class="sd">        Cidr:</span>
+<span class="sd">          values:</span>
+<span class="sd">            - &quot;0.0.0.0/0&quot;</span>
+<span class="sd">            - &quot;::/0&quot;</span>
+<span class="sd">          op: in</span>
+
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">perm_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
         <span class="s1">&#39;IpProtocol&#39;</span><span class="p">,</span> <span class="s1">&#39;FromPort&#39;</span><span class="p">,</span> <span class="s1">&#39;ToPort&#39;</span><span class="p">,</span> <span class="s1">&#39;UserIdGroupPairs&#39;</span><span class="p">,</span>
         <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="s1">&#39;PrefixListIds&#39;</span><span class="p">))</span>
-    <span class="n">filter_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">,</span> <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">,</span> <span class="s1">&#39;SelfReference&#39;</span><span class="p">))</span>
+    <span class="n">filter_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;CidrV6&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">,</span> <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">,</span> <span class="s1">&#39;SelfReference&#39;</span><span class="p">))</span>
     <span class="n">attrs</span> <span class="o">=</span> <span class="n">perm_attrs</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">filter_attrs</span><span class="p">)</span>
     <span class="n">attrs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">)</span>
 
@@ -1096,24 +1110,37 @@
                 <span class="n">found</span> <span class="o">=</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">found</span> <span class="ow">and</span> <span class="kc">True</span> <span class="ow">or</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="n">found</span></div>
 
-<div class="viewcode-block" id="SGPermission.process_cidrs"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.vpc.SGPermission.process_cidrs">[docs]</a>    <span class="k">def</span> <span class="nf">process_cidrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_process_cidr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cidr_key</span><span class="p">,</span> <span class="n">cidr_type</span><span class="p">,</span> <span class="n">range_type</span><span class="p">,</span> <span class="n">perm</span><span class="p">):</span>
         <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="s1">&#39;Cidr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
-            <span class="n">ip_perms</span> <span class="o">=</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="p">[])</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ip_perms</span><span class="p">:</span>
-                <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">ip_perms</span> <span class="o">=</span> <span class="n">perm</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">range_type</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ip_perms</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
 
-            <span class="n">match_range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;Cidr&#39;</span><span class="p">]</span>
-            <span class="n">match_range</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;CidrIp&#39;</span>
-            <span class="n">vf</span> <span class="o">=</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="n">match_range</span><span class="p">)</span>
-            <span class="n">vf</span><span class="o">.</span><span class="n">annotate</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="k">for</span> <span class="n">ip_range</span> <span class="ow">in</span> <span class="n">ip_perms</span><span class="p">:</span>
-                <span class="n">found</span> <span class="o">=</span> <span class="n">vf</span><span class="p">(</span><span class="n">ip_range</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
-                    <span class="k">break</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="k">return</span> <span class="n">found</span></div>
+        <span class="n">match_range</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">cidr_key</span><span class="p">]</span>
+        <span class="n">match_range</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cidr_type</span>
+
+        <span class="n">vf</span> <span class="o">=</span> <span class="n">ValueFilter</span><span class="p">(</span><span class="n">match_range</span><span class="p">)</span>
+        <span class="n">vf</span><span class="o">.</span><span class="n">annotate</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="k">for</span> <span class="n">ip_range</span> <span class="ow">in</span> <span class="n">ip_perms</span><span class="p">:</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">vf</span><span class="p">(</span><span class="n">ip_range</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">found</span>
+
+<div class="viewcode-block" id="SGPermission.process_cidrs"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.vpc.SGPermission.process_cidrs">[docs]</a>    <span class="k">def</span> <span class="nf">process_cidrs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">):</span>
+        <span class="n">found_v6</span> <span class="o">=</span> <span class="n">found_v4</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="s1">&#39;CidrV6&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="n">found_v6</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_cidr</span><span class="p">(</span><span class="s1">&#39;CidrV6&#39;</span><span class="p">,</span> <span class="s1">&#39;CidrIpv6&#39;</span><span class="p">,</span> <span class="s1">&#39;Ipv6Ranges&#39;</span><span class="p">,</span> <span class="n">perm</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;Cidr&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="n">found_v4</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_cidr</span><span class="p">(</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;CidrIp&#39;</span><span class="p">,</span> <span class="s1">&#39;IpRanges&#39;</span><span class="p">,</span> <span class="n">perm</span><span class="p">)</span>
+        <span class="n">match_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;and&#39;</span> <span class="ow">and</span> <span class="nb">all</span> <span class="ow">or</span> <span class="nb">any</span>
+        <span class="n">cidr_match</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="n">found_v6</span><span class="p">,</span> <span class="n">found_v4</span><span class="p">)</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cidr_match</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">match_op</span><span class="p">(</span><span class="n">cidr_match</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SGPermission.process_self_reference"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.vpc.SGPermission.process_self_reference">[docs]</a>    <span class="k">def</span> <span class="nf">process_self_reference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">perm</span><span class="p">,</span> <span class="n">sg_id</span><span class="p">):</span>
         <span class="n">found</span> <span class="o">=</span> <span class="kc">None</span>
