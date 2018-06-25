@@ -216,7 +216,9 @@
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.core</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="k">import</span> <span class="n">deepcopy</span>
 
 
 <div class="viewcode-block" id="NetworkSecurityGroup"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.NetworkSecurityGroup">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;networksecuritygroup&#39;</span><span class="p">)</span>
@@ -234,45 +236,60 @@
         <span class="p">)</span></div></div>
 
 
+<span class="n">FROM_PORT</span> <span class="o">=</span> <span class="s1">&#39;fromPort&#39;</span>
+<span class="n">TO_PORT</span> <span class="o">=</span> <span class="s1">&#39;toPort&#39;</span>
+<span class="n">PORTS</span> <span class="o">=</span> <span class="s1">&#39;ports&#39;</span>
+<span class="n">EXCEPT_PORTS</span> <span class="o">=</span> <span class="s1">&#39;exceptPorts&#39;</span>
+<span class="n">IP_PROTOCOL</span> <span class="o">=</span> <span class="s1">&#39;ipProtocol&#39;</span>
+
+
 <div class="viewcode-block" id="SecurityRuleFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.SecurityRuleFilter">[docs]</a><span class="k">class</span> <span class="nc">SecurityRuleFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Filter on Security Rules within a Network Security Group</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">perm_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
-        <span class="s1">&#39;IpProtocol&#39;</span><span class="p">,</span> <span class="s1">&#39;FromPort&#39;</span><span class="p">,</span> <span class="s1">&#39;ToPort&#39;</span><span class="p">))</span>
 
-    <span class="n">filter_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="s1">&#39;Ports&#39;</span><span class="p">,</span> <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">))</span>
+    <span class="n">perm_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span>
+        <span class="n">IP_PROTOCOL</span><span class="p">,</span> <span class="n">FROM_PORT</span><span class="p">,</span> <span class="n">TO_PORT</span><span class="p">))</span>
+
+    <span class="n">filter_attrs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">((</span><span class="s1">&#39;Cidr&#39;</span><span class="p">,</span> <span class="n">PORTS</span><span class="p">,</span> <span class="n">EXCEPT_PORTS</span><span class="p">))</span>
     <span class="n">attrs</span> <span class="o">=</span> <span class="n">perm_attrs</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">filter_attrs</span><span class="p">)</span>
     <span class="n">attrs</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SecurityRuleFilter.validate"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.SecurityRuleFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Check that variable values are valid</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FromPort&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ToPort&#39;</span><span class="p">)</span> <span class="ow">and</span> \
-                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FromPort&#39;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ToPort&#39;</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;FromPort should be lower than ToPort&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FROM_PORT</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">TO_PORT</span><span class="p">)</span> <span class="ow">and</span> \
+                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FROM_PORT</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">TO_PORT</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1"> should be lower than </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">FROM_PORT</span><span class="p">,</span> <span class="n">TO_PORT</span><span class="p">))</span>
         <span class="k">if</span> <span class="p">(</span>
-                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FromPort&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ToPort&#39;</span><span class="p">))</span> <span class="ow">and</span>
-                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Ports&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;OnlyPorts&#39;</span><span class="p">))</span>
-        <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Ports&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;OnlyPorts&#39;</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s1">&#39;Invalid port parameters. Choose port range (FromPort and/or ToPort) &#39;</span>
-                <span class="s1">&#39;or specify specific ports (Ports or OnlyPorts)&#39;</span><span class="p">)</span></div>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FROM_PORT</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">TO_PORT</span><span class="p">))</span> <span class="ow">and</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">PORTS</span><span class="p">)</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EXCEPT_PORTS</span><span class="p">))</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">PORTS</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EXCEPT_PORTS</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s1">&#39;Invalid port parameters. Choose port range (</span><span class="si">{}</span><span class="s1"> and/or </span><span class="si">{}</span><span class="s1">) &#39;</span>
+                <span class="s1">&#39;or specify specific ports (</span><span class="si">{}</span><span class="s1"> or </span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">FROM_PORT</span><span class="p">,</span> <span class="n">TO_PORT</span><span class="p">,</span> <span class="n">PORTS</span><span class="p">,</span> <span class="n">EXCEPT_PORTS</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="SecurityRuleFilter.process"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.SecurityRuleFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">network_security_groups</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
         <span class="c1"># Get variables</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ip_protocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IpProtocol&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">from_port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;FromPort&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">to_port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;ToPort&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Ports&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;OnlyPorts&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ip_protocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">IP_PROTOCOL</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">from_port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">FROM_PORT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">TO_PORT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">PORTS</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">except_ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">EXCEPT_PORTS</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">match_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;match-operator&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;and&#39;</span> <span class="ow">and</span> <span class="nb">all</span> <span class="ow">or</span> <span class="nb">any</span>
 
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        For each Network Security Group, set the &#39;securityRules&#39; property to contain</span>
 <span class="sd">        only rules where there is a match, as defined in &#39;is_match&#39;</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">for</span> <span class="n">nsg</span> <span class="ow">in</span> <span class="n">network_security_groups</span><span class="p">:</span>
+        <span class="c1"># Because the filtering actually takes elements out of the list,</span>
+        <span class="c1"># seemed best to create a copy.</span>
+        <span class="c1"># Without the deepcopy, in testing, the list is being accessed and</span>
+        <span class="c1"># altered by different tests, causing each other to fail</span>
+        <span class="n">nsgs</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="n">network_security_groups</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">nsg</span> <span class="ow">in</span> <span class="n">nsgs</span><span class="p">:</span>
             <span class="n">nsg</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;securityRules&#39;</span><span class="p">]</span> <span class="o">=</span> \
                 <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">nsg</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;securityRules&#39;</span><span class="p">]</span>
                  <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_match</span><span class="p">(</span><span class="n">rule</span><span class="p">)]</span>
@@ -280,9 +297,9 @@
 <span class="sd">        Set network_security_groups to include only those that still have &#39;securityRules&#39;</span>
 <span class="sd">        after the filtering has taken place</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">network_security_groups</span> <span class="o">=</span> \
-            <span class="p">[</span><span class="n">nsg</span> <span class="k">for</span> <span class="n">nsg</span> <span class="ow">in</span> <span class="n">network_security_groups</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">nsg</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;securityRules&#39;</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">network_security_groups</span></div>
+        <span class="n">nsgs</span> <span class="o">=</span> \
+            <span class="p">[</span><span class="n">nsg</span> <span class="k">for</span> <span class="n">nsg</span> <span class="ow">in</span> <span class="n">nsgs</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">nsg</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;securityRules&#39;</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">nsgs</span></div>
 
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Check to see if range given matches range as defined by policy, return boolean</span>
@@ -303,13 +320,13 @@
                 <span class="k">if</span> <span class="n">port</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_port</span><span class="p">:</span>
                     <span class="k">return</span> <span class="kc">False</span>
         <span class="c1"># OnlyPorts is specified, anything NOT included in OnlyPorts should return True</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_ports</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">except_ports</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">except_ports</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dest_port_range</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">op</span> <span class="o">&gt;=</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">port</span> <span class="o">&gt;=</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">and</span> <span class="n">port</span> <span class="o">&lt;=</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
                         <span class="k">return</span> <span class="kc">False</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">op</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">dest_port_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">port</span><span class="p">:</span>
                         <span class="k">return</span> <span class="kc">False</span>
         <span class="c1"># Ports is specified, only those included in Ports should return true</span>
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">:</span>
@@ -326,6 +343,8 @@
 <span class="sd">    Check to see if port ranges defined in security rule match range as defined by policy</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 <div class="viewcode-block" id="SecurityRuleFilter.is_ranges_match"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.SecurityRuleFilter.is_ranges_match">[docs]</a>    <span class="k">def</span> <span class="nf">is_ranges_match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">security_rule</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">from_port</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_port</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">except_ports</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">]):</span>
+            <span class="k">return</span> <span class="kc">True</span>
         <span class="k">if</span> <span class="s1">&#39;destinationPortRange&#39;</span> <span class="ow">in</span> <span class="n">security_rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">]:</span>
             <span class="n">dest_port_ranges</span> <span class="o">=</span> \
                 <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_port_range</span><span class="p">(</span><span class="n">security_rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;destinationPortRange&#39;</span><span class="p">])]</span>
@@ -345,12 +364,13 @@
 <span class="sd">    Determine if SecurityRule matches criteria as entered in policy</span>
 
 <span class="sd">    Currently supporting filters:</span>
-<span class="sd">        Ports - Specific Ports to target</span>
-<span class="sd">        OnlyPorts - Ports to IGNORE</span>
-<span class="sd">        FromPort - Lower bound of port range (inclusive)</span>
-<span class="sd">        ToPort - Upper bound of port range (inclusive)</span>
-<span class="sd">        IpProtocol - TCP/UDP protocol</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        {} - Specific Ports to target</span>
+<span class="sd">        {} - Ports to IGNORE</span>
+<span class="sd">        {} - Lower bound of port range (inclusive)</span>
+<span class="sd">        {} - Upper bound of port range (inclusive)</span>
+<span class="sd">        {} - TCP/UDP protocol</span>
+<span class="sd">    &quot;&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">PORTS</span><span class="p">,</span> <span class="n">EXCEPT_PORTS</span><span class="p">,</span> <span class="n">FROM_PORT</span><span class="p">,</span> <span class="n">TO_PORT</span><span class="p">,</span> <span class="n">IP_PROTOCOL</span><span class="p">)</span>
+
 <div class="viewcode-block" id="SecurityRuleFilter.is_match"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.network_security_group.SecurityRuleFilter.is_match">[docs]</a>    <span class="k">def</span> <span class="nf">is_match</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">security_rule</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">direction_key</span> <span class="o">!=</span> <span class="n">security_rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;direction&#39;</span><span class="p">]:</span>
             <span class="k">return</span> <span class="kc">False</span>
@@ -369,11 +389,11 @@
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ingress&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;match-operator&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">]},</span>
-            <span class="s1">&#39;Ports&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
-            <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
-            <span class="s1">&#39;FromPort&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;ToPort&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;IpProtocol&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;TCP&#39;</span><span class="p">,</span> <span class="s1">&#39;UDP&#39;</span><span class="p">]}</span>
+            <span class="n">PORTS</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
+            <span class="n">EXCEPT_PORTS</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
+            <span class="n">FROM_PORT</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+            <span class="n">TO_PORT</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+            <span class="n">IP_PROTOCOL</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;TCP&#39;</span><span class="p">,</span> <span class="s1">&#39;UDP&#39;</span><span class="p">]}</span>
         <span class="p">},</span>
         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
     <span class="p">}</span></div>
@@ -389,11 +409,11 @@
         <span class="s1">&#39;properties&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;egress&#39;</span><span class="p">]},</span>
             <span class="s1">&#39;match-operator&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">]},</span>
-            <span class="s1">&#39;Ports&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
-            <span class="s1">&#39;OnlyPorts&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
-            <span class="s1">&#39;FromPort&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;ToPort&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;IpProtocol&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;TCP&#39;</span><span class="p">,</span> <span class="s1">&#39;UDP&#39;</span><span class="p">]}</span>
+            <span class="n">PORTS</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
+            <span class="n">EXCEPT_PORTS</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}},</span>
+            <span class="n">FROM_PORT</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+            <span class="n">TO_PORT</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">},</span>
+            <span class="n">IP_PROTOCOL</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;TCP&#39;</span><span class="p">,</span> <span class="s1">&#39;UDP&#39;</span><span class="p">]}</span>
             <span class="c1"># &#39;SelfReference&#39;: {&#39;type&#39;: &#39;boolean&#39;}</span>
         <span class="p">},</span>
         <span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]}</span></div>
