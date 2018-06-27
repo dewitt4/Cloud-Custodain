@@ -213,11 +213,12 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">sources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
@@ -242,10 +243,8 @@
 <span class="k">class</span> <span class="nc">RoleDefinition</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
 <div class="viewcode-block" id="RoleDefinition.resource_type"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleDefinition.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="n">Session</span><span class="p">()</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;azure.mgmt.authorization&#39;</span>
         <span class="n">client</span> <span class="o">=</span> <span class="s1">&#39;AuthorizationManagementClient&#39;</span>
-        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="s1">&#39;/subscriptions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">))</span>
         <span class="n">get_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_definitions&#39;</span><span class="p">,</span> <span class="s1">&#39;get_by_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;roleDefinition&#39;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;id&#39;</span>
@@ -257,7 +256,22 @@
             <span class="s1">&#39;properties.description&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.type&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.permissions&#39;</span>
-        <span class="p">)</span></div></div>
+        <span class="p">)</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">source_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;source&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-azure-roledefinition&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DescribeSource"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DescribeSource">[docs]</a><span class="nd">@sources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;describe-azure-roledefinition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DescribeSource</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DescribeSource.get_resources"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DescribeSource.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.authorization.AuthorizationManagementClient&#39;</span><span class="p">)</span>
+        <span class="n">scope</span> <span class="o">=</span> <span class="s1">&#39;/subscriptions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">)</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">role_definitions</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="n">scope</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span></div></div>
 
 
 <div class="viewcode-block" id="UserRole"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.UserRole">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">)</span>
