@@ -225,6 +225,19 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param subscription_id: If provided overrides environment variables.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.session&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_provider_cache</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id_override</span> <span class="o">=</span> <span class="n">subscription_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">_initialize_session</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Creates a session using available authentication type.</span>
 
 <span class="sd">        Auth priority:</span>
@@ -232,11 +245,11 @@
 <span class="sd">        2. Tenant Auth</span>
 <span class="sd">        3. Azure CLI Auth</span>
 
-<span class="sd">        :param subscription_id: If provided, overrides environment variables.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.session&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_provider_cache</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Only run once</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
 
         <span class="n">tenant_auth_variables</span> <span class="o">=</span> <span class="p">[</span>
             <span class="s1">&#39;AZURE_TENANT_ID&#39;</span><span class="p">,</span> <span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">,</span>
@@ -273,8 +286,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with Azure CLI Authentication&quot;</span><span class="p">)</span>
 
         <span class="c1"># Let provided id parameter override everything else</span>
-        <span class="k">if</span> <span class="n">subscription_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="n">subscription_id</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id_override</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id_override</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Session using Subscription ID: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">)</span>
 
@@ -282,6 +295,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Unable to locate credentials for Azure session.&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Session.client"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session.client">[docs]</a>    <span class="k">def</span> <span class="nf">client</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize_session</span><span class="p">()</span>
         <span class="n">service_name</span><span class="p">,</span> <span class="n">client_name</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="n">svc_module</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">service_name</span><span class="p">)</span>
         <span class="n">klass</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">svc_module</span><span class="p">,</span> <span class="n">client_name</span><span class="p">)</span>
