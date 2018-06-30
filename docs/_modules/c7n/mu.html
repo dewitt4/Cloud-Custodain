@@ -1377,6 +1377,64 @@
                     <span class="k">raise</span></div></div>
 
 
+<div class="viewcode-block" id="SQSSubscription"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SQSSubscription">[docs]</a><span class="k">class</span> <span class="nc">SQSSubscription</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Subscribe a lambda to one or more SQS queues.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">queue_arns</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue_arns</span> <span class="o">=</span> <span class="n">queue_arns</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
+
+<div class="viewcode-block" id="SQSSubscription.add"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SQSSubscription.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">event_mappings</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">m</span><span class="p">[</span><span class="s1">&#39;EventSourceArn&#39;</span><span class="p">]:</span> <span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">list_event_source_mappings</span><span class="p">(</span>
+                <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EventSourceMappings&#39;</span><span class="p">,</span> <span class="p">())}</span>
+
+        <span class="n">modified</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">queue_arn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_arns</span><span class="p">:</span>
+            <span class="n">mapping</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">queue_arn</span> <span class="ow">in</span> <span class="n">event_mappings</span><span class="p">:</span>
+                <span class="n">mapping</span> <span class="o">=</span> <span class="n">event_mappings</span><span class="p">[</span><span class="n">queue_arn</span><span class="p">]</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">mapping</span><span class="p">[</span><span class="s1">&#39;State&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Enabled&#39;</span> <span class="ow">or</span>
+                        <span class="n">mapping</span><span class="p">[</span><span class="s1">&#39;BatchSize&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="n">modified</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">modified</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">modified</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">modified</span>
+
+            <span class="k">if</span> <span class="n">mapping</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;Updating subscription </span><span class="si">%s</span><span class="s2"> on </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">queue_arn</span><span class="p">)</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_event_source_mapping</span><span class="p">(</span>
+                    <span class="n">UUID</span><span class="o">=</span><span class="n">mapping</span><span class="p">[</span><span class="s1">&#39;UUID&#39;</span><span class="p">],</span>
+                    <span class="n">Enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">BatchSize</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Subscribing </span><span class="si">%s</span><span class="s2"> to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">queue_arn</span><span class="p">)</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">create_event_source_mapping</span><span class="p">(</span>
+                    <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">EventSourceArn</span><span class="o">=</span><span class="n">queue_arn</span><span class="p">,</span>
+                    <span class="n">BatchSize</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">modified</span></div>
+
+<div class="viewcode-block" id="SQSSubscription.remove"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SQSSubscription.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">event_mappings</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">m</span><span class="p">[</span><span class="s1">&#39;EventSourceArn&#39;</span><span class="p">]:</span> <span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">list_event_source_mappings</span><span class="p">(</span>
+                <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;EventSourceMappings&#39;</span><span class="p">,</span> <span class="p">())}</span>
+
+        <span class="k">for</span> <span class="n">queue_arn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue_arns</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">queue_arn</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">event_mappings</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">delete_event_source_mapping</span><span class="p">(</span>
+                <span class="n">UUID</span><span class="o">=</span><span class="n">event_mappings</span><span class="p">[</span><span class="n">queue_arn</span><span class="p">][</span><span class="s1">&#39;UUID&#39;</span><span class="p">])</span></div></div>
+
+
 <div class="viewcode-block" id="SNSSubscription"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SNSSubscription">[docs]</a><span class="k">class</span> <span class="nc">SNSSubscription</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Subscribe a lambda to one or more SNS topics.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -1386,8 +1444,6 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">topic_arns</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">topic_arns</span> <span class="o">=</span> <span class="n">topic_arns</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session_factory</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">_parse_arn</span><span class="p">(</span><span class="n">arn</span><span class="p">):</span>
@@ -1397,7 +1453,8 @@
         <span class="k">return</span> <span class="n">region</span><span class="p">,</span> <span class="n">topic_name</span><span class="p">,</span> <span class="n">statement_id</span>
 
 <div class="viewcode-block" id="SNSSubscription.add"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SNSSubscription.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
-        <span class="n">lambda_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">lambda_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">arn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">topic_arns</span><span class="p">:</span>
             <span class="n">region</span><span class="p">,</span> <span class="n">topic_name</span><span class="p">,</span> <span class="n">statement_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_arn</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
 
@@ -1418,12 +1475,16 @@
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
                     <span class="k">raise</span>
 
-            <span class="c1"># Subscribe the lambda to the topic.</span>
-            <span class="n">topic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">resource</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">Topic</span><span class="p">(</span><span class="n">arn</span><span class="p">)</span>
-            <span class="n">topic</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">Protocol</span><span class="o">=</span><span class="s1">&#39;lambda&#39;</span><span class="p">,</span> <span class="n">Endpoint</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="p">)</span>  <span class="c1"># idempotent</span></div>
+            <span class="c1"># Subscribe the lambda to the topic, idempotent</span>
+            <span class="n">sns_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span>
+            <span class="n">sns_client</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span>
+                <span class="n">TopicArn</span><span class="o">=</span><span class="n">arn</span><span class="p">,</span> <span class="n">Protocol</span><span class="o">=</span><span class="s1">&#39;lambda&#39;</span><span class="p">,</span> <span class="n">Endpoint</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="SNSSubscription.remove"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SNSSubscription.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
-        <span class="n">lambda_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">lambda_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
+        <span class="n">sns_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span>
+
         <span class="k">for</span> <span class="n">topic_arn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">topic_arns</span><span class="p">:</span>
             <span class="n">region</span><span class="p">,</span> <span class="n">topic_name</span><span class="p">,</span> <span class="n">statement_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_arn</span><span class="p">(</span><span class="n">topic_arn</span><span class="p">)</span>
 
@@ -1436,7 +1497,7 @@
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                     <span class="k">raise</span>
 
-            <span class="n">paginator</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;list_subscriptions_by_topic&#39;</span><span class="p">)</span>
+            <span class="n">paginator</span> <span class="o">=</span> <span class="n">sns_client</span><span class="o">.</span><span class="n">get_paginator</span><span class="p">(</span><span class="s1">&#39;list_subscriptions_by_topic&#39;</span><span class="p">)</span>
 
             <span class="k">class</span> <span class="nc">Done</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
                 <span class="k">pass</span>
@@ -1446,7 +1507,7 @@
                         <span class="k">if</span> <span class="n">subscription</span><span class="p">[</span><span class="s1">&#39;Endpoint&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="p">:</span>
                             <span class="k">continue</span>
                         <span class="k">try</span><span class="p">:</span>
-                            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">unsubscribe</span><span class="p">(</span>
+                            <span class="n">response</span> <span class="o">=</span> <span class="n">sns_client</span><span class="o">.</span><span class="n">unsubscribe</span><span class="p">(</span>
                                 <span class="n">SubscriptionArn</span><span class="o">=</span><span class="n">subscription</span><span class="p">[</span><span class="s1">&#39;SubscriptionArn&#39;</span><span class="p">])</span>
                             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Unsubscribed </span><span class="si">%s</span><span class="s2"> from </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
                                 <span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">topic_name</span><span class="p">))</span>
