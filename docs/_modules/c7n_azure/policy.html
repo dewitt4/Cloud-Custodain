@@ -127,7 +127,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../azure/policy/index.html">Policies</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../azure/advanced/index.html">Advanced Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../azure/contribute.html">Developer Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../azure/azurefunctions.html">Azure Functions Support</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -213,9 +212,10 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="kn">from</span> <span class="nn">c7n_azure.template_utils</span> <span class="k">import</span> <span class="n">TemplateUtilities</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.function_package</span> <span class="k">import</span> <span class="n">FunctionPackage</span>
 
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">ServerlessExecutionMode</span><span class="p">,</span> <span class="n">execution</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">ServerlessExecutionMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">,</span> <span class="n">execution</span>
 
 
 <div class="viewcode-block" id="AzureFunctionMode"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode">[docs]</a><span class="k">class</span> <span class="nc">AzureFunctionMode</span><span class="p">(</span><span class="n">ServerlessExecutionMode</span><span class="p">):</span>
@@ -252,20 +252,29 @@
         <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_parameters</span><span class="p">()</span>
         <span class="n">group_name</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">create_resource_group</span><span class="p">(</span>
-            <span class="n">group_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;location&#39;</span><span class="p">:</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">resource_exist</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">create_resource_group</span><span class="p">(</span>
+                <span class="n">group_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;location&#39;</span><span class="p">:</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">deploy_resource_template</span><span class="p">(</span>
-            <span class="n">group_name</span><span class="p">,</span> <span class="s1">&#39;dedicated_functionapp.json&#39;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">deploy_resource_template</span><span class="p">(</span>
+                <span class="n">group_name</span><span class="p">,</span> <span class="s1">&#39;dedicated_functionapp.json&#39;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
+        <span class="n">archive</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">archive</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
+        <span class="n">archive</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">])</span></div>
 
 <div class="viewcode-block" id="AzureFunctionMode.get_parameters"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.get_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">get_default_parameters</span><span class="p">(</span>
             <span class="s1">&#39;dedicated_functionapp.parameters.json&#39;</span><span class="p">)</span>
 
         <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span>
+
         <span class="n">updated_parameters</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
-            <span class="s1">&#39;storageName&#39;</span><span class="p">:</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;provision-options&#39;</span><span class="p">][</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">]</span> <span class="o">+</span>
+                     <span class="s1">&#39;-&#39;</span> <span class="o">+</span>
+                     <span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+
+            <span class="s1">&#39;storageName&#39;</span><span class="p">:</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;provision-options&#39;</span><span class="p">][</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">]</span>
         <span class="p">}</span>
 
         <span class="k">if</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
@@ -285,15 +294,16 @@
 
 
 <div class="viewcode-block" id="AzurePeriodicMode"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzurePeriodicMode">[docs]</a><span class="nd">@execution</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;azure-periodic&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">AzurePeriodicMode</span><span class="p">(</span><span class="n">AzureFunctionMode</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">AzurePeriodicMode</span><span class="p">(</span><span class="n">AzureFunctionMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;A policy that runs/executes in azure functions at specified</span>
 <span class="sd">    time intervals.&quot;&quot;&quot;</span>
-
-    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;azure-periodic&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">AzureFunctionMode</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;azure-periodic&#39;</span><span class="p">,</span>
+                               <span class="n">schedule</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+                               <span class="n">rinherit</span><span class="o">=</span><span class="n">AzureFunctionMode</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
 
 <div class="viewcode-block" id="AzurePeriodicMode.run"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzurePeriodicMode.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lambda_context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Run the actual policy.&quot;&quot;&quot;</span>
-        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;error - not implemented&quot;</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">PullMode</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AzurePeriodicMode.get_logs"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzurePeriodicMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Retrieve logs for the policy&quot;&quot;&quot;</span>

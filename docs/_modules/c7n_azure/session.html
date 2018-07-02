@@ -127,7 +127,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../../azure/policy/index.html">Policies</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../azure/advanced/index.html">Advanced Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../azure/contribute.html">Developer Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../azure/azurefunctions.html">Azure Functions Support</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -215,6 +214,7 @@
 <span class="kn">import</span> <span class="nn">importlib</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">from</span> <span class="nn">azure.cli.core.cloud</span> <span class="k">import</span> <span class="n">AZURE_PUBLIC_CLOUD</span>
 <span class="kn">from</span> <span class="nn">azure.cli.core._profile</span> <span class="k">import</span> <span class="n">Profile</span>
 <span class="kn">from</span> <span class="nn">azure.common.credentials</span> <span class="k">import</span> <span class="n">ServicePrincipalCredentials</span><span class="p">,</span> <span class="n">BasicTokenAuthentication</span>
@@ -223,7 +223,7 @@
 
 <div class="viewcode-block" id="Session"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session">[docs]</a><span class="k">class</span> <span class="nc">Session</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subscription_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">authorization_file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        :param subscription_id: If provided overrides environment variables.</span>
 
@@ -235,6 +235,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">authorization_file</span> <span class="o">=</span> <span class="n">authorization_file</span>
 
     <span class="k">def</span> <span class="nf">_initialize_session</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
@@ -257,7 +258,11 @@
         <span class="p">]</span>
         <span class="n">token_auth_variables</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;AZURE_ACCESS_TOKEN&#39;</span><span class="p">,</span> <span class="s1">&#39;AZURE_SUBSCRIPTION_ID&#39;</span><span class="p">]</span>
 
-        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">token_auth_variables</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">authorization_file</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_auth_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">authorization_file</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with authorization file&quot;</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">all</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">token_auth_variables</span><span class="p">):</span>
             <span class="c1"># Token authentication</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span> <span class="o">=</span> <span class="n">BasicTokenAuthentication</span><span class="p">(</span>
                 <span class="n">token</span><span class="o">=</span><span class="p">{</span>
@@ -283,6 +288,7 @@
              <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">,</span>
              <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="p">)</span> <span class="o">=</span> <span class="n">Profile</span><span class="p">()</span><span class="o">.</span><span class="n">get_login_credentials</span><span class="p">(</span>
                 <span class="n">resource</span><span class="o">=</span><span class="n">AZURE_PUBLIC_CLOUD</span><span class="o">.</span><span class="n">endpoints</span><span class="o">.</span><span class="n">active_directory_resource_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_is_cli_auth</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating session with Azure CLI Authentication&quot;</span><span class="p">)</span>
 
         <span class="c1"># Let provided id parameter override everything else</span>
@@ -319,7 +325,38 @@
             <span class="n">versions</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">rt</span><span class="o">.</span><span class="n">api_versions</span> <span class="k">if</span> <span class="s1">&#39;preview&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">lower</span><span class="p">()]</span>
             <span class="n">api_version</span> <span class="o">=</span> <span class="n">versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">versions</span> <span class="k">else</span> <span class="n">rt</span><span class="o">.</span><span class="n">api_versions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_provider_cache</span><span class="p">[</span><span class="n">resource_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">api_version</span>
-            <span class="k">return</span> <span class="n">api_version</span></div></div>
+            <span class="k">return</span> <span class="n">api_version</span></div>
+
+<div class="viewcode-block" id="Session.get_bearer_token"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session.get_bearer_token">[docs]</a>    <span class="k">def</span> <span class="nf">get_bearer_token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_cli_auth</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="o">.</span><span class="n">_token_retriever</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="o">.</span><span class="n">token</span><span class="p">[</span><span class="s1">&#39;access_token&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="Session.load_auth_file"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session.load_auth_file">[docs]</a>    <span class="k">def</span> <span class="nf">load_auth_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">json_file</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">json_file</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">ServicePrincipalCredentials</span><span class="p">(</span>
+                <span class="n">client_id</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;credentials&#39;</span><span class="p">][</span><span class="s1">&#39;client_id&#39;</span><span class="p">],</span>
+                <span class="n">secret</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;credentials&#39;</span><span class="p">][</span><span class="s1">&#39;secret&#39;</span><span class="p">],</span>
+                <span class="n">tenant</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;credentials&#39;</span><span class="p">][</span><span class="s1">&#39;tenant&#39;</span><span class="p">]</span>
+            <span class="p">),</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;subscription&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="Session.get_auth_string"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.session.Session.get_auth_string">[docs]</a>    <span class="k">def</span> <span class="nf">get_auth_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">credentials</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">ServicePrincipalCredentials</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="s2">&quot;Writing auth file only supported for Service Principal credentials.&quot;</span><span class="p">)</span>
+
+        <span class="n">auth</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;credentials&#39;</span><span class="p">:</span>
+                <span class="p">{</span>
+                    <span class="s1">&#39;client_id&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_CLIENT_ID&#39;</span><span class="p">],</span>
+                    <span class="s1">&#39;secret&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_CLIENT_SECRET&#39;</span><span class="p">],</span>
+                    <span class="s1">&#39;tenant&#39;</span><span class="p">:</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;AZURE_TENANT_ID&#39;</span><span class="p">]</span>
+                <span class="p">},</span>
+            <span class="s1">&#39;subscription&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">subscription_id</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">auth</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>

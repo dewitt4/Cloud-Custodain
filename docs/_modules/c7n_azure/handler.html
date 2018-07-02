@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>c7n_gcp.entry &mdash; Cloud Custodian  documentation</title>
+  <title>c7n_azure.handler &mdash; Cloud Custodian  documentation</title>
   
 
   
@@ -179,7 +179,7 @@
         
           <li><a href="../index.html">Module code</a> &raquo;</li>
         
-      <li>c7n_gcp.entry</li>
+      <li>c7n_azure.handler</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -196,8 +196,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <h1>Source code for c7n_gcp.entry</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2017-2018 Capital One Services, LLC</span>
+  <h1>Source code for c7n_azure.handler</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright 2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -211,18 +211,52 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
 
-<span class="kn">import</span> <span class="nn">c7n_gcp.resources.compute</span>
-<span class="kn">import</span> <span class="nn">c7n_gcp.resources.function</span>
-<span class="kn">import</span> <span class="nn">c7n_gcp.resources.resourcemanager</span>
-<span class="kn">import</span> <span class="nn">c7n_gcp.resources.storage</span>  <span class="c1"># noqa: F401</span>
+<span class="kn">from</span> <span class="nn">c7n.config</span> <span class="k">import</span> <span class="n">Config</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">PolicyCollection</span>
+<span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 
-<span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;googleapiclient.discovery&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.functions&#39;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="initialize_gcp"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.entry.initialize_gcp">[docs]</a><span class="k">def</span> <span class="nf">initialize_gcp</span><span class="p">():</span>
-    <span class="k">pass</span></div>
+<div class="viewcode-block" id="run"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.handler.run">[docs]</a><span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+
+    <span class="c1"># policies file should always be valid in functions so do loading naively</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">context</span><span class="p">[</span><span class="s1">&#39;config_file&#39;</span><span class="p">])</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">policy_config</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">policy_config</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">policy_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;policies&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="c1"># Initialize output directory</span>
+    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="s1">&#39;C7N_OUTPUT_DIR&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;/tmp/&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">output_dir</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Unable to make output directory: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">error</span><span class="p">))</span>
+
+    <span class="n">options_overrides</span> <span class="o">=</span> \
+        <span class="n">policy_config</span><span class="p">[</span><span class="s1">&#39;policies&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;execution-options&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+    <span class="n">options_overrides</span><span class="p">[</span><span class="s1">&#39;authorization_file&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">context</span><span class="p">[</span><span class="s1">&#39;auth_file&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="s1">&#39;output_dir&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">options_overrides</span><span class="p">:</span>
+        <span class="n">options_overrides</span><span class="p">[</span><span class="s1">&#39;output_dir&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">output_dir</span>
+    <span class="n">options</span> <span class="o">=</span> <span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="o">**</span><span class="n">options_overrides</span><span class="p">)</span>
+
+    <span class="n">load_resources</span><span class="p">()</span>
+    <span class="n">policies</span> <span class="o">=</span> <span class="n">PolicyCollection</span><span class="o">.</span><span class="n">from_data</span><span class="p">(</span><span class="n">policy_config</span><span class="p">,</span> <span class="n">options</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">policies</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">policies</span><span class="p">:</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+    <span class="k">return</span> <span class="kc">True</span></div>
 </pre></div>
 
            </div>
