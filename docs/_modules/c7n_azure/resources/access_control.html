@@ -211,14 +211,27 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">azure.graphrbac</span> <span class="k">import</span> <span class="n">GraphRbacManagementClient</span>
+<span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">Azure</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
+<span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
 
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.ctx</span> <span class="k">import</span> <span class="n">ExecutionContext</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.handler</span> <span class="k">import</span> <span class="n">Config</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">sources</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.access_control&#39;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="RoleAssignment"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;roleassignment&#39;</span><span class="p">)</span>
@@ -231,11 +244,52 @@
         <span class="n">get_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;role_assignments&#39;</span><span class="p">,</span> <span class="s1">&#39;get_by_id&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;id&#39;</span>
         <span class="n">default_report_fields</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;principalName&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;displayName&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;aadType&#39;</span><span class="p">,</span>
             <span class="s1">&#39;name&#39;</span><span class="p">,</span>
             <span class="s1">&#39;type&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.scope&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.roleDefinitionId&#39;</span>
-        <span class="p">)</span></div></div>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="RoleAssignment.augment"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">Session</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="s1">&#39;https://graph.windows.net&#39;</span><span class="p">)</span>
+        <span class="n">graph_client</span> <span class="o">=</span> <span class="n">GraphRbacManagementClient</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span> <span class="n">s</span><span class="o">.</span><span class="n">get_tenant_id</span><span class="p">())</span>
+
+        <span class="n">object_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span>
+            <span class="k">if</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]))</span>
+
+        <span class="n">object_params</span> <span class="o">=</span> <span class="n">GetObjectsParameters</span><span class="p">(</span>
+            <span class="n">include_directory_object_references</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">object_ids</span><span class="o">=</span><span class="n">object_ids</span><span class="p">)</span>
+
+        <span class="n">aad_objects</span> <span class="o">=</span> <span class="n">graph_client</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get_objects_by_object_ids</span><span class="p">(</span><span class="n">object_params</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">principal_dics</span> <span class="o">=</span> <span class="p">{</span><span class="n">aad_object</span><span class="o">.</span><span class="n">object_id</span><span class="p">:</span> <span class="n">aad_object</span> <span class="k">for</span> <span class="n">aad_object</span> <span class="ow">in</span> <span class="n">aad_objects</span><span class="p">}</span>
+
+            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">graph_resource</span> <span class="o">=</span> <span class="n">principal_dics</span><span class="p">[</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]]</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;principalName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_principal_name</span><span class="p">(</span><span class="n">graph_resource</span><span class="p">)</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;displayName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">display_name</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;aadType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">object_type</span>
+
+        <span class="k">except</span> <span class="n">CloudError</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Credentials not authorized for access to read from Microsoft Graph. </span><span class="se">\n</span><span class="s1"> &#39;</span>
+                        <span class="s1">&#39;Can not query on principalName, displayName, or aadType. </span><span class="se">\n</span><span class="s1">&#39;</span>
+                        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="RoleAssignment.get_principal_name"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment.get_principal_name">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_principal_name</span><span class="p">(</span><span class="n">graph_object</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span>
+        <span class="k">elif</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">display_name</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span></div></div>
 
 
 <div class="viewcode-block" id="RoleDefinition"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleDefinition">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;roledefinition&#39;</span><span class="p">)</span>
@@ -248,11 +302,11 @@
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;roleDefinition&#39;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;id&#39;</span>
         <span class="n">default_report_fields</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="s1">&#39;id&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;name&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;type&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.roleName&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.description&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;id&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span>
             <span class="s1">&#39;properties.type&#39;</span><span class="p">,</span>
             <span class="s1">&#39;properties.permissions&#39;</span>
         <span class="p">)</span></div>
@@ -273,8 +327,8 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span></div></div>
 
 
-<div class="viewcode-block" id="UserRole"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.UserRole">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">UserRole</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
+<div class="viewcode-block" id="RoleFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleFilter">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RoleFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters role assignments based on role definitions</span>
 
 <span class="sd">    :Example:</span>
@@ -295,6 +349,81 @@
 
     <span class="n">RelatedResource</span> <span class="o">=</span> <span class="s2">&quot;c7n_azure.resources.access_control.RoleDefinition&quot;</span>
     <span class="n">RelatedIdsExpression</span> <span class="o">=</span> <span class="s2">&quot;properties.roleDefinitionId&quot;</span></div>
+
+
+<div class="viewcode-block" id="ResourceAccessFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ResourceAccessFilter">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resource-access&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ResourceAccessFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters role assignments that have access to a certain</span>
+<span class="sd">    type of azure resource.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">        .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">               - name: assignments-by-azure-resource</span>
+<span class="sd">                 resource: azure.roleassignment</span>
+<span class="sd">                 filters:</span>
+<span class="sd">                    - type: resource-access</span>
+<span class="sd">                      relatedResource: azure.vm</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;resource-access&#39;</span><span class="p">,</span>
+        <span class="n">relatedResource</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+        <span class="n">rinherit</span><span class="o">=</span><span class="n">RelatedResourceFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;relatedResource&#39;</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ResourceAccessFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;relatedResource&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">factory</span> <span class="o">=</span> <span class="n">Azure</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="n">resource_type</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+<div class="viewcode-block" id="ResourceAccessFilter.get_related"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ResourceAccessFilter.get_related">[docs]</a>    <span class="k">def</span> <span class="nf">get_related</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">ctx</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span><span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">())</span>
+        <span class="n">manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">factory</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">related</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">related</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="p">)]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">related</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="ResourceAccessFilter.process_resource"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ResourceAccessFilter.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">related</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">related</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="ResourceAccessFilter.validate"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ResourceAccessFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">factory</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;The related resource is not a custodian supported azure resource&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;relatedResource&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;azure.roleassignment&#39;</span> <span class="ow">or</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;relatedResource&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;azure.roledefinition&#39;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;The related resource can not be role assignments or role definitions&quot;</span>
+            <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="DeleteAssignmentAction"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DeleteAssignmentAction">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DeleteAssignmentAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">log_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DeleteAssignmentAction</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DeleteAssignmentAction.delete"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DeleteAssignmentAction.delete">[docs]</a>    <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">assignment_scope</span><span class="p">,</span> <span class="n">assignment_name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">role_assignments</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">assignment_scope</span><span class="p">,</span> <span class="n">assignment_name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DeleteAssignmentAction.process"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DeleteAssignmentAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">assignments</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">assignment</span> <span class="ow">in</span> <span class="n">assignments</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">assignment</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;scope&#39;</span><span class="p">],</span> <span class="n">assignment</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span></div></div>
 </pre></div>
 
            </div>
