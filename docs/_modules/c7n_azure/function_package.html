@@ -298,11 +298,14 @@
             <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span>
 
         <span class="k">elif</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;azure-stream&#39;</span><span class="p">:</span>
-            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;eventHubTrigger&#39;</span>
+            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;httpTrigger&#39;</span>
+            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;authLevel&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;anonymous&#39;</span>
             <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;input&#39;</span>
-            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;eventHubName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;eventHubName&#39;</span>
-            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;consumerGroup&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;consumerGroup&#39;</span>
-            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;connection&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;name_of_app_setting_with_read_conn_string&#39;</span>
+            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;methods&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;post&#39;</span><span class="p">]</span>
+            <span class="n">config</span><span class="p">[</span><span class="s1">&#39;bindings&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;$return&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;http&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="s2">&quot;out&quot;</span><span class="p">})</span>
 
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Mode not yet supported for Azure functions (</span><span class="si">%s</span><span class="s2">)&quot;</span>
@@ -374,6 +377,22 @@
         <span class="c1"># update perms of the package</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_update_perms_package</span><span class="p">()</span></div>
 
+<div class="viewcode-block" id="FunctionPackage.status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.status">[docs]</a>    <span class="k">def</span> <span class="nf">status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
+        <span class="n">status_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.scm.azurewebsites.net/api/deployments&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;Authorization&#39;</span><span class="p">:</span> <span class="s1">&#39;Bearer </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">())</span>
+        <span class="p">}</span>
+
+        <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">status_url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">status_code</span> <span class="o">!=</span> <span class="mi">200</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Application service returned an error.</span><span class="se">\n</span><span class="si">%s</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span>
+                           <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">text</span><span class="p">))</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="k">return</span> <span class="kc">True</span></div>
+
 <div class="viewcode-block" id="FunctionPackage.publish"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
         <span class="n">zip_api_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.scm.azurewebsites.net/api/zipdeploy?isAsync=true&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
@@ -387,7 +406,9 @@
         <span class="n">zip_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
         <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">zip_api_url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">zip_file</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function publish result: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">text</span><span class="p">))</span></div>
+        <span class="n">r</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function publish result: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">text</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.close"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
