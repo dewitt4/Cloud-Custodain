@@ -1460,7 +1460,7 @@
 
 <div class="viewcode-block" id="SetInstanceProfile"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ec2.SetInstanceProfile">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-instance-profile&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">SetInstanceProfile</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">,</span> <span class="n">StateTransitionFilter</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Sets (or removes) the instance profile for a running EC2 instance.</span>
+    <span class="sd">&quot;&quot;&quot;Sets (add, modify, remove) the instance profile for a running EC2 instance.</span>
 
 <span class="sd">    :Example:</span>
 
@@ -1488,38 +1488,48 @@
         <span class="s1">&#39;ec2:DisassociateIamInstanceProfile&#39;</span><span class="p">,</span>
         <span class="s1">&#39;iam:PassRole&#39;</span><span class="p">)</span>
 
-    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,</span> <span class="s1">&#39;pending&#39;</span><span class="p">)</span>
+    <span class="n">valid_origin_states</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;running&#39;</span><span class="p">,</span> <span class="s1">&#39;pending&#39;</span><span class="p">,</span> <span class="s1">&#39;stopped&#39;</span><span class="p">,</span> <span class="s1">&#39;stopping&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SetInstanceProfile.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ec2.SetInstanceProfile.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instances</span><span class="p">):</span>
         <span class="n">instances</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_instance_state</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">instances</span><span class="p">):</span>
             <span class="k">return</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
-        <span class="n">profile_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;ec2&#39;</span><span class="p">)</span>
+        <span class="n">profile_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">)</span>
+        <span class="n">profile_instances</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span> <span class="k">if</span> <span class="n">i</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IamInstanceProfile&#39;</span><span class="p">)]</span>
+
+        <span class="n">associations</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">a</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]:</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AssociationId&#39;</span><span class="p">],</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;IamInstanceProfile&#39;</span><span class="p">][</span><span class="s1">&#39;Arn&#39;</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_iam_instance_profile_associations</span><span class="p">(</span>
+                <span class="n">Filters</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;instance-id&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">profile_instances</span><span class="p">]},</span>
+                    <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;associating&#39;</span><span class="p">,</span> <span class="s1">&#39;associated&#39;</span><span class="p">]}]</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;IamInstanceProfileAssociations&#39;</span><span class="p">,</span> <span class="p">())}</span>
 
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">profile_name</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">profile_name</span> <span class="ow">and</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">associations</span><span class="p">:</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">associate_iam_instance_profile</span><span class="p">(</span>
-                    <span class="n">IamInstanceProfile</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)},</span>
+                    <span class="n">IamInstanceProfile</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">profile_name</span><span class="p">},</span>
                     <span class="n">InstanceId</span><span class="o">=</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">])</span>
+                <span class="k">continue</span>
+            <span class="c1"># Removing profile and no profile on instance.</span>
+            <span class="k">elif</span> <span class="n">profile_name</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">associations</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">p_assoc_id</span><span class="p">,</span> <span class="n">p_arn</span> <span class="o">=</span> <span class="n">associations</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]]</span>
+
+            <span class="c1"># Already associated to target profile, skip</span>
+            <span class="k">if</span> <span class="n">profile_name</span> <span class="ow">and</span> <span class="n">p_arn</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">profile_name</span><span class="p">):</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="n">profile_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">disassociate_iam_instance_profile</span><span class="p">(</span>
+                    <span class="n">AssociationId</span><span class="o">=</span><span class="n">p_assoc_id</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_iam_instance_profile_associations</span><span class="p">(</span>
-                    <span class="n">Filters</span><span class="o">=</span><span class="p">[</span>
-                        <span class="p">{</span>
-                            <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;instance-id&#39;</span><span class="p">,</span>
-                            <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;InstanceId&#39;</span><span class="p">]],</span>
-                        <span class="p">},</span>
-                        <span class="p">{</span>
-                            <span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;state&#39;</span><span class="p">,</span>
-                            <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;associating&#39;</span><span class="p">,</span> <span class="s1">&#39;associated&#39;</span><span class="p">]</span>
-                        <span class="p">}</span>
-                    <span class="p">]</span>
-                <span class="p">)</span>
-                <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">response</span><span class="p">[</span><span class="s1">&#39;IamInstanceProfileAssociations&#39;</span><span class="p">]:</span>
-                    <span class="n">client</span><span class="o">.</span><span class="n">disassociate_iam_instance_profile</span><span class="p">(</span>
-                        <span class="n">AssociationId</span><span class="o">=</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;AssociationId&#39;</span><span class="p">]</span>
-                    <span class="p">)</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">replace_iam_instance_profile_association</span><span class="p">(</span>
+                    <span class="n">IamInstanceProfile</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="n">profile_name</span><span class="p">},</span>
+                    <span class="n">AssociationId</span><span class="o">=</span><span class="n">p_assoc_id</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">instances</span></div></div>
 
