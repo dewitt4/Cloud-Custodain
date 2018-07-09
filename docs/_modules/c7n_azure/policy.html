@@ -225,7 +225,8 @@
                 <span class="s1">&#39;sku&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;workerSize&#39;</span><span class="p">:</span> <span class="s1">&#39;number&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;skuCode&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span>
-            <span class="p">}</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;execution-options&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">}</span>
         <span class="p">}</span>
     <span class="p">}</span>
 
@@ -233,7 +234,6 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span> <span class="o">=</span> <span class="n">TemplateUtilities</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.AzureFunctionMode&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="AzureFunctionMode.run"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lambda_context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -242,17 +242,19 @@
 
 <div class="viewcode-block" id="AzureFunctionMode.provision"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Provision any resources needed for the policy.&quot;&quot;&quot;</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_parameters</span><span class="p">()</span>
+        <span class="n">template_util</span> <span class="o">=</span> <span class="n">TemplateUtilities</span><span class="p">()</span>
+
+        <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_parameters</span><span class="p">(</span><span class="n">template_util</span><span class="p">)</span>
         <span class="n">group_name</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span>
         <span class="n">webapp_name</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span>
 
-        <span class="n">existing_webapp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">resource_exist</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">webapp_name</span><span class="p">)</span>
+        <span class="n">existing_webapp</span> <span class="o">=</span> <span class="n">template_util</span><span class="o">.</span><span class="n">resource_exist</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">webapp_name</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_webapp</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">create_resource_group</span><span class="p">(</span>
+            <span class="n">template_util</span><span class="o">.</span><span class="n">create_resource_group</span><span class="p">(</span>
                 <span class="n">group_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;location&#39;</span><span class="p">:</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">deploy_resource_template</span><span class="p">(</span>
+            <span class="n">template_util</span><span class="o">.</span><span class="n">deploy_resource_template</span><span class="p">(</span>
                 <span class="n">group_name</span><span class="p">,</span> <span class="s1">&#39;dedicated_functionapp.json&#39;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found existing App </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">) in group </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
@@ -268,8 +270,8 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Aborted deployment, ensure Application Service is healthy.&quot;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AzureFunctionMode.get_parameters"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.get_parameters">[docs]</a>    <span class="k">def</span> <span class="nf">get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">get_default_parameters</span><span class="p">(</span>
+    <span class="k">def</span> <span class="nf">_get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_util</span><span class="p">):</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">template_util</span><span class="o">.</span><span class="n">get_default_parameters</span><span class="p">(</span>
             <span class="s1">&#39;dedicated_functionapp.parameters.json&#39;</span><span class="p">)</span>
 
         <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span>
@@ -286,9 +288,9 @@
             <span class="k">if</span> <span class="s1">&#39;provision-options&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]:</span>
                 <span class="n">updated_parameters</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;provision-options&#39;</span><span class="p">])</span>
 
-        <span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="o">.</span><span class="n">update_parameters</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">updated_parameters</span><span class="p">)</span>
+        <span class="n">parameters</span> <span class="o">=</span> <span class="n">template_util</span><span class="o">.</span><span class="n">update_parameters</span><span class="p">(</span><span class="n">parameters</span><span class="p">,</span> <span class="n">updated_parameters</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">parameters</span></div>
+        <span class="k">return</span> <span class="n">parameters</span>
 
 <div class="viewcode-block" id="AzureFunctionMode.get_logs"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Retrieve logs for the policy&quot;&quot;&quot;</span>
