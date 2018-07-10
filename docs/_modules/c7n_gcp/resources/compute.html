@@ -199,8 +199,14 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-<span class="kn">from</span> <span class="nn">c7n_gcp.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">TypeInfo</span>
+
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+
+<span class="kn">from</span> <span class="nn">c7n_gcp.actions</span> <span class="k">import</span> <span class="n">MethodAction</span>
 <span class="kn">from</span> <span class="nn">c7n_gcp.provider</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n_gcp.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">TypeInfo</span>
 
 
 <div class="viewcode-block" id="Instance"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.Instance">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;instance&#39;</span><span class="p">)</span>
@@ -212,6 +218,33 @@
         <span class="n">component</span> <span class="o">=</span> <span class="s1">&#39;instances&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;aggregatedList&#39;</span><span class="p">,</span> <span class="s1">&#39;items.*.instances[]&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">scope</span> <span class="o">=</span> <span class="s1">&#39;project&#39;</span></div></div>
+
+
+<div class="viewcode-block" id="InstanceAction"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.InstanceAction">[docs]</a><span class="k">class</span> <span class="nc">InstanceAction</span><span class="p">(</span><span class="n">MethodAction</span><span class="p">):</span>
+
+<div class="viewcode-block" id="InstanceAction.get_resource_params"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.InstanceAction.get_resource_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">project</span><span class="p">,</span> <span class="n">zone</span><span class="p">,</span> <span class="n">instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_param_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;selfLink&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">groups</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="n">project</span><span class="p">,</span> <span class="s1">&#39;zone&#39;</span><span class="p">:</span> <span class="n">zone</span><span class="p">,</span> <span class="s1">&#39;instance&#39;</span><span class="p">:</span> <span class="n">instance</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="Stop"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.Stop">[docs]</a><span class="nd">@Instance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Stop</span><span class="p">(</span><span class="n">InstanceAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+    <span class="n">method_spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;stop&#39;</span><span class="p">}</span>
+    <span class="n">path_param_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+        <span class="s1">&#39;.*?/projects/(.*?)/zones/(.*?)/instances/(.*)&#39;</span><span class="p">)</span>
+    <span class="n">attr_filter</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;RUNNING&#39;</span><span class="p">,))</span></div>
+
+
+<div class="viewcode-block" id="Delete"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.Delete">[docs]</a><span class="nd">@Instance</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Delete</span><span class="p">(</span><span class="n">InstanceAction</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
+    <span class="n">method_spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;delete&#39;</span><span class="p">}</span>
+    <span class="n">path_param_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+        <span class="s1">&#39;.*?/projects/(.*?)/zones/(.*?)/instances/(.*)&#39;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Image"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.compute.Image">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;image&#39;</span><span class="p">)</span>
