@@ -205,6 +205,7 @@
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">import</span> <span class="nn">requests</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
@@ -215,23 +216,29 @@
 
 <div class="viewcode-block" id="FunctionPackage"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage">[docs]</a><span class="k">class</span> <span class="nc">FunctionPackage</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">function_path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.function_package&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">basedir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span> <span class="o">=</span> <span class="n">PythonPackageArchive</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function_path</span> <span class="o">=</span> <span class="n">function_path</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)),</span> <span class="s1">&#39;function.py&#39;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_add_functions_required_files</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">_add_functions_required_files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_path</span><span class="p">,</span>
+                          <span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/function.py&#39;</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">basedir</span><span class="p">,</span> <span class="s1">&#39;function.py&#39;</span><span class="p">),</span>
-                          <span class="n">dest</span><span class="o">=</span><span class="n">policy_name</span> <span class="o">+</span> <span class="s1">&#39;/function.py&#39;</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="n">policy_name</span> <span class="o">+</span> <span class="s1">&#39;/__init__.py&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/__init__.py&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_add_host_config</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_add_function_config</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_add_policy</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">policy</span><span class="p">:</span>
+            <span class="n">config_contents</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_function_config</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+            <span class="n">policy_contents</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/function.json&#39;</span><span class="p">,</span>
+                                  <span class="n">contents</span><span class="o">=</span><span class="n">config_contents</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/config.json&#39;</span><span class="p">,</span>
+                                  <span class="n">contents</span><span class="o">=</span><span class="n">policy_contents</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_add_host_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">config</span> <span class="o">=</span> \
@@ -269,7 +276,7 @@
             <span class="p">}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s1">&#39;host.json&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
 
-    <span class="k">def</span> <span class="nf">_add_function_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FunctionPackage.get_function_config"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.get_function_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_function_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="n">config</span> <span class="o">=</span> \
             <span class="p">{</span>
                 <span class="s2">&quot;scriptFile&quot;</span><span class="p">:</span> <span class="s2">&quot;function.py&quot;</span><span class="p">,</span>
@@ -278,13 +285,13 @@
                 <span class="p">}]</span>
             <span class="p">}</span>
 
-        <span class="n">mode_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+        <span class="n">mode_type</span> <span class="o">=</span> <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
         <span class="n">binding</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s1">&#39;bindings&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;azure-periodic&#39;</span><span class="p">:</span>
             <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;timerTrigger&#39;</span>
             <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;input&#39;</span>
-            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span>
+            <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;schedule&#39;</span><span class="p">]</span>
 
         <span class="k">elif</span> <span class="n">mode_type</span> <span class="o">==</span> <span class="s1">&#39;azure-stream&#39;</span><span class="p">:</span>
             <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;httpTrigger&#39;</span>
@@ -300,12 +307,10 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Mode not yet supported for Azure functions (</span><span class="si">%s</span><span class="s2">)&quot;</span>
                            <span class="o">%</span> <span class="n">mode_type</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/function.json&#39;</span><span class="p">,</span>
-                              <span class="n">contents</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">config</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></div>
 
-    <span class="k">def</span> <span class="nf">_add_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/config.json&#39;</span><span class="p">,</span>
-                              <span class="n">contents</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s1">&#39;policies&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">]},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+    <span class="k">def</span> <span class="nf">_get_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s1">&#39;policies&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">policy</span><span class="p">]},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_add_cffi_module</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;CFFI native bits aren&#39;t discovered automatically</span>
@@ -337,13 +342,18 @@
     <span class="k">def</span> <span class="nf">_update_perms_package</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="mo">0o0644</span><span class="p">)</span>
 
-<div class="viewcode-block" id="FunctionPackage.build"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.build">[docs]</a>    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FunctionPackage.build"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.build">[docs]</a>    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">entry_point</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="c1"># Get dependencies for azure entry point</span>
-        <span class="n">modules</span><span class="p">,</span> <span class="n">so_files</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="o">.</span><span class="n">_get_dependencies</span><span class="p">(</span><span class="s1">&#39;entry.py&#39;</span><span class="p">)</span>
+        <span class="n">entry_point</span> <span class="o">=</span> <span class="n">entry_point</span> <span class="ow">or</span> \
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)),</span> <span class="s1">&#39;entry.py&#39;</span><span class="p">)</span>
+        <span class="n">modules</span><span class="p">,</span> <span class="n">so_files</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="o">.</span><span class="n">_get_dependencies</span><span class="p">(</span><span class="n">entry_point</span><span class="p">)</span>
 
         <span class="c1"># add all loaded modules</span>
-        <span class="n">modules</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;azure&#39;</span><span class="p">)</span>
+        <span class="n">modules</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s1">&#39;azure&#39;</span><span class="p">)</span>
         <span class="n">modules</span> <span class="o">=</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">({</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;c7n_azure&#39;</span><span class="p">,</span> <span class="s1">&#39;pkg_resources&#39;</span><span class="p">})</span>
+        <span class="k">if</span> <span class="n">extra_modules</span><span class="p">:</span>
+            <span class="n">modules</span> <span class="o">=</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">extra_modules</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">modules</span><span class="p">)</span>
 
         <span class="c1"># adding azure manually</span>
@@ -351,20 +361,24 @@
         <span class="c1"># https://www.python.org/dev/peps/pep-0420/</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="n">f</span> <span class="o">==</span> <span class="s1">&#39;azure/__init__.py&#39;</span><span class="p">,</span> <span class="s1">&#39;azure&#39;</span><span class="p">)</span>
 
-        <span class="c1"># add Functions HttpTrigger</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_add_functions_required_files</span><span class="p">()</span>
+        <span class="c1"># add config and policy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_functions_required_files</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
 
         <span class="c1"># generate and add auth</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;/auth.json&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">get_auth_string</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/auth.json&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">get_auth_string</span><span class="p">())</span>
 
         <span class="c1"># cffi module needs special handling</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_add_cffi_module</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_cffi_module</span><span class="p">()</span></div>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-
-        <span class="c1"># update perms of the package</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_update_perms_package</span><span class="p">()</span></div>
+<div class="viewcode-block" id="FunctionPackage.wait_for_status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.wait_for_status">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">,</span> <span class="n">retries</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">delay</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">retries</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">(</span><span class="n">app_name</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Will retry Function App status check in </span><span class="si">%s</span><span class="s1"> seconds...&#39;</span> <span class="o">%</span> <span class="n">delay</span><span class="p">)</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.status">[docs]</a>    <span class="k">def</span> <span class="nf">status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
@@ -387,6 +401,11 @@
         <span class="k">return</span> <span class="kc">True</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.publish"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="c1"># update perms of the package</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_perms_package</span><span class="p">()</span>
+
         <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
         <span class="n">zip_api_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.scm.azurewebsites.net/api/zipdeploy?isAsync=true&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
         <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
@@ -440,7 +459,7 @@
         <span class="c1"># Dynamically find all imported modules</span>
         <span class="kn">from</span> <span class="nn">modulefinder</span> <span class="k">import</span> <span class="n">ModuleFinder</span>
         <span class="n">finder</span> <span class="o">=</span> <span class="n">ModuleFinder</span><span class="p">()</span>
-        <span class="n">finder</span><span class="o">.</span><span class="n">run_script</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)),</span> <span class="n">entry_point</span><span class="p">))</span>
+        <span class="n">finder</span><span class="o">.</span><span class="n">run_script</span><span class="p">(</span><span class="n">entry_point</span><span class="p">)</span>
         <span class="n">imports</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="vm">__file__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;site-packages/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
                             <span class="k">for</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="ow">in</span> <span class="n">finder</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
                             <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">&quot;site-packages&quot;</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span><span class="p">]))</span>
