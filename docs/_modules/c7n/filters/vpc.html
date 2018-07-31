@@ -207,8 +207,6 @@
 <span class="kn">from</span> <span class="nn">.core</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
 
-<span class="kn">import</span> <span class="nn">jmespath</span>
-
 
 <div class="viewcode-block" id="SecurityGroupFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.vpc.SecurityGroupFilter">[docs]</a><span class="k">class</span> <span class="nc">SecurityGroupFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filter a resource by its associated security groups.&quot;&quot;&quot;</span>
@@ -258,6 +256,24 @@
 <span class="sd">    and `security-group` filters suffice. but say for example you wanted to</span>
 <span class="sd">    verify that an ec2 instance was only using subnets and security groups</span>
 <span class="sd">    with a given tag value, and that tag was not present on the resource.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: ec2-mismatched-sg-remove</span>
+<span class="sd">            resource: ec2</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: network-location</span>
+<span class="sd">                compare: [&quot;resource&quot;,&quot;security-group&quot;]</span>
+<span class="sd">                key: &quot;tag:TEAM_NAME&quot;</span>
+<span class="sd">                ignore:</span>
+<span class="sd">                  - &quot;tag:TEAM_NAME&quot;: Enterprise</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: modify-security-groups</span>
+<span class="sd">                remove: network-location</span>
+<span class="sd">                isolation-group: sg-xxxxxxxx</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
@@ -343,7 +359,7 @@
             <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                    <span class="k">if</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="o">==</span> <span class="n">v</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vf</span><span class="o">.</span><span class="n">get_resource_value</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="o">==</span> <span class="n">v</span><span class="p">:</span>
                         <span class="n">found</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
                     <span class="k">break</span>
@@ -409,6 +425,15 @@
                     <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;ResourceLocationMismatch&#39;</span><span class="p">,</span>
                     <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">r_value</span><span class="p">,</span>
                     <span class="s1">&#39;subnet&#39;</span><span class="p">:</span> <span class="n">subnet_values</span><span class="p">})</span>
+            <span class="k">if</span> <span class="s1">&#39;security-group&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">compare</span> <span class="ow">and</span> <span class="n">resource_sgs</span><span class="p">:</span>
+                <span class="n">mismatched_sgs</span> <span class="o">=</span> <span class="p">{</span><span class="n">sg_id</span><span class="p">:</span> <span class="n">sg_value</span>
+                                <span class="k">for</span> <span class="n">sg_id</span><span class="p">,</span> <span class="n">sg_value</span> <span class="ow">in</span> <span class="n">sg_values</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                                <span class="k">if</span> <span class="n">sg_value</span> <span class="o">!=</span> <span class="n">r_value</span><span class="p">}</span>
+                <span class="k">if</span> <span class="n">mismatched_sgs</span><span class="p">:</span>
+                    <span class="n">evaluation</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                        <span class="s1">&#39;reason&#39;</span><span class="p">:</span> <span class="s1">&#39;SecurityGroupMismatch&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">r_value</span><span class="p">,</span>
+                        <span class="s1">&#39;security-groups&#39;</span><span class="p">:</span> <span class="n">mismatched_sgs</span><span class="p">})</span>
 
         <span class="k">if</span> <span class="n">evaluation</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span> <span class="o">==</span> <span class="s1">&#39;not-equal&#39;</span><span class="p">:</span>
             <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:NetworkLocation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">evaluation</span>
