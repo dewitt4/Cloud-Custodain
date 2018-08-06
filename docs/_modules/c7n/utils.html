@@ -201,9 +201,6 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
-<span class="kn">from</span> <span class="nn">botocore.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
-
-<span class="kn">import</span> <span class="nn">boto3</span>
 <span class="kn">import</span> <span class="nn">copy</span>
 <span class="kn">import</span> <span class="nn">csv</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
@@ -220,6 +217,7 @@
 <span class="kn">import</span> <span class="nn">sys</span>
 
 
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">ipaddress</span>
 
 <span class="c1"># Try to place nice in lambda exec environment</span>
@@ -639,17 +637,36 @@
     <span class="k">return</span> <span class="n">ret</span></div>
 
 
-<span class="n">_profile_session</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="c1"># from botocore.utils avoiding runtime dependency for botocore for other providers.</span>
+<span class="c1"># license apache 2.0</span>
+<div class="viewcode-block" id="set_value_from_jmespath"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.set_value_from_jmespath">[docs]</a><span class="k">def</span> <span class="nf">set_value_from_jmespath</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">expression</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">is_first</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="c1"># This takes a (limited) jmespath-like expression &amp; can set a value based</span>
+    <span class="c1"># on it.</span>
+    <span class="c1"># Limitations:</span>
+    <span class="c1"># * Only handles dotted lookups</span>
+    <span class="c1"># * No offsets/wildcards/slices/etc.</span>
+    <span class="n">bits</span> <span class="o">=</span> <span class="n">expression</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">current_key</span><span class="p">,</span> <span class="n">remainder</span> <span class="o">=</span> <span class="n">bits</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">bits</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">bits</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span>
 
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">current_key</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">expression</span><span class="p">)</span>
 
-<div class="viewcode-block" id="get_profile_session"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.get_profile_session">[docs]</a><span class="k">def</span> <span class="nf">get_profile_session</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
-    <span class="k">global</span> <span class="n">_profile_session</span>
-    <span class="k">if</span> <span class="n">_profile_session</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_profile_session</span>
+    <span class="k">if</span> <span class="n">remainder</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">current_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">source</span><span class="p">:</span>
+            <span class="c1"># We&#39;ve got something in the expression that&#39;s not present in the</span>
+            <span class="c1"># source (new key). If there&#39;s any more bits, we&#39;ll set the key</span>
+            <span class="c1"># with an empty dictionary.</span>
+            <span class="n">source</span><span class="p">[</span><span class="n">current_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
 
-    <span class="n">profile</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;profile&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="n">_profile_session</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">Session</span><span class="p">(</span><span class="n">profile_name</span><span class="o">=</span><span class="n">profile</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">_profile_session</span></div>
+        <span class="k">return</span> <span class="n">set_value_from_jmespath</span><span class="p">(</span>
+            <span class="n">source</span><span class="p">[</span><span class="n">current_key</span><span class="p">],</span>
+            <span class="n">remainder</span><span class="p">,</span>
+            <span class="n">value</span><span class="p">,</span>
+            <span class="n">is_first</span><span class="o">=</span><span class="kc">False</span>
+        <span class="p">)</span>
+
+    <span class="c1"># If we&#39;re down to a single key, set it.</span>
+    <span class="n">source</span><span class="p">[</span><span class="n">current_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span></div>
 
 
 <div class="viewcode-block" id="format_string_values"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.format_string_values">[docs]</a><span class="k">def</span> <span class="nf">format_string_values</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>

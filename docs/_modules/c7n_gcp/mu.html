@@ -186,7 +186,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n_gcp.mu</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2017-2018 Capital One Services, LLC</span>
+<span></span><span class="c1"># Copyright 2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -201,6 +201,8 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="c1"># import base64</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">namedtuple</span>
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">hashlib</span>
 
@@ -208,40 +210,32 @@
 <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">custodian_archive</span> <span class="k">as</span> <span class="n">base_archive</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
+<span class="kn">from</span> <span class="nn">googleapiclient.errors</span> <span class="k">import</span> <span class="n">HttpError</span>
+
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;c7n_gcp.mu&#39;</span><span class="p">)</span>
 
 
-<span class="n">handler</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span><span class="se">\</span>
-<span class="s2">exports.handler = (req, res) =&gt; {</span>
-<span class="s2">  res.send(&#39;Hello World!&#39;);</span>
-<span class="s2">};</span>
-<span class="s2">&quot;&quot;&quot;</span>
-
-
 <div class="viewcode-block" id="custodian_archive"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.custodian_archive">[docs]</a><span class="k">def</span> <span class="nf">custodian_archive</span><span class="p">(</span><span class="n">packages</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-    <span class="n">archive</span> <span class="o">=</span> <span class="n">base_archive</span><span class="p">([</span><span class="s1">&#39;c7n_gcp&#39;</span><span class="p">])</span>
-    <span class="n">archive</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="s1">&#39;index.js&#39;</span><span class="p">,</span> <span class="n">handler</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">packages</span><span class="p">:</span>
+        <span class="n">packages</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;c7n_gcp&#39;</span><span class="p">)</span>
+    <span class="n">archive</span> <span class="o">=</span> <span class="n">base_archive</span><span class="p">(</span><span class="n">packages</span><span class="p">)</span>
 
-    <span class="c1"># requirements are fetched server-side, which helps for binary extensions</span>
+    <span class="c1"># Requirements are fetched server-side, which helps for binary extensions</span>
     <span class="c1"># but for pure python packages, if we have a local install and its</span>
     <span class="c1"># relatively small, it might be faster to just upload.</span>
     <span class="c1">#</span>
-    <span class="n">requirements</span> <span class="o">=</span> <span class="n">packages</span> <span class="ow">and</span> <span class="nb">set</span><span class="p">(</span><span class="n">packages</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">requirements</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;jmespath&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;retrying&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;ratelimiter&gt;=1.2.0.post0&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-auth&gt;=1.4.1&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-auth-httplib2&gt;=0.0.3&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-api-python-client&gt;=1.7.3&#39;</span><span class="p">)</span>
-    <span class="c1"># both of these bring in grpc :-( which in turn brings in a whole</span>
-    <span class="c1"># pile of random threads and protobufs.</span>
-    <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-cloud-monitoring&gt;=0.3.0&#39;</span><span class="p">)</span>
-    <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-cloud-logging&gt;=1.6.0&#39;</span><span class="p">)</span>
 
     <span class="n">archive</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span>
         <span class="s1">&#39;requirements.txt&#39;</span><span class="p">,</span>
         <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">requirements</span><span class="p">)))</span>
-    <span class="n">archive</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-
     <span class="k">return</span> <span class="n">archive</span></div>
 
 
@@ -265,6 +259,10 @@
 
 <div class="viewcode-block" id="CloudFunctionManager.remove"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.CloudFunctionManager.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="n">project</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">()</span>
+
+        <span class="c1"># delete event sources</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">events</span><span class="p">:</span>
+            <span class="n">e</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
         <span class="n">func_name</span> <span class="o">=</span> <span class="s2">&quot;projects/</span><span class="si">{}</span><span class="s2">/locations/</span><span class="si">{}</span><span class="s2">/functions/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
             <span class="n">project</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
@@ -290,32 +288,34 @@
         <span class="k">if</span> <span class="n">source_url</span><span class="p">:</span>
             <span class="n">config</span><span class="p">[</span><span class="s1">&#39;sourceUploadUrl&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">source_url</span>
 
+        <span class="c1"># todo - we&#39;ll really need before() and after() for pre-provisioning of</span>
+        <span class="c1"># resources (ie topic for function stream on create) and post provisioning (schedule</span>
+        <span class="c1"># invocation of extant function).</span>
+        <span class="c1">#</span>
+        <span class="c1"># convergent event source creation</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">events</span><span class="p">:</span>
+            <span class="n">e</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">func_info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;creating function&quot;</span><span class="p">)</span>
             <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span>
                 <span class="s1">&#39;create&#39;</span><span class="p">,</span> <span class="p">{</span>
                     <span class="s1">&#39;location&#39;</span><span class="p">:</span> <span class="s2">&quot;projects/</span><span class="si">{}</span><span class="s2">/locations/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
                         <span class="n">project</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">region</span><span class="p">),</span>
                     <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="n">config</span><span class="p">})</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">delta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta_function</span><span class="p">(</span><span class="n">func_info</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">delta_resource</span><span class="p">(</span><span class="n">func_info</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="p">(</span><span class="s1">&#39;httpsTrigger&#39;</span><span class="p">,))</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">delta</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span>
-                <span class="s1">&#39;patch&#39;</span><span class="p">,</span> <span class="p">{</span>
-                    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">func_name</span><span class="p">,</span>
-                    <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="n">config</span><span class="p">,</span>
-                    <span class="s1">&#39;updateMask&#39;</span><span class="p">:</span> <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">delta</span><span class="p">)})</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">update_mask</span> <span class="o">=</span> <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">delta</span><span class="p">)</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;updating function config </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">update_mask</span><span class="p">)</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span>
+                    <span class="s1">&#39;patch&#39;</span><span class="p">,</span> <span class="p">{</span>
+                        <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">func_name</span><span class="p">,</span>
+                        <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="n">config</span><span class="p">,</span>
+                        <span class="s1">&#39;updateMask&#39;</span><span class="p">:</span> <span class="n">update_mask</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">response</span></div>
-
-<div class="viewcode-block" id="CloudFunctionManager.delta_function"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.CloudFunctionManager.delta_function">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">delta_function</span><span class="p">(</span><span class="n">old_config</span><span class="p">,</span> <span class="n">new_config</span><span class="p">):</span>
-        <span class="n">found</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">new_config</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;httpsTrigger&#39;</span><span class="p">,):</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
-                <span class="n">found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">found</span></div>
 
 <div class="viewcode-block" id="CloudFunctionManager.metrics"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.CloudFunctionManager.metrics">[docs]</a>    <span class="k">def</span> <span class="nf">metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">funcs</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="mi">5</span> <span class="o">*</span> <span class="mi">60</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Get the metrics for a set of functions.&quot;&quot;&quot;</span></div>
@@ -347,6 +347,7 @@
         <span class="n">source_headers</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">source_info</span><span class="p">[</span><span class="s1">&#39;downloadUrl&#39;</span><span class="p">],</span> <span class="s1">&#39;HEAD&#39;</span><span class="p">)</span>
         <span class="c1"># &#39;x-goog-hash&#39;: &#39;crc32c=tIfQ9A==, md5=DqrN06/NbVGsG+3CdrVK+Q==&#39;</span>
         <span class="n">deployed_checksum</span> <span class="o">=</span> <span class="n">source_headers</span><span class="p">[</span><span class="s1">&#39;x-goog-hash&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;archive checksum </span><span class="si">%r</span><span class="s2"> deployed checksum </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">checksum</span><span class="p">,</span> <span class="n">deployed_checksum</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">deployed_checksum</span> <span class="o">!=</span> <span class="n">checksum</span>
 
     <span class="k">def</span> <span class="nf">_upload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">archive</span><span class="p">,</span> <span class="n">region</span><span class="p">):</span>
@@ -358,7 +359,7 @@
             <span class="p">{</span><span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="s1">&#39;projects/</span><span class="si">{}</span><span class="s1">/locations/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">(),</span>
                 <span class="n">region</span><span class="p">)})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;uploadUrl&#39;</span><span class="p">)</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;function upload url </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;uploading function code </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">url</span><span class="p">)</span>
         <span class="n">http</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_http_client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="p">)</span>
         <span class="n">headers</span><span class="p">,</span> <span class="n">response</span> <span class="o">=</span> <span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="p">(</span>
             <span class="n">url</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;PUT&#39;</span><span class="p">,</span>
@@ -369,14 +370,25 @@
             <span class="p">},</span>
             <span class="n">body</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="n">archive</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
         <span class="p">)</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;function code uploaded&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">headers</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;200&#39;</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">headers</span><span class="p">,</span> <span class="n">response</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">url</span></div>
 
 
+<div class="viewcode-block" id="delta_resource"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.delta_resource">[docs]</a><span class="k">def</span> <span class="nf">delta_resource</span><span class="p">(</span><span class="n">old_config</span><span class="p">,</span> <span class="n">new_config</span><span class="p">,</span> <span class="n">ignore</span><span class="o">=</span><span class="p">()):</span>
+    <span class="n">found</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">new_config</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">ignore</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">new_config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">!=</span> <span class="n">old_config</span><span class="p">[</span><span class="n">k</span><span class="p">]:</span>
+            <span class="n">found</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">found</span></div>
+
+
 <div class="viewcode-block" id="CloudFunction"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.CloudFunction">[docs]</a><span class="k">class</span> <span class="nc">CloudFunction</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_data</span><span class="p">,</span> <span class="n">archive</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_data</span><span class="p">,</span> <span class="n">archive</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span> <span class="o">=</span> <span class="n">func_data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">archive</span> <span class="o">=</span> <span class="n">archive</span>
 
@@ -390,16 +402,27 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">memory_size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;memory-size&#39;</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;memory-size&#39;</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">runtime</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="c1"># see google-cloud-sdk lib/googlecloudsdk/command_lib/functions/flags.py AddRuntimeFlag</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;runtime&#39;</span><span class="p">,</span> <span class="s1">&#39;nodejs6&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;runtime&#39;</span><span class="p">,</span> <span class="s1">&#39;python37&#39;</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">labels</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;labels&#39;</span><span class="p">,</span> <span class="p">{}))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">environment</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;environment&#39;</span><span class="p">,</span> <span class="p">{})</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">network</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;network&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">max_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max-instances&#39;</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">events</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -419,13 +442,73 @@
             <span class="s1">&#39;labels&#39;</span><span class="p">:</span> <span class="n">labels</span><span class="p">,</span>
             <span class="s1">&#39;availableMemoryMb&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">memory_size</span><span class="p">}</span>
 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">environment</span><span class="p">:</span>
+            <span class="n">conf</span><span class="p">[</span><span class="s1">&#39;environmentVariables&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">environment</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span><span class="p">:</span>
+            <span class="n">conf</span><span class="p">[</span><span class="s1">&#39;network&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">network</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_instances</span><span class="p">:</span>
+            <span class="n">conf</span><span class="p">[</span><span class="s1">&#39;maxInstances&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_instances</span>
+
         <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">events</span><span class="p">:</span>
             <span class="n">conf</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">conf</span></div></div>
 
 
+<span class="n">PolicyHandlerTemplate</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span><span class="se">\</span>
+
+<span class="s2">import base64</span>
+<span class="s2">import json</span>
+<span class="s2">import traceback</span>
+<span class="s2">import os</span>
+<span class="s2">import logging</span>
+<span class="s2">import sys</span>
+
+
+<span class="s2">def run(event, context=None):</span>
+<span class="s2">    logging.info(&quot;starting function execution&quot;)</span>
+<span class="s2">    event = json.loads(base64.b64decode(event[&#39;data&#39;]).decode(&#39;utf-8&#39;))</span>
+<span class="s2">    print(&quot;Event: </span><span class="si">%s</span><span class="s2">&quot; % (event,))</span>
+<span class="s2">    try:</span>
+<span class="s2">        from c7n_gcp.handler import run</span>
+<span class="s2">        result = run(event, context)</span>
+<span class="s2">        logging.info(&quot;function execution complete&quot;)</span>
+<span class="s2">        return result</span>
+<span class="s2">    except Exception as e:</span>
+<span class="s2">        traceback.print_exc()</span>
+<span class="s2">        raise</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+
 <div class="viewcode-block" id="PolicyFunction"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PolicyFunction">[docs]</a><span class="k">class</span> <span class="nc">PolicyFunction</span><span class="p">(</span><span class="n">CloudFunction</span><span class="p">):</span>
-    <span class="k">pass</span></div>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">archive</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">events</span><span class="o">=</span><span class="p">()):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">func_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span> <span class="o">=</span> <span class="n">archive</span> <span class="ow">or</span> <span class="n">custodian_archive</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_events</span> <span class="o">=</span> <span class="n">events</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">events</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_events</span>
+
+<div class="viewcode-block" id="PolicyFunction.get_archive"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PolicyFunction.get_archive">[docs]</a>    <span class="k">def</span> <span class="nf">get_archive</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="s1">&#39;main.py&#39;</span><span class="p">,</span> <span class="n">PolicyHandlerTemplate</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span>
+            <span class="s1">&#39;config.json&#39;</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+                <span class="p">{</span><span class="s1">&#39;policies&#39;</span><span class="p">:</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">]},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">archive</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">archive</span></div>
+
+<div class="viewcode-block" id="PolicyFunction.get_config"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PolicyFunction.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">PolicyFunction</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_config</span><span class="p">()</span>
+        <span class="n">config</span><span class="p">[</span><span class="s1">&#39;entryPoint&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;run&#39;</span>
+        <span class="k">return</span> <span class="n">config</span></div></div>
 
 
 <div class="viewcode-block" id="EventSource"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.EventSource">[docs]</a><span class="k">class</span> <span class="nc">EventSource</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -473,24 +556,237 @@
                 <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;bucket&#39;</span><span class="p">]}}</span></div></div>
 
 
-<div class="viewcode-block" id="PubSubSubscriber"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSubscriber">[docs]</a><span class="k">class</span> <span class="nc">PubSubSubscriber</span><span class="p">(</span><span class="n">EventSource</span><span class="p">):</span>
+<div class="viewcode-block" id="PubSubSource"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource">[docs]</a><span class="k">class</span> <span class="nc">PubSubSource</span><span class="p">(</span><span class="n">EventSource</span><span class="p">):</span>
 
-    <span class="n">trigger</span> <span class="o">=</span> <span class="s1">&#39;google.pubsub.topic.publish&#39;</span>
+    <span class="n">trigger</span> <span class="o">=</span> <span class="s1">&#39;providers/cloud.pubsub/eventTypes/topic.publish&#39;</span>
     <span class="n">collection_id</span> <span class="o">=</span> <span class="s1">&#39;pubsub.projects.topics&#39;</span>
 
-<div class="viewcode-block" id="PubSubSubscriber.get_config"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSubscriber.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+    <span class="c1"># data -&gt; topic</span>
+
+<div class="viewcode-block" id="PubSubSource.get_config"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s1">&#39;eventTrigger&#39;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s1">&#39;eventType&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">trigger</span><span class="p">,</span>
-                <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;topic&#39;</span><span class="p">]}}</span></div></div>
+                <span class="s1">&#39;failurePolicy&#39;</span><span class="p">:</span> <span class="p">{},</span>
+                <span class="s1">&#39;service&#39;</span><span class="p">:</span> <span class="s1">&#39;pubsub.googleapis.com&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_topic_param</span><span class="p">()}}</span></div>
+
+<div class="viewcode-block" id="PubSubSource.get_topic_param"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.get_topic_param">[docs]</a>    <span class="k">def</span> <span class="nf">get_topic_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topic</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">&#39;projects/</span><span class="si">{}</span><span class="s1">/topics/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">project</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">(),</span>
+            <span class="n">topic</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;topic&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="PubSubSource.ensure_topic"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.ensure_topic">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_topic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Verify the pub/sub topic exists.</span>
+
+<span class="sd">        Returns the topic qualified name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;pubsub&#39;</span><span class="p">,</span> <span class="s1">&#39;v1&#39;</span><span class="p">,</span> <span class="s1">&#39;projects.topics&#39;</span><span class="p">)</span>
+        <span class="n">topic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_topic_param</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;get&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;topic&#39;</span><span class="p">:</span> <span class="n">topic</span><span class="p">})</span>
+        <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">resp</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">topic</span>
+
+        <span class="c1"># bug in discovery doc.. apis say body must be empty but its required in the</span>
+        <span class="c1"># discovery api for create.</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="n">topic</span><span class="p">,</span> <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="p">{}})</span>
+        <span class="k">return</span> <span class="n">topic</span></div>
+
+<div class="viewcode-block" id="PubSubSource.ensure_iam"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.ensure_iam">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_iam</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">publisher</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Ensure the given identities are in the iam role bindings for the topic.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">topic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_topic_param</span><span class="p">()</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;pubsub&#39;</span><span class="p">,</span> <span class="s1">&#39;v1&#39;</span><span class="p">,</span> <span class="s1">&#39;projects.topics&#39;</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;getIamPolicy&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">topic</span><span class="p">})</span>
+        <span class="n">policy</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;etag&#39;</span><span class="p">)</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">binding</span> <span class="ow">in</span> <span class="n">policy</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;bindings&#39;</span><span class="p">,</span> <span class="p">{}):</span>
+            <span class="k">if</span> <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;role&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;roles/pubsub.publisher&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">publisher</span> <span class="ow">in</span> <span class="n">binding</span><span class="p">[</span><span class="s1">&#39;members&#39;</span><span class="p">]:</span>
+                <span class="k">return</span>
+            <span class="n">found</span> <span class="o">=</span> <span class="n">binding</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found</span><span class="p">:</span>
+            <span class="n">policy</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span>
+                <span class="s1">&#39;bindings&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;members&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">publisher</span><span class="p">],</span> <span class="s1">&#39;role&#39;</span><span class="p">:</span> <span class="s1">&#39;roles/pubsub.publisher&#39;</span><span class="p">})</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">found</span><span class="p">[</span><span class="s1">&#39;members&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">publisher</span><span class="p">)</span>
+
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;setIamPolicy&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="n">topic</span><span class="p">,</span> <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;policy&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="p">}})</span></div>
+
+<div class="viewcode-block" id="PubSubSource.add"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ensure_topic</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="PubSubSource.remove"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.PubSubSource.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;topic&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;custodian-auto&#39;</span><span class="p">):</span>
+            <span class="k">return</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;topic&#39;</span><span class="p">,</span> <span class="s1">&#39;v1&#39;</span><span class="p">,</span> <span class="s1">&#39;projects.topics&#39;</span><span class="p">)</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;topic&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_topic_param</span><span class="p">()})</span></div></div>
+
+
+<span class="n">LogInfo</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;LogInfo&#39;</span><span class="p">,</span> <span class="s1">&#39;name scope_type scope_id id&#39;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="LogSubscriber"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber">[docs]</a><span class="k">class</span> <span class="nc">LogSubscriber</span><span class="p">(</span><span class="n">EventSource</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Composite as a log sink&quot;&quot;&quot;</span></div>
+    <span class="sd">&quot;&quot;&quot;Composite as a log sink</span>
+
+<span class="sd">    subscriber = LogSubscriber(dict(</span>
+<span class="sd">        log=&#39;projects/custodian-1291/logs/cloudaudit.googleapis.com%2Factivity&#39;))</span>
+
+<span class="sd">    function = CloudFunction(dict(name=&#39;log-sub&#39;, events=[subscriber])</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># filter, log, topic, name</span>
+    <span class="c1"># optional scope, scope_id (if scope != default)</span>
+    <span class="c1"># + pub sub</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pubsub</span> <span class="o">=</span> <span class="n">PubSubSource</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LogSubscriber.get_log"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.get_log">[docs]</a>    <span class="k">def</span> <span class="nf">get_log</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">scope_type</span><span class="p">,</span> <span class="n">scope_id</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">log_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;log&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">LogInfo</span><span class="p">(</span>
+            <span class="n">scope_type</span><span class="o">=</span><span class="n">scope_type</span><span class="p">,</span> <span class="n">scope_id</span><span class="o">=</span><span class="n">scope_id</span><span class="p">,</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">log_id</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;log&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.get_log_filter"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.get_log_filter">[docs]</a>    <span class="k">def</span> <span class="nf">get_log_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;filter&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.get_parent"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.get_parent">[docs]</a>    <span class="k">def</span> <span class="nf">get_parent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log_info</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Get the parent container for the log sink&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;scope&#39;</span><span class="p">,</span> <span class="s1">&#39;log&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;log&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">log_info</span><span class="o">.</span><span class="n">scope_type</span> <span class="o">!=</span> <span class="s1">&#39;projects&#39;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid log subscriber scope&quot;</span><span class="p">)</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">log_info</span><span class="o">.</span><span class="n">scope_type</span><span class="p">,</span> <span class="n">log_info</span><span class="o">.</span><span class="n">scope_id</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;project&#39;</span><span class="p">:</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="s1">&#39;projects/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;scope_id&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">()))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;organization&#39;</span><span class="p">:</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="s1">&#39;organizations/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope_id&#39;</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;folder&#39;</span><span class="p">:</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="s1">&#39;folders/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope_id&#39;</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;billing&#39;</span><span class="p">:</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="s1">&#39;billingAccounts/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;scope_id&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s1">&#39;invalid log subscriber scope </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">parent</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.get_sink"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.get_sink">[docs]</a>    <span class="k">def</span> <span class="nf">get_sink</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topic_info</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="n">log_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_log</span><span class="p">()</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_parent</span><span class="p">(</span><span class="n">log_info</span><span class="p">)</span>
+        <span class="n">log_filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_log_filter</span><span class="p">()</span>
+        <span class="n">scope</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">sink</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;parent&#39;</span><span class="p">:</span> <span class="n">parent</span><span class="p">,</span>
+            <span class="s1">&#39;uniqueWriterIdentity&#39;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># Sink body</span>
+            <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+                <span class="s1">&#39;destination&#39;</span><span class="p">:</span> <span class="s2">&quot;pubsub.googleapis.com/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">topic_info</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="n">log_filter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sink</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">][</span><span class="s1">&#39;filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">log_filter</span>
+        <span class="k">if</span> <span class="n">scope</span> <span class="o">!=</span> <span class="s1">&#39;projects&#39;</span><span class="p">:</span>
+            <span class="n">sink</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">][</span><span class="s1">&#39;includeChildren&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">sink</span><span class="p">[</span><span class="s1">&#39;uniqueWriterIdentity&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="n">sink_path</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/sinks/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sink</span><span class="p">[</span><span class="s1">&#39;parent&#39;</span><span class="p">],</span> <span class="n">sink</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">scope</span><span class="p">,</span> <span class="n">sink_path</span><span class="p">,</span> <span class="n">sink</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.ensure_sink"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.ensure_sink">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_sink</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Ensure the log sink and its pub sub topic exist.&quot;&quot;&quot;</span>
+        <span class="n">topic_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pubsub</span><span class="o">.</span><span class="n">ensure_topic</span><span class="p">()</span>
+        <span class="n">scope</span><span class="p">,</span> <span class="n">sink_path</span><span class="p">,</span> <span class="n">sink_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sink</span><span class="p">(</span><span class="n">topic_info</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logging&#39;</span><span class="p">,</span> <span class="s1">&#39;v2&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">.sinks&#39;</span> <span class="o">%</span> <span class="n">scope</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sink</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;get&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;sinkName&#39;</span><span class="p">:</span> <span class="n">sink_path</span><span class="p">})</span>
+        <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">resp</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="n">sink</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">,</span> <span class="n">sink_info</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">delta_resource</span><span class="p">(</span><span class="n">sink</span><span class="p">,</span> <span class="n">sink_info</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">delta</span><span class="p">:</span>
+                <span class="n">sink_info</span><span class="p">[</span><span class="s1">&#39;updateMask&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">delta</span><span class="p">)</span>
+                <span class="n">sink_info</span><span class="p">[</span><span class="s1">&#39;sinkName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sink_path</span>
+                <span class="n">sink_info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;parent&#39;</span><span class="p">)</span>
+                <span class="n">sink</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;update&#39;</span><span class="p">,</span> <span class="n">sink_info</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">sink_path</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">pubsub</span><span class="o">.</span><span class="n">ensure_iam</span><span class="p">(</span><span class="n">publisher</span><span class="o">=</span><span class="n">sink</span><span class="p">[</span><span class="s1">&#39;writerIdentity&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">sink_path</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.add"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create any configured log sink if doesn&#39;t exist.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ensure_sink</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.remove"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Remove any provisioned log sink if auto created&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;custodian-auto&#39;</span><span class="p">):</span>
+            <span class="k">return</span>
+        <span class="n">parent</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_parent</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_log</span><span class="p">())</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">sink_path</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sink</span><span class="p">()</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;logging&#39;</span><span class="p">,</span> <span class="s1">&#39;v2&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">.sinks&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">parent</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span>
+                <span class="s1">&#39;delete&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;sinkName&#39;</span><span class="p">:</span> <span class="n">sink_path</span><span class="p">})</span>
+        <span class="k">except</span> <span class="n">HttpError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">resp</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="mi">404</span><span class="p">:</span>
+                <span class="k">raise</span></div>
+
+<div class="viewcode-block" id="LogSubscriber.get_config"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.LogSubscriber.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">pubsub</span><span class="o">.</span><span class="n">get_config</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="ScheduledEvent"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ScheduledEvent">[docs]</a><span class="k">class</span> <span class="nc">ScheduledEvent</span><span class="p">(</span><span class="n">EventSource</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;External scheduled clock event.&quot;&quot;&quot;</span></div>
+<div class="viewcode-block" id="ApiSubscriber"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ApiSubscriber">[docs]</a><span class="k">class</span> <span class="nc">ApiSubscriber</span><span class="p">(</span><span class="n">EventSource</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Subscribe to individual api calls</span>
+
+<span class="sd">    via audit log -&gt; filtered sink -&gt; pub/sub topic -&gt; cloud function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># https://cloud.google.com/logging/docs/reference/audit/auditlog/rest/Shared.Types/AuditLog</span>
+
+    <span class="c1"># scope - project</span>
+    <span class="c1"># api calls</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session</span>
+
+<div class="viewcode-block" id="ApiSubscriber.get_subscription"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ApiSubscriber.get_subscription">[docs]</a>    <span class="k">def</span> <span class="nf">get_subscription</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="n">log_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2">/logs/cloudaudit.googleapis.com</span><span class="si">%2F</span><span class="s2">activity&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;scope&#39;</span><span class="p">,</span> <span class="s1">&#39;projects&#39;</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">())</span>
+        <span class="n">log_filter</span> <span class="o">=</span> <span class="s1">&#39;logName = &quot;</span><span class="si">%s</span><span class="s1">&quot;&#39;</span> <span class="o">%</span> <span class="n">log_name</span>
+        <span class="n">log_filter</span> <span class="o">+=</span> <span class="s2">&quot; AND protoPayload.methodName = (</span><span class="si">%s</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s1">&#39;&quot;</span><span class="si">%s</span><span class="s1">&quot;&#39;</span> <span class="o">%</span> <span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;methods&#39;</span><span class="p">]]))</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;topic&#39;</span><span class="p">:</span> <span class="s1">&#39;custodian-auto-audit-</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;custodian-auto-audit-</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;log&#39;</span><span class="p">:</span> <span class="n">log_name</span><span class="p">,</span>
+            <span class="s1">&#39;filter&#39;</span><span class="p">:</span> <span class="n">log_filter</span><span class="p">}</span></div>
+
+<div class="viewcode-block" id="ApiSubscriber.add"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ApiSubscriber.add">[docs]</a>    <span class="k">def</span> <span class="nf">add</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">LogSubscriber</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_subscription</span><span class="p">(</span><span class="n">func</span><span class="p">))</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ApiSubscriber.remove"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ApiSubscriber.remove">[docs]</a>    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">LogSubscriber</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_subscription</span><span class="p">(</span><span class="n">func</span><span class="p">))</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ApiSubscriber.get_config"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.mu.ApiSubscriber.get_config">[docs]</a>    <span class="k">def</span> <span class="nf">get_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">LogSubscriber</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_subscription</span><span class="p">(</span><span class="n">func</span><span class="p">))</span><span class="o">.</span><span class="n">get_config</span><span class="p">(</span><span class="n">func</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
