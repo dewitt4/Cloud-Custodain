@@ -200,14 +200,18 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
-<span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">c7n_azure.function_package</span> <span class="k">import</span> <span class="n">FunctionPackage</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.functionapp_utils</span> <span class="k">import</span> <span class="n">FunctionAppUtilities</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.template_utils</span> <span class="k">import</span> <span class="n">TemplateUtilities</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="n">CONST_DOCKER_VERSION</span><span class="p">,</span> <span class="n">CONST_FUNCTIONS_EXT_VERSION</span>
 
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
 <span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">ServerlessExecutionMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">,</span> <span class="n">execution</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
 
 <div class="viewcode-block" id="AzureFunctionMode"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode">[docs]</a><span class="k">class</span> <span class="nc">AzureFunctionMode</span><span class="p">(</span><span class="n">ServerlessExecutionMode</span><span class="p">):</span>
@@ -235,6 +239,8 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.AzureFunctionMode&#39;</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="AzureFunctionMode.run"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lambda_context</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Run the actual policy.&quot;&quot;&quot;</span>
@@ -249,17 +255,25 @@
         <span class="n">webapp_name</span> <span class="o">=</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]</span>
         <span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
 
-        <span class="n">existing_webapp</span> <span class="o">=</span> <span class="n">template_util</span><span class="o">.</span><span class="n">resource_exist</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">webapp_name</span><span class="p">)</span>
+        <span class="n">existing_service_plan</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">app_service_plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="n">group_name</span><span class="p">,</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">])</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_webapp</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_service_plan</span><span class="p">:</span>
             <span class="n">template_util</span><span class="o">.</span><span class="n">create_resource_group</span><span class="p">(</span>
                 <span class="n">group_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;location&#39;</span><span class="p">:</span> <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">]})</span>
 
             <span class="n">template_util</span><span class="o">.</span><span class="n">deploy_resource_template</span><span class="p">(</span>
                 <span class="n">group_name</span><span class="p">,</span> <span class="s1">&#39;dedicated_functionapp.json&#39;</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
         <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found existing App </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">) in group </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
-                          <span class="p">(</span><span class="n">webapp_name</span><span class="p">,</span> <span class="n">existing_webapp</span><span class="o">.</span><span class="n">location</span><span class="p">,</span> <span class="n">group_name</span><span class="p">))</span>
+            <span class="n">existing_webapp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">web_apps</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">group_name</span><span class="p">,</span> <span class="n">webapp_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_webapp</span><span class="p">:</span>
+                <span class="n">functionapp_util</span> <span class="o">=</span> <span class="n">FunctionAppUtilities</span><span class="p">()</span>
+                <span class="n">functionapp_util</span><span class="o">.</span><span class="n">deploy_webapp</span><span class="p">(</span><span class="n">webapp_name</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">existing_service_plan</span><span class="p">,</span>
+                                               <span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;storageName&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found existing App </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">) in group </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
+                              <span class="p">(</span><span class="n">webapp_name</span><span class="p">,</span> <span class="n">existing_webapp</span><span class="o">.</span><span class="n">location</span><span class="p">,</span> <span class="n">group_name</span><span class="p">))</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Building function package for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">webapp_name</span><span class="p">)</span>
 
@@ -283,7 +297,10 @@
                      <span class="s1">&#39;-&#39;</span> <span class="o">+</span>
                      <span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
 
-            <span class="s1">&#39;storageName&#39;</span><span class="p">:</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;provision-options&#39;</span><span class="p">][</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">]</span>
+            <span class="s1">&#39;storageName&#39;</span><span class="p">:</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;mode&#39;</span><span class="p">][</span><span class="s1">&#39;provision-options&#39;</span><span class="p">][</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">]</span>
+                            <span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+            <span class="s1">&#39;dockerVersion&#39;</span><span class="p">:</span> <span class="n">CONST_DOCKER_VERSION</span><span class="p">,</span>
+            <span class="s1">&#39;functionsExtVersion&#39;</span><span class="p">:</span> <span class="n">CONST_FUNCTIONS_EXT_VERSION</span>
         <span class="p">}</span>
 
         <span class="k">if</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
