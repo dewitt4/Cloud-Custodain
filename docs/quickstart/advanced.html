@@ -89,6 +89,7 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Advanced Usage</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#running-against-multiple-regions">Running against multiple regions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#reporting-against-multiple-regions">Reporting against multiple regions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filtering-policy-execution-by-date">Filtering Policy Execution by Date</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#adding-custom-fields-to-reports">Adding custom fields to reports</a></li>
 </ul>
 </li>
@@ -237,6 +238,67 @@ multiple regions the same way as with the <code class="docutils literal notransl
 </div>
 <p>A region column will be added to reports generated that include multiple regions to
 indicate which region each row is from.</p>
+</div>
+<div class="section" id="filtering-policy-execution-by-date">
+<span id="scheduling-policy-execution"></span><h2>Filtering Policy Execution by Date<a class="headerlink" href="#filtering-policy-execution-by-date" title="Permalink to this headline">¶</a></h2>
+<p>Cloud Custodian can skip policies that are included in a policy file when running if
+the start and end date/times are before or after the current date-time respectively.
+To utilize this behavior, include the <code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, and <code class="docutils literal notranslate"><span class="pre">tz</span></code> attributes
+in the policy.</p>
+<p>If the current date and/or time is after the <code class="docutils literal notranslate"><span class="pre">start</span></code>  value and there is no <code class="docutils literal notranslate"><span class="pre">end</span></code>
+value, the policy will execute. Likewise, if the <code class="docutils literal notranslate"><span class="pre">end</span></code> value is after the current
+date and/or time and there is no <code class="docutils literal notranslate"><span class="pre">start</span></code> value, the policy will execute. Otherwise,
+the current date and/or time must fall between <code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> values for the
+policy to execute. In order to specify a timezone, a <code class="docutils literal notranslate"><span class="pre">tz</span></code> attribute must be
+specified. Otherwise, UTC will be used to perform the comparison.</p>
+<p>This allows you to continuously run the same policy file for different time periods,
+without having to update the policy file for specific days or times.</p>
+<p><strong>Note</strong>: Dates and/or times specified in <code class="docutils literal notranslate"><span class="pre">start</span></code> or <code class="docutils literal notranslate"><span class="pre">end</span></code> must not be offset-aware.
+The policy’s <code class="docutils literal notranslate"><span class="pre">tz</span></code> attribute will be applied to the <code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> values.
+If no <code class="docutils literal notranslate"><span class="pre">tz</span></code> attribute is specified, UTC is set by default.</p>
+<p><code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> attributes support the following formats:</p>
+<ul class="simple">
+<li>a date (example: <code class="docutils literal notranslate"><span class="pre">1-1-2018</span></code>, <code class="docutils literal notranslate"><span class="pre">January</span> <span class="pre">1</span> <span class="pre">2018</span></code>, <code class="docutils literal notranslate"><span class="pre">2018-1-1</span></code>)</li>
+<li>a offset-naive time with up to second precision (example: <code class="docutils literal notranslate"><span class="pre">2:03:01</span> <span class="pre">PM</span></code> <code class="docutils literal notranslate"><span class="pre">16:03:01</span></code>, <code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">AM</span></code>)</li>
+<li>a date and a offset-naive time with up to second precision (example: <code class="docutils literal notranslate"><span class="pre">1-1-2018</span> <span class="pre">2</span> <span class="pre">PM</span></code>, <code class="docutils literal notranslate"><span class="pre">January</span> <span class="pre">1</span> <span class="pre">2018</span> <span class="pre">14:00:00</span></code>)</li>
+</ul>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+
+  <span class="c1"># other compliance related policies that</span>
+  <span class="c1"># should always be running...</span>
+
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">holiday-break-stop</span>
+    <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+      <span class="no">This policy will stop all EC2 instances</span>
+      <span class="no">if the current date is between  12-15-2018</span>
+      <span class="no">to 12-31-2018 when the policy is run.</span>
+
+      <span class="no">Use this in conjunction with a cron job</span>
+      <span class="no">to ensure that the environment is fully</span>
+      <span class="no">turned off during the break.</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+    <span class="l l-Scalar l-Scalar-Plain">start</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2018-12-15</span>
+    <span class="l l-Scalar l-Scalar-Plain">end</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2018-12-31</span>
+    <span class="l l-Scalar l-Scalar-Plain">tz</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">utc</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:holiday-off-hours&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
+    <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
+
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">holiday-break-start</span>
+    <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+      <span class="no">This policy will start up all EC2 instances</span>
+      <span class="no">and only run on 1-1-2019.</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+    <span class="l l-Scalar l-Scalar-Plain">start</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2019-1-1</span>
+    <span class="l l-Scalar l-Scalar-Plain">end</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">2019-1-1 23:59:59</span>
+    <span class="l l-Scalar l-Scalar-Plain">tz</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">utc</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:holiday-off-hours&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
+    <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">start</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="adding-custom-fields-to-reports">
 <span id="report-custom-fields"></span><h2>Adding custom fields to reports<a class="headerlink" href="#adding-custom-fields-to-reports" title="Permalink to this headline">¶</a></h2>
