@@ -188,58 +188,127 @@
   <h1>Source code for c7n_gcp.output</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;</span>
 
-<span class="sd">Todo, provider policy execution initialization for outputs</span>
+<span class="sd">TODO: provider policy execution initialization for outputs</span>
 
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">tempfile</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
-<span class="c1"># TODO drop these grpc variants for the REST versions, and we can drop</span>
-<span class="c1"># protobuf/grpc deps, and also so we can record tests..</span>
-<span class="c1"># gcp has three different python sdks all independently maintained .. hmmm...</span>
-<span class="c1"># and random monkey shims on top of those :-(</span>
-
-<span class="kn">from</span> <span class="nn">google.cloud.monitoring_v3</span> <span class="k">import</span> <span class="n">MetricServiceClient</span>
-<span class="kn">from</span> <span class="nn">google.cloud.monitoring_v3.types</span> <span class="k">import</span> <span class="n">TimeSeries</span>
-<span class="kn">from</span> <span class="nn">google.cloud.logging</span> <span class="k">import</span> <span class="n">Client</span> <span class="k">as</span> <span class="n">LogClient</span>
-<span class="kn">from</span> <span class="nn">google.cloud.logging.handlers</span> <span class="k">import</span> <span class="n">CloudLoggingHandler</span>
-<span class="kn">from</span> <span class="nn">google.cloud.logging.resource</span> <span class="k">import</span> <span class="n">Resource</span>
-
-<span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">MetricsOutput</span><span class="p">,</span> <span class="n">LogOutput</span><span class="p">,</span> <span class="n">FSOutput</span><span class="p">,</span> <span class="n">blob_outputs</span>
+<span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">blob_outputs</span><span class="p">,</span>
+    <span class="n">FSOutput</span><span class="p">,</span>
+    <span class="n">metrics_outputs</span><span class="p">,</span>
+    <span class="n">MetricsOutput</span><span class="p">,</span>
+    <span class="n">LogOutput</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
 
-<div class="viewcode-block" id="StackDriverMonitoring"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMonitoring">[docs]</a><span class="k">class</span> <span class="nc">StackDriverMonitoring</span><span class="p">(</span><span class="n">MetricsOutput</span><span class="p">):</span>
+<div class="viewcode-block" id="StackDriverMetrics"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMetrics">[docs]</a><span class="nd">@metrics_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;gcp&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">StackDriverMetrics</span><span class="p">(</span><span class="n">MetricsOutput</span><span class="p">):</span>
 
-<div class="viewcode-block" id="StackDriverMonitoring.put_metric"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMonitoring.put_metric">[docs]</a>    <span class="k">def</span> <span class="nf">put_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
-        <span class="k">pass</span></div>
+    <span class="n">METRICS_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;custom.googleapis.com/custodian/policy&#39;</span>
 
-    <span class="k">def</span> <span class="nf">_format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
-        <span class="n">series</span> <span class="o">=</span> <span class="n">TimeSeries</span><span class="p">()</span>
+    <span class="n">DESCRIPTOR_COMMON</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;metricsKind&#39;</span><span class="p">:</span> <span class="s1">&#39;GAUGE&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;labels&#39;</span><span class="p">:</span> <span class="p">[{</span>
+            <span class="s1">&#39;key&#39;</span><span class="p">:</span> <span class="s1">&#39;policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;valueType&#39;</span><span class="p">:</span> <span class="s1">&#39;STRING&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Custodian Policy&#39;</span><span class="p">}],</span>
+    <span class="p">}</span>
 
-        <span class="n">series</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="s1">&#39;custom.googleapis.com/custodian/policy/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">key</span>
+    <span class="n">METRICS_DESCRIPTORS</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;resourcecount&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/%&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">METRICS_PREFIX</span><span class="p">,</span> <span class="s1">&#39;resourcecount&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;valueType&#39;</span><span class="p">:</span> <span class="s1">&#39;INT64&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;items&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Number of resources that matched the given policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;displayName&#39;</span><span class="p">:</span> <span class="s1">&#39;Resources&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;resourcetime&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">METRICS_PREFIX</span><span class="p">,</span> <span class="s1">&#39;resourcetime&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;valueType&#39;</span><span class="p">:</span> <span class="s1">&#39;DOUBLE&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;s&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Time to query the resources for a given policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;displayName&#39;</span><span class="p">:</span> <span class="s1">&#39;Query Time&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;actiontime&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">METRICS_PREFIX</span><span class="p">,</span> <span class="s1">&#39;actiontime&#39;</span><span class="p">),</span>
+            <span class="s1">&#39;valueType&#39;</span><span class="p">:</span> <span class="s1">&#39;DOUBLE&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;units&#39;</span><span class="p">:</span> <span class="s1">&#39;s&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Time to perform actions for a given policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;displayName&#39;</span><span class="p">:</span> <span class="s1">&#39;Action Time&#39;</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+    <span class="c1"># Custom metrics docs https://tinyurl.com/y8rrghwc</span>
 
-        <span class="c1"># Google controlled vocabulary with artificial limitations on resource type</span>
-        <span class="c1"># there&#39;s not uch useful we can utilize.</span>
-        <span class="n">series</span><span class="o">.</span><span class="n">resource</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="s1">&#39;global&#39;</span>
+    <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;c7n_gcp.metrics&#39;</span><span class="p">)</span>
 
-        <span class="c1"># series.resource.labels[&#39;project_id&#39;] =</span>
-        <span class="n">point</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">points</span><span class="o">.</span><span class="n">add</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">unit</span> <span class="o">==</span> <span class="s1">&#39;Count&#39;</span><span class="p">:</span>
-            <span class="n">point</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">int64</span> <span class="o">=</span> <span class="n">value</span>
-        <span class="k">elif</span> <span class="n">unit</span> <span class="o">==</span> <span class="s1">&#39;Seconds&#39;</span><span class="p">:</span>
-            <span class="n">point</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">double_value</span> <span class="o">=</span> <span class="n">value</span>
-        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-        <span class="n">point</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end_time</span><span class="o">.</span><span class="n">seconds</span> <span class="o">=</span> <span class="n">ns</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
-        <span class="n">point</span><span class="o">.</span><span class="n">interval</span><span class="o">.</span><span class="n">end_time</span><span class="o">.</span><span class="n">nanos</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">now</span> <span class="o">-</span> <span class="n">ns</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10</span><span class="o">**</span><span class="mi">9</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">series</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">StackDriverMetrics</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">()</span>
+
+<div class="viewcode-block" id="StackDriverMetrics.initialize"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMetrics.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;One time initialization of metrics descriptors.</span>
+
+<span class="sd">        # tbd - unclear if this adding significant value.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+            <span class="s1">&#39;monitoring&#39;</span><span class="p">,</span> <span class="s1">&#39;v3&#39;</span><span class="p">,</span> <span class="s1">&#39;projects.metricDescriptors&#39;</span><span class="p">)</span>
+        <span class="n">descriptor_map</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">n</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span> <span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;projects/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span>
+                <span class="s1">&#39;filter&#39;</span><span class="p">:</span> <span class="s1">&#39;metric.type=startswith(&quot;</span><span class="si">{}</span><span class="s1">&quot;)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">METRICS_PREFIX</span><span class="p">)})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;metricsDescriptors&#39;</span><span class="p">,</span> <span class="p">[])}</span>
+        <span class="n">created</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">METRICS_DESCRIPTORS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">descriptor_map</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">created</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="n">md</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">METRICS_DESCRIPTORS</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">DESCRIPTOR_COMMON</span><span class="p">)</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span>
+                <span class="s1">&#39;create&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;projects/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">,</span> <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="n">md</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="n">created</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Initializing StackDriver Metrics Descriptors&quot;</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">):</span>
+        <span class="c1"># Resource is a Google controlled vocabulary with artificial</span>
+        <span class="c1"># limitations on resource type there&#39;s not much useful we can</span>
+        <span class="c1"># utilize.</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_timestamp</span><span class="p">()</span>
+        <span class="n">metrics_series</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;metric&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;custom.googleapis.com/custodian/policy/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">key</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
+                <span class="s1">&#39;labels&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;policy&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="s1">&#39;project_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;metricKind&#39;</span><span class="p">:</span> <span class="s1">&#39;GAUGE&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;valueType&#39;</span><span class="p">:</span> <span class="s1">&#39;INT64&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;resource&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;global&#39;</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;points&#39;</span><span class="p">:</span> <span class="p">[{</span>
+                <span class="s1">&#39;interval&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;endTime&#39;</span><span class="p">:</span> <span class="n">now</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;Z&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;startTime&#39;</span><span class="p">:</span> <span class="n">now</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="s1">&#39;T&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;Z&#39;</span><span class="p">},</span>
+                <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;int64Value&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)}}]</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">metrics_series</span>
 
     <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">MetricServiceClient</span><span class="p">()</span>
-        <span class="n">client</span><span class="o">.</span><span class="n">create_time_series</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span></div>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;monitoring&#39;</span><span class="p">,</span> <span class="s1">&#39;v3&#39;</span><span class="p">,</span> <span class="s1">&#39;projects.timeSeries&#39;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s2">&quot;projects/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">project_id</span><span class="p">),</span>
+                  <span class="s1">&#39;body&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;timeSeries&#39;</span><span class="p">:</span> <span class="n">metrics</span><span class="p">}}</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">execute_command</span><span class="p">(</span><span class="s1">&#39;create&#39;</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="StackDriverLogging"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverLogging">[docs]</a><span class="k">class</span> <span class="nc">StackDriverLogging</span><span class="p">(</span><span class="n">LogOutput</span><span class="p">):</span>
@@ -247,6 +316,15 @@
 <div class="viewcode-block" id="StackDriverLogging.get_handler"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverLogging.get_handler">[docs]</a>    <span class="k">def</span> <span class="nf">get_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># gcp has three independent implementation of api bindings for python.</span>
         <span class="c1"># The one used by logging is not yet supported by our test recording.</span>
+
+        <span class="c1"># TODO drop these grpc variants for the REST versions, and we can drop</span>
+        <span class="c1"># protobuf/grpc deps, and also so we can record tests..</span>
+        <span class="c1"># gcp has three different python sdks all independently maintained .. hmmm...</span>
+        <span class="c1"># and random monkey shims on top of those :-(</span>
+
+        <span class="kn">from</span> <span class="nn">google.cloud.logging</span> <span class="k">import</span> <span class="n">Client</span> <span class="k">as</span> <span class="n">LogClient</span>
+        <span class="kn">from</span> <span class="nn">google.cloud.logging.handlers</span> <span class="k">import</span> <span class="n">CloudLoggingHandler</span>
+        <span class="kn">from</span> <span class="nn">google.cloud.logging.resource</span> <span class="k">import</span> <span class="n">Resource</span>
 
         <span class="n">log_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span>
         <span class="k">if</span> <span class="n">log_group</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;*&#39;</span><span class="p">):</span>

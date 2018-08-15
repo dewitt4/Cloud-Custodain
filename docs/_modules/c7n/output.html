@@ -225,10 +225,12 @@
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.output&#39;</span><span class="p">)</span>
 
 
+<span class="n">metrics_outputs</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.blob-outputs&#39;</span><span class="p">)</span>
 <span class="n">blob_outputs</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.blob-outputs&#39;</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="MetricsOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput">[docs]</a><span class="k">class</span> <span class="nc">MetricsOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="MetricsOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput">[docs]</a><span class="nd">@metrics_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;aws&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MetricsOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Send metrics data to cloudwatch</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
@@ -237,10 +239,13 @@
     <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,)))</span>
 
 <div class="viewcode-block" id="MetricsOutput.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.select">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">metrics_enabled</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">metrics_enabled</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">MetricsOutput</span>
-        <span class="k">return</span> <span class="n">NullMetricsOutput</span></div>
+    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">metrics_selector</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">NullMetricsOutput</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">metrics_outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">metrics_outputs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid metrics option </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">metrics_selector</span><span class="p">)</span></div>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="n">DEFAULT_NAMESPACE</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
@@ -264,7 +269,17 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-<div class="viewcode-block" id="MetricsOutput.put_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.put_metric">[docs]</a>    <span class="k">def</span> <span class="nf">put_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
+<div class="viewcode-block" id="MetricsOutput.put_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.put_metric">[docs]</a>    <span class="k">def</span> <span class="nf">put_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
+        <span class="n">point</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_metric</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">buffer</span><span class="p">:</span>
+            <span class="c1"># Max metrics in a single request</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="nf">_format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">):</span>
         <span class="n">d</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;MetricName&quot;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span>
             <span class="s2">&quot;Timestamp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_timestamp</span><span class="p">(),</span>
@@ -275,14 +290,7 @@
             <span class="p">{</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="s2">&quot;ResType&quot;</span><span class="p">,</span> <span class="s2">&quot;Value&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_type</span><span class="p">}]</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">d</span><span class="p">[</span><span class="s1">&#39;Dimensions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s2">&quot;Value&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">})</span>
-
-        <span class="k">if</span> <span class="n">buffer</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
-            <span class="c1"># Max metrics in a single request</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">,</span> <span class="p">[</span><span class="n">d</span><span class="p">])</span></div>
+        <span class="k">return</span> <span class="n">d</span>
 
     <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
         <span class="n">watch</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
