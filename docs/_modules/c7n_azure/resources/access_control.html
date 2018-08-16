@@ -201,6 +201,8 @@
 <span class="c1"># limitations under the License.</span>
 
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">six</span>
 
 <span class="kn">from</span> <span class="nn">azure.graphrbac</span> <span class="k">import</span> <span class="n">GraphRbacManagementClient</span>
 <span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span>
@@ -213,6 +215,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.config</span> <span class="k">import</span> <span class="n">Config</span>
 <span class="kn">from</span> <span class="nn">c7n.ctx</span> <span class="k">import</span> <span class="n">ExecutionContext</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.related</span> <span class="k">import</span> <span class="n">RelatedResourceFilter</span>
@@ -317,6 +320,21 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span></div></div>
 
 
+<div class="viewcode-block" id="is_scope"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.is_scope">[docs]</a><span class="k">def</span> <span class="nf">is_scope</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">scope_type</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scope</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="n">regex</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">scope_type</span> <span class="o">==</span> <span class="s2">&quot;subscription&quot;</span><span class="p">:</span>
+        <span class="n">regex</span> <span class="o">=</span> <span class="s2">&quot;^\/subscriptions\/[^\/]+$&quot;</span>
+    <span class="k">elif</span> <span class="n">scope_type</span> <span class="o">==</span> <span class="s2">&quot;resource-group&quot;</span><span class="p">:</span>
+        <span class="n">regex</span> <span class="o">=</span> <span class="s2">&quot;^\/subscriptions\/([^\/]+)\/resourceGroups\/.*$&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">))</span></div>
+
+
 <div class="viewcode-block" id="RoleFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleFilter">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;role&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">RoleFilter</span><span class="p">(</span><span class="n">RelatedResourceFilter</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Filters role assignments based on role definitions</span>
@@ -397,6 +415,31 @@
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span>
                 <span class="s2">&quot;The related resource can not be role assignments or role definitions&quot;</span>
             <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ScopeFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ScopeFilter">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;scope&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ScopeFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters role assignments that have subscription level scope access</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: assignments-with-subscription-scope</span>
+<span class="sd">                resource: azure.roleassignment</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: scope</span>
+<span class="sd">                    value: subscription</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;scope&#39;</span><span class="p">,</span>
+        <span class="n">value</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;subscription&#39;</span><span class="p">,</span> <span class="s1">&#39;resource-group&#39;</span><span class="p">]})</span>
+
+<div class="viewcode-block" id="ScopeFilter.process"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.ScopeFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">scope_value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="n">is_scope</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;properties&quot;</span><span class="p">][</span><span class="s2">&quot;scope&quot;</span><span class="p">],</span> <span class="n">scope_value</span><span class="p">)]</span></div></div>
 
 
 <div class="viewcode-block" id="DeleteAssignmentAction"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.DeleteAssignmentAction">[docs]</a><span class="nd">@RoleAssignment</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
