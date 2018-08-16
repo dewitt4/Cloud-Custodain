@@ -230,6 +230,9 @@
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">worker</span><span class="p">)</span>
 
+
+<span class="kn">from</span> <span class="nn">.ec2</span> <span class="k">import</span> <span class="n">deserialize_user_data</span>
+
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.asg&#39;</span><span class="p">)</span>
 
 <span class="n">filters</span> <span class="o">=</span> <span class="n">FilterRegistry</span><span class="p">(</span><span class="s1">&#39;asg.filters&#39;</span><span class="p">)</span>
@@ -1008,6 +1011,45 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">asgs</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;DesiredCapacity&#39;</span><span class="p">]</span> <span class="ow">or</span>
                 <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s1">&#39;Instances&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">a</span><span class="p">[</span><span class="s1">&#39;MinSize&#39;</span><span class="p">]]</span></div></div>
+
+
+<div class="viewcode-block" id="UserDataFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.UserDataFilter">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;user-data&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UserDataFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">,</span> <span class="n">LaunchConfigFilterBase</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;user-data&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="mi">50</span>
+    <span class="n">annotation</span> <span class="o">=</span> <span class="s1">&#39;c7n:user-data&#39;</span>
+
+<div class="viewcode-block" id="UserDataFilter.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.UserDataFilter.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="UserDataFilter.get_permissions"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.UserDataFilter.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;asg&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="UserDataFilter.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.UserDataFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">asgs</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Get list of autoscaling groups whose launch configs match the user-data filter.</span>
+<span class="sd">        Note: Since this is an autoscaling filter, this won&#39;t match unused launch configs.</span>
+<span class="sd">        :param launch_configs: List of launch configurations</span>
+<span class="sd">        :param event: Event</span>
+<span class="sd">        :return: List of ASG&#39;s with matching launch configs</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;&quot;c7n:user-data&quot;&#39;</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">UserDataFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">asgs</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">asg</span> <span class="ow">in</span> <span class="n">asgs</span><span class="p">:</span>
+            <span class="n">launch_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">configs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">asg</span><span class="p">[</span><span class="s1">&#39;LaunchConfigurationName&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">annotation</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">launch_config</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">launch_config</span><span class="p">[</span><span class="s1">&#39;UserData&#39;</span><span class="p">]:</span>
+                    <span class="n">asg</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">asg</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation</span><span class="p">]</span> <span class="o">=</span> <span class="n">deserialize_user_data</span><span class="p">(</span>
+                        <span class="n">launch_config</span><span class="p">[</span><span class="s1">&#39;UserData&#39;</span><span class="p">])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">asg</span><span class="p">):</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">asg</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">results</span></div></div>
 
 
 <div class="viewcode-block" id="Resize"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.Resize">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resize&#39;</span><span class="p">)</span>
@@ -1820,8 +1862,6 @@
 <div class="viewcode-block" id="DescribeLaunchConfig"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.DescribeLaunchConfig">[docs]</a><span class="k">class</span> <span class="nc">DescribeLaunchConfig</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">DescribeSource</span><span class="p">):</span>
 
 <div class="viewcode-block" id="DescribeLaunchConfig.augment"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.asg.DescribeLaunchConfig.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">r</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;UserData&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
