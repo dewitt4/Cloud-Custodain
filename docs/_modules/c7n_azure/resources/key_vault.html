@@ -200,7 +200,14 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">from</span> <span class="nn">azure.graphrbac</span> <span class="k">import</span> <span class="n">GraphRbacManagementClient</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">ValueFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">GraphHelper</span>
+
 <span class="kn">from</span> <span class="nn">c7n_azure.resources.arm</span> <span class="k">import</span> <span class="n">ArmResourceManager</span>
 
 
@@ -211,6 +218,56 @@
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;azure.mgmt.keyvault&#39;</span>
         <span class="n">client</span> <span class="o">=</span> <span class="s1">&#39;KeyVaultManagementClient&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;vaults&#39;</span><span class="p">,</span> <span class="s1">&#39;list&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="WhiteListFilter"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.key_vault.WhiteListFilter">[docs]</a><span class="nd">@KeyVault</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;whitelist&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">WhiteListFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;whitelist&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">graph_client</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">WhiteListFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op</span> <span class="o">=</span> <span class="s1">&#39;difference&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;accessPolicies&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">i</span><span class="p">:</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">()</span>
+            <span class="n">vault</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">vaults</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;resourceGroup&#39;</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+            <span class="c1"># Retrieve access policies for the keyvaults</span>
+            <span class="n">access_policies</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="n">vault</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">access_policies</span><span class="p">:</span>
+                <span class="n">access_policies</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;tenantId&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">tenant_id</span><span class="p">,</span>
+                    <span class="s1">&#39;objectId&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">object_id</span><span class="p">,</span>
+                    <span class="s1">&#39;applicationId&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">application_id</span><span class="p">,</span>
+                    <span class="s1">&#39;permissions&#39;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s1">&#39;keys&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">permissions</span><span class="o">.</span><span class="n">keys</span><span class="p">,</span>
+                        <span class="s1">&#39;secrets&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">permissions</span><span class="o">.</span><span class="n">secrets</span><span class="p">,</span>
+                        <span class="s1">&#39;certificates&#39;</span><span class="p">:</span> <span class="n">policy</span><span class="o">.</span><span class="n">permissions</span><span class="o">.</span><span class="n">certificates</span>
+                    <span class="p">}</span>
+                <span class="p">})</span>
+            <span class="c1"># Enhance access policies with display_name, object_type and principal_name</span>
+            <span class="n">i</span><span class="p">[</span><span class="s1">&#39;accessPolicies&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">enhance_policies</span><span class="p">(</span><span class="n">access_policies</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">WhiteListFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__call__</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<div class="viewcode-block" id="WhiteListFilter.enhance_policies"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.key_vault.WhiteListFilter.enhance_policies">[docs]</a>    <span class="k">def</span> <span class="nf">enhance_policies</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">access_policies</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">Session</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="s1">&#39;https://graph.windows.net&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">graph_client</span> <span class="o">=</span> <span class="n">GraphRbacManagementClient</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(),</span> <span class="n">s</span><span class="o">.</span><span class="n">get_tenant_id</span><span class="p">())</span>
+
+        <span class="c1"># Retrieve graph objects for all object_id</span>
+        <span class="n">object_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;objectId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">access_policies</span><span class="p">]</span>
+        <span class="c1"># GraphHelper.get_principal_dictionary returns empty AADObject if not found with graph</span>
+        <span class="c1"># or if graph is not available.</span>
+        <span class="n">principal_dics</span> <span class="o">=</span> <span class="n">GraphHelper</span><span class="o">.</span><span class="n">get_principal_dictionary</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_client</span><span class="p">,</span> <span class="n">object_ids</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">policy</span> <span class="ow">in</span> <span class="n">access_policies</span><span class="p">:</span>
+            <span class="n">aad_object</span> <span class="o">=</span> <span class="n">principal_dics</span><span class="p">[</span><span class="n">policy</span><span class="p">[</span><span class="s1">&#39;objectId&#39;</span><span class="p">]]</span>
+            <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;displayName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">aad_object</span><span class="o">.</span><span class="n">display_name</span>
+            <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;aadType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">aad_object</span><span class="o">.</span><span class="n">object_type</span>
+            <span class="n">policy</span><span class="p">[</span><span class="s1">&#39;principalName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">GraphHelper</span><span class="o">.</span><span class="n">get_principal_name</span><span class="p">(</span><span class="n">aad_object</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">access_policies</span></div></div>
 </pre></div>
 
            </div>

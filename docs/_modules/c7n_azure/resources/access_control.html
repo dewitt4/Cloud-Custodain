@@ -205,12 +205,11 @@
 <span class="kn">import</span> <span class="nn">six</span>
 
 <span class="kn">from</span> <span class="nn">azure.graphrbac</span> <span class="k">import</span> <span class="n">GraphRbacManagementClient</span>
-<span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">Azure</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">DescribeSource</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
-<span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">GraphHelper</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.config</span> <span class="k">import</span> <span class="n">Config</span>
@@ -253,36 +252,16 @@
             <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span>
             <span class="k">if</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]))</span>
 
-        <span class="n">object_params</span> <span class="o">=</span> <span class="n">GetObjectsParameters</span><span class="p">(</span>
-            <span class="n">include_directory_object_references</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">object_ids</span><span class="o">=</span><span class="n">object_ids</span><span class="p">)</span>
+        <span class="n">principal_dics</span> <span class="o">=</span> <span class="n">GraphHelper</span><span class="o">.</span><span class="n">get_principal_dictionary</span><span class="p">(</span><span class="n">graph_client</span><span class="p">,</span> <span class="n">object_ids</span><span class="p">)</span>
 
-        <span class="n">aad_objects</span> <span class="o">=</span> <span class="n">graph_client</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get_objects_by_object_ids</span><span class="p">(</span><span class="n">object_params</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">principal_dics</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">graph_resource</span> <span class="o">=</span> <span class="n">principal_dics</span><span class="p">[</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]]</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;principalName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">GraphHelper</span><span class="o">.</span><span class="n">get_principal_name</span><span class="p">(</span><span class="n">graph_resource</span><span class="p">)</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;displayName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">display_name</span>
+                <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;aadType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">object_type</span>
 
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">principal_dics</span> <span class="o">=</span> <span class="p">{</span><span class="n">aad_object</span><span class="o">.</span><span class="n">object_id</span><span class="p">:</span> <span class="n">aad_object</span> <span class="k">for</span> <span class="n">aad_object</span> <span class="ow">in</span> <span class="n">aad_objects</span><span class="p">}</span>
-
-            <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">principal_dics</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-                    <span class="n">graph_resource</span> <span class="o">=</span> <span class="n">principal_dics</span><span class="p">[</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;principalId&#39;</span><span class="p">]]</span>
-                    <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;principalName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_principal_name</span><span class="p">(</span><span class="n">graph_resource</span><span class="p">)</span>
-                    <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;displayName&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">display_name</span>
-                    <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;aadType&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_resource</span><span class="o">.</span><span class="n">object_type</span>
-
-        <span class="k">except</span> <span class="n">CloudError</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;Credentials not authorized for access to read from Microsoft Graph. </span><span class="se">\n</span><span class="s1"> &#39;</span>
-                        <span class="s1">&#39;Can not query on principalName, displayName, or aadType. </span><span class="se">\n</span><span class="s1">&#39;</span>
-                        <span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">resources</span></div>
-
-<div class="viewcode-block" id="RoleAssignment.get_principal_name"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleAssignment.get_principal_name">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">get_principal_name</span><span class="p">(</span><span class="n">graph_object</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span>
-        <span class="k">elif</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">display_name</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span></div></div>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
 <div class="viewcode-block" id="RoleDefinition"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.access_control.RoleDefinition">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;roledefinition&#39;</span><span class="p">)</span>

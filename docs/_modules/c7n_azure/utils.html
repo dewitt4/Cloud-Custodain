@@ -200,7 +200,11 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">six</span>
+
+<span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span><span class="p">,</span> <span class="n">AADObject</span>
+<span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
 
 
 <div class="viewcode-block" id="ResourceIdParser"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser">[docs]</a><span class="k">class</span> <span class="nc">ResourceIdParser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -258,6 +262,37 @@
     <span class="k">def</span> <span class="nf">sum</span><span class="p">(</span><span class="n">numbers</span><span class="p">):</span>
         <span class="n">clean_numbers</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">numbers</span> <span class="k">if</span> <span class="n">e</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
         <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">clean_numbers</span><span class="p">))</span></div></div>
+
+
+<div class="viewcode-block" id="GraphHelper"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.GraphHelper">[docs]</a><span class="k">class</span> <span class="nc">GraphHelper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.utils.GraphHelper&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="GraphHelper.get_principal_dictionary"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.GraphHelper.get_principal_dictionary">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_principal_dictionary</span><span class="p">(</span><span class="n">graph_client</span><span class="p">,</span> <span class="n">object_ids</span><span class="p">):</span>
+        <span class="n">object_params</span> <span class="o">=</span> <span class="n">GetObjectsParameters</span><span class="p">(</span>
+            <span class="n">include_directory_object_references</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">object_ids</span><span class="o">=</span><span class="n">object_ids</span><span class="p">)</span>
+
+        <span class="n">principal_dics</span> <span class="o">=</span> <span class="p">{</span><span class="n">object_id</span><span class="p">:</span> <span class="n">AADObject</span><span class="p">()</span> <span class="k">for</span> <span class="n">object_id</span> <span class="ow">in</span> <span class="n">object_ids</span><span class="p">}</span>
+
+        <span class="n">aad_objects</span> <span class="o">=</span> <span class="n">graph_client</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get_objects_by_object_ids</span><span class="p">(</span><span class="n">object_params</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">aad_object</span> <span class="ow">in</span> <span class="n">aad_objects</span><span class="p">:</span>
+                <span class="n">principal_dics</span><span class="p">[</span><span class="n">aad_object</span><span class="o">.</span><span class="n">object_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">aad_object</span>
+        <span class="k">except</span> <span class="n">CloudError</span><span class="p">:</span>
+            <span class="n">GraphHelper</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s1">&#39;Credentials not authorized for access to read from Microsoft Graph. </span><span class="se">\n</span><span class="s1"> &#39;</span>
+                <span class="s1">&#39;Can not query on principalName, displayName, or aadType. </span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">principal_dics</span></div>
+
+<div class="viewcode-block" id="GraphHelper.get_principal_name"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.GraphHelper.get_principal_name">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_principal_name</span><span class="p">(</span><span class="n">graph_object</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">user_principal_name</span>
+        <span class="k">elif</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">display_name</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span></div></div>
 </pre></div>
 
            </div>
