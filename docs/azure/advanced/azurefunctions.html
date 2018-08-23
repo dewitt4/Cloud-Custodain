@@ -122,6 +122,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#overview">Overview</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#provision-options">Provision Options</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#execution-options">Execution Options</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#event-grid-functions">Event Grid Functions</a></li>
 </ul>
 </li>
 </ul>
@@ -208,7 +209,8 @@
 <p>The Azure provider supports deploying policies into Azure Functions to allow
 them to run inexpensively in your subscription.</p>
 <p>Python support in Azure Functions V2 is in preview and this feature is still immature.</p>
-<p>Currently periodic (CRON) functions are supported and consumption pricing is not yet supported.</p>
+<p>Currently periodic (CRON) and Event Grid functions are supported, but consumption pricing is not
+yet supported.</p>
 <div class="section" id="provision-options">
 <h3>Provision Options<a class="headerlink" href="#provision-options" title="Permalink to this headline">¶</a></h3>
 <p>When deploying an Azure function the following ARM resources are required and created on demand:</p>
@@ -306,6 +308,32 @@ be provided on the command line in non-serverless scenarios.</p>
 </pre></div>
 </div>
 <p>More details on Blob Storage output are at <a class="reference internal" href="bloboutput.html#azure-bloboutput"><span class="std std-ref">Blob Storage Output</span></a></p>
+</div>
+<div class="section" id="event-grid-functions">
+<h3>Event Grid Functions<a class="headerlink" href="#event-grid-functions" title="Permalink to this headline">¶</a></h3>
+<p>Currently, support for event grid functions is at the subscription level and can listen to write and delete
+events. When deploying an event grid function, an Event Grid Subscription is created that triggers the Azure Function
+when any event is triggered in the subscription. Cloud custodian filters to the events you passed to your policy and
+ignores all other events.</p>
+<p>In order to subscribe on an event you need to provide the resource provider and the action, or provide the string
+of one of the <a class="reference external" href="https://github.com/capitalone/cloud-custodian/blob/master/tools/c7n_azure/c7n_azure/azure_events.py">shortcuts</a>.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">tag-key-vault-creator</span>
+      <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.keyvault</span>
+      <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure-event-grid</span>
+        <span class="l l-Scalar l-Scalar-Plain">events</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">[{</span>
+            <span class="nv">resourceProvider</span><span class="p p-Indicator">:</span> <span class="s">&#39;Microsoft.KeyVault/vaults&#39;</span><span class="p p-Indicator">,</span>
+            <span class="nv">event</span><span class="p p-Indicator">:</span> <span class="s">&#39;write&#39;</span>
+          <span class="p p-Indicator">}]</span>
+      <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="s">&quot;tag:CreatorEmail&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">null</span>
+      <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+        <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">auto-tag-user</span>
+          <span class="l l-Scalar l-Scalar-Plain">tag</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">CreatorEmail</span>
+          <span class="l l-Scalar l-Scalar-Plain">days</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">10</span>
+</pre></div>
+</div>
 </div>
 </div>
 </div>
