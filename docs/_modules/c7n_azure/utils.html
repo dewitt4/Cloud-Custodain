@@ -205,25 +205,36 @@
 
 <span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span><span class="p">,</span> <span class="n">AADObject</span>
 <span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
+<span class="kn">from</span> <span class="nn">msrestazure.tools</span> <span class="k">import</span> <span class="n">parse_resource_id</span>
 
 
 <div class="viewcode-block" id="ResourceIdParser"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser">[docs]</a><span class="k">class</span> <span class="nc">ResourceIdParser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
 <div class="viewcode-block" id="ResourceIdParser.get_namespace"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser.get_namespace">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">get_namespace</span><span class="p">(</span><span class="n">resource_id</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">resource_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">6</span><span class="p">]</span></div>
+        <span class="k">return</span> <span class="n">parse_resource_id</span><span class="p">(</span><span class="n">resource_id</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;namespace&#39;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="ResourceIdParser.get_resource_group"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser.get_resource_group">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">get_resource_group</span><span class="p">(</span><span class="n">resource_id</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">resource_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span></div>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">parse_resource_id</span><span class="p">(</span><span class="n">resource_id</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;resource_group&quot;</span><span class="p">)</span>
+        <span class="c1"># parse_resource_id fails to parse resource id for resource groups</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resource_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span></div>
 
 <div class="viewcode-block" id="ResourceIdParser.get_resource_type"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser.get_resource_type">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">get_resource_type</span><span class="p">(</span><span class="n">resource_id</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">resource_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">7</span><span class="p">]</span></div>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">parse_resource_id</span><span class="p">(</span><span class="n">resource_id</span><span class="p">)</span>
+        <span class="c1"># parse_resource_id returns dictionary with &quot;child_type_#&quot; to represent</span>
+        <span class="c1"># types sequence. &quot;type&quot; stores root type.</span>
+        <span class="n">child_type_keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">parsed</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;child_type_&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">types</span> <span class="o">=</span> <span class="p">[</span><span class="n">parsed</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">child_type_keys</span><span class="p">)]</span>
+        <span class="n">types</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">parsed</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">))</span>
+        <span class="k">return</span> <span class="s1">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">types</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="ResourceIdParser.get_resource_name"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.ResourceIdParser.get_resource_name">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">get_resource_name</span><span class="p">(</span><span class="n">resource_id</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">resource_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">8</span><span class="p">]</span></div></div>
+        <span class="k">return</span> <span class="n">parse_resource_id</span><span class="p">(</span><span class="n">resource_id</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resource_name&#39;</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="StringUtils"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.StringUtils">[docs]</a><span class="k">class</span> <span class="nc">StringUtils</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>

@@ -204,6 +204,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 
 <span class="kn">from</span> <span class="nn">azure.mgmt.resource.resources.models</span> <span class="k">import</span> <span class="n">GenericResource</span><span class="p">,</span> <span class="n">ResourceGroupPatchable</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.storage_utils</span> <span class="k">import</span> <span class="n">StorageUtilities</span>
@@ -218,6 +219,8 @@
 <span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
 <span class="kn">from</span> <span class="nn">c7n.resolver</span> <span class="k">import</span> <span class="n">ValuesFrom</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
+
+<span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.actions&#39;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="TagHelper"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagHelper">[docs]</a><span class="k">class</span> <span class="nc">TagHelper</span><span class="p">:</span>
@@ -255,7 +258,13 @@
                                                <span class="n">sku</span><span class="o">=</span><span class="n">az_resource</span><span class="o">.</span><span class="n">sku</span><span class="p">,</span>
                                                <span class="n">identity</span><span class="o">=</span><span class="n">az_resource</span><span class="o">.</span><span class="n">identity</span><span class="p">)</span>
 
-            <span class="n">client</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">update_by_id</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">api_version</span><span class="p">,</span> <span class="n">generic_resource</span><span class="p">)</span></div>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">update_by_id</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span> <span class="n">api_version</span><span class="p">,</span> <span class="n">generic_resource</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to update tags for the resource.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                          <span class="s2">&quot;Type: </span><span class="si">{0}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                          <span class="s2">&quot;Name: </span><span class="si">{1}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                          <span class="s2">&quot;Error: </span><span class="si">{2}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">))</span></div>
 
 <div class="viewcode-block" id="TagHelper.remove_tags"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagHelper.remove_tags">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">remove_tags</span><span class="p">(</span><span class="n">tag_action</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags_to_delete</span><span class="p">):</span>
