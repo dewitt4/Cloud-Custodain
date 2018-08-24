@@ -14,9 +14,9 @@
 
 from __future__ import print_function
 
-import boto3
 import click
 import yaml
+from c7n.credentials import assumed_session, SessionFactory
 
 ROLE_TEMPLATE = "arn:aws:iam::{Id}:role/OrganizationAccountAccessRole"
 
@@ -35,18 +35,20 @@ ROLE_TEMPLATE = "arn:aws:iam::{Id}:role/OrganizationAccountAccessRole"
 @click.option(
     '-f', '--output', type=click.File('w'),
     help="File to store the generated config (default stdout)")
-def main(role, ou, assume, profile, output, region):
+@click.option('-a', '--active', default=False, help="Get only active accounts", type=click.BOOL)
+def main(role, ou, assume, profile, output, region, active):
     """Generate a c7n-org accounts config file using AWS Organizations
 
     With c7n-org you can then run policies or arbitrary scripts across
     accounts.
     """
 
-    client = boto3.client('organizations')
+    session = get_session(assume, 'c7n-org', profile, region)
+    client = session.client('organizations')
     accounts = []
     for path in ou:
         ou = get_ou_from_path(client, path)
-        accounts.extend(get_accounts_for_ou(client, ou))
+        accounts.extend(get_accounts_for_ou(client, ou, active))
 
     results = []
     for a in accounts:
@@ -70,6 +72,13 @@ def main(role, ou, assume, profile, output, region):
             {'accounts': results},
             default_flow_style=False),
         file=output)
+
+
+def get_session(role, session_name, profile, region):
+    if role:
+        return assumed_session(role, session_name, region=region)
+    else:
+        return SessionFactory(region, profile)()
 
 
 def get_ou_from_path(client, path):
@@ -109,7 +118,7 @@ def get_sub_ous(client, ou):
     return results
 
 
-def get_accounts_for_ou(client, ou, recursive=True):
+def get_accounts_for_ou(client, ou, active, recursive=True):
     results = []
     ous = [ou]
     if recursive:
@@ -121,8 +130,11 @@ def get_accounts_for_ou(client, ou, recursive=True):
             ParentId=ou['Id']).build_full_result().get(
                 'Accounts', []):
             a['Path'] = ou['Path']
-            results.append(a)
-
+            if active:
+                if a['Status'] == 'ACTIVE':
+                    results.append(a)
+            else:
+                results.append(a)
     return results
 
 
