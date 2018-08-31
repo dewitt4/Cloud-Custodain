@@ -627,15 +627,23 @@
                 <span class="n">methods</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">default</span><span class="p">,</span> <span class="n">select</span><span class="p">))</span>
                 <span class="k">continue</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
-                    <span class="n">b</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;c7n:DeniedMethods&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                     <span class="s2">&quot;Bucket:</span><span class="si">%s</span><span class="s2"> unable to invoke method:</span><span class="si">%s</span><span class="s2"> error:</span><span class="si">%s</span><span class="s2"> &quot;</span><span class="p">,</span>
                     <span class="n">b</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Message&#39;</span><span class="p">])</span>
-                <span class="c1"># We don&#39;t bail out, continue processing if we can.</span>
+                <span class="c1"># For auth failures, we don&#39;t bail out, continue processing if we can.</span>
                 <span class="c1"># Note this can lead to missing data, but in general is cleaner than</span>
-                <span class="c1"># failing hard.</span>
-                <span class="k">continue</span>
+                <span class="c1"># failing hard, due to the common use of locked down s3 bucket policies</span>
+                <span class="c1"># that may cause issues fetching information across a fleet of buckets.</span>
+
+                <span class="c1"># This does mean s3 policies depending on augments should check denied</span>
+                <span class="c1"># methods annotation, generally though lacking get access to an augment means</span>
+                <span class="c1"># they won&#39;t have write access either.</span>
+
+                <span class="c1"># For other error types we raise and bail policy execution.</span>
+                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;AccessDenied&#39;</span><span class="p">:</span>
+                    <span class="n">b</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;c7n:DeniedMethods&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+                    <span class="k">continue</span>
+                <span class="k">raise</span>
         <span class="c1"># As soon as we learn location (which generally works)</span>
         <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s1">&#39;Location&#39;</span> <span class="ow">and</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">b_location</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LocationConstraint&#39;</span><span class="p">)</span>
