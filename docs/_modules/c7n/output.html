@@ -218,7 +218,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
 <span class="kn">from</span> <span class="nn">c7n.log</span> <span class="k">import</span> <span class="n">CloudWatchLogHandler</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">get_retry</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">get_retry</span>
 
 <span class="n">DEFAULT_NAMESPACE</span> <span class="o">=</span> <span class="s2">&quot;CloudMaid&quot;</span>
 
@@ -237,6 +237,8 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cloudWatch:PutMetricData&quot;</span><span class="p">,)</span>
 
     <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,)))</span>
+
+    <span class="n">BUFFER_SIZE</span> <span class="o">=</span> <span class="mi">20</span>
 
 <div class="viewcode-block" id="MetricsOutput.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.select">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">):</span>
@@ -259,7 +261,7 @@
 <span class="sd">        To disable this and use the system&#39;s time zone, C7N_METRICS_TZ shoule be set to FALSE.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;C7N_METRICS_TZ&quot;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;TRUE&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;C7N_METRICS_TZ&quot;</span><span class="p">,</span> <span class="s1">&#39;TRUE&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;TRUE&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span></div>
@@ -294,8 +296,9 @@
 
     <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
         <span class="n">watch</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-            <span class="n">watch</span><span class="o">.</span><span class="n">put_metric_data</span><span class="p">,</span> <span class="n">Namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">MetricData</span><span class="o">=</span><span class="n">metrics</span><span class="p">)</span></div>
+        <span class="k">for</span> <span class="n">metric_values</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BUF_SIZE</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">watch</span><span class="o">.</span><span class="n">put_metric_data</span><span class="p">,</span> <span class="n">Namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">MetricData</span><span class="o">=</span><span class="n">metrics</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="NullMetricsOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullMetricsOutput">[docs]</a><span class="k">class</span> <span class="nc">NullMetricsOutput</span><span class="p">(</span><span class="n">MetricsOutput</span><span class="p">):</span>
