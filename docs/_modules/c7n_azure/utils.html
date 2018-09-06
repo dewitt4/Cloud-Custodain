@@ -199,8 +199,10 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">collections</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
 <span class="kn">import</span> <span class="nn">six</span>
 
 <span class="kn">from</span> <span class="nn">azure.graphrbac.models</span> <span class="k">import</span> <span class="n">GetObjectsParameters</span><span class="p">,</span> <span class="n">AADObject</span>
@@ -304,6 +306,135 @@
         <span class="k">elif</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">service_principal_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">graph_object</span><span class="o">.</span><span class="n">display_name</span> <span class="ow">or</span> <span class="s1">&#39;&#39;</span></div></div>
+
+
+<div class="viewcode-block" id="PortsRangeHelper"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper">[docs]</a><span class="k">class</span> <span class="nc">PortsRangeHelper</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">PortsRange</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;PortsRange&#39;</span><span class="p">,</span> <span class="s1">&#39;start end&#39;</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_port_range</span><span class="p">(</span><span class="n">range_str</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Given a string with a port or port range: &#39;80&#39;, &#39;80-120&#39;</span>
+<span class="sd">            Returns tuple with range start and end ports: (80, 80), (80, 120)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">range_str</span> <span class="o">==</span> <span class="s1">&#39;*&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">PortsRange</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="mi">65535</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">range_str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">PortsRange</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">end</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+        <span class="k">return</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">PortsRange</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">end</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_string_port_ranges</span><span class="p">(</span><span class="n">ports</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Extracts ports ranges from the string</span>
+<span class="sd">            Returns an array of PortsRange tuples</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_port_range</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ports</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_rule_port_ranges</span><span class="p">(</span><span class="n">rule</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Extracts ports ranges from the NSG rule object</span>
+<span class="sd">            Returns an array of PortsRange tuples</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">properties</span> <span class="o">=</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s1">&#39;destinationPortRange&#39;</span> <span class="ow">in</span> <span class="n">properties</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_port_range</span><span class="p">(</span><span class="n">properties</span><span class="p">[</span><span class="s1">&#39;destinationPortRange&#39;</span><span class="p">])]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[</span><span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_port_range</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">properties</span><span class="p">[</span><span class="s1">&#39;destinationPortRanges&#39;</span><span class="p">]]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_port_ranges_to_set</span><span class="p">(</span><span class="n">ranges</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Converts array of port ranges to the set of integers</span>
+<span class="sd">            Example: [(10-12), (20,20)] -&gt; {10, 11, 12, 20}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">set</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ranges</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">end</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)])</span>
+
+<div class="viewcode-block" id="PortsRangeHelper.validate_ports_string"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper.validate_ports_string">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">validate_ports_string</span><span class="p">(</span><span class="n">ports</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Validate that provided string has proper port numbers:</span>
+<span class="sd">            1. port number &lt; 65535</span>
+<span class="sd">            2. range start &lt; range end</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;^</span><span class="se">\\</span><span class="s1">d+(-</span><span class="se">\\</span><span class="s1">d+)?(,</span><span class="se">\\</span><span class="s1">d+(-</span><span class="se">\\</span><span class="s1">d+)?)*$&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">ports</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">ranges</span> <span class="o">=</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_string_port_ranges</span><span class="p">(</span><span class="n">ports</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ranges</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;</span> <span class="n">r</span><span class="o">.</span><span class="n">end</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">start</span> <span class="o">&gt;</span> <span class="mi">65535</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">end</span> <span class="o">&gt;</span> <span class="mi">65535</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+<div class="viewcode-block" id="PortsRangeHelper.get_ports_set_from_string"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper.get_ports_set_from_string">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_ports_set_from_string</span><span class="p">(</span><span class="n">ports</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Convert ports range string to the set of integers</span>
+<span class="sd">            Example: &quot;10-12, 20&quot; -&gt; {10, 11, 12, 20}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ranges</span> <span class="o">=</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_string_port_ranges</span><span class="p">(</span><span class="n">ports</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_port_ranges_to_set</span><span class="p">(</span><span class="n">ranges</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PortsRangeHelper.get_ports_set_from_rule"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper.get_ports_set_from_rule">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_ports_set_from_rule</span><span class="p">(</span><span class="n">rule</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Extract port ranges from NSG rule and convert it to the set of integers</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ranges</span> <span class="o">=</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_get_rule_port_ranges</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">_port_ranges_to_set</span><span class="p">(</span><span class="n">ranges</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="PortsRangeHelper.get_ports_strings_from_list"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper.get_ports_strings_from_list">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_ports_strings_from_list</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Transform a list of port numbers to the list of strings with port ranges</span>
+<span class="sd">            Example: [10, 12, 13, 14, 15] -&gt; [&#39;10&#39;, &#39;12-15&#39;]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="c1"># Transform diff_ports list to the ranges list</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">it</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">data</span><span class="p">[</span><span class="n">first</span><span class="p">]</span> <span class="o">==</span> <span class="n">data</span><span class="p">[</span><span class="n">it</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">it</span> <span class="o">-</span> <span class="n">first</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">PortsRange</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="n">first</span><span class="p">],</span> <span class="n">end</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="n">it</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]))</span>
+            <span class="n">first</span> <span class="o">=</span> <span class="n">it</span>
+
+        <span class="c1"># Update tuples with strings, representing ranges</span>
+        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">PortsRange</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="n">first</span><span class="p">],</span> <span class="n">end</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">start</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">start</span> <span class="o">==</span> <span class="n">x</span><span class="o">.</span><span class="n">end</span> <span class="k">else</span> <span class="s2">&quot;</span><span class="si">%i</span><span class="s2">-</span><span class="si">%i</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">end</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span></div>
+
+<div class="viewcode-block" id="PortsRangeHelper.build_ports_dict"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.utils.PortsRangeHelper.build_ports_dict">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">build_ports_dict</span><span class="p">(</span><span class="n">nsg</span><span class="p">,</span> <span class="n">direction_key</span><span class="p">,</span> <span class="n">ip_protocol</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Build entire ports array filled with True (Allow), False (Deny) and None(default - Deny)</span>
+<span class="sd">            based on the provided Network Security Group object, direction and protocol.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="n">nsg</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;securityRules&#39;</span><span class="p">]</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">rules</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="n">k</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;priority&#39;</span><span class="p">])</span>
+        <span class="n">ports</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+            <span class="c1"># Skip rules with different direction</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">StringUtils</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">direction_key</span><span class="p">,</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;direction&#39;</span><span class="p">]):</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># Check the protocol: possible values are &#39;TCP&#39;, &#39;UDP&#39;, &#39;*&#39; (both)</span>
+            <span class="c1"># Skip only if rule and ip_protocol are &#39;TCP&#39;/&#39;UDP&#39; pair.</span>
+            <span class="n">protocol</span> <span class="o">=</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;protocol&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">StringUtils</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">protocol</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">)</span> <span class="ow">and</span> \
+               <span class="ow">not</span> <span class="n">StringUtils</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">ip_protocol</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">)</span> <span class="ow">and</span> \
+               <span class="ow">not</span> <span class="n">StringUtils</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">protocol</span><span class="p">,</span> <span class="n">ip_protocol</span><span class="p">):</span>
+                <span class="k">continue</span>
+
+            <span class="n">IsAllowed</span> <span class="o">=</span> <span class="n">StringUtils</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">rule</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;access&#39;</span><span class="p">],</span> <span class="s1">&#39;allow&#39;</span><span class="p">)</span>
+            <span class="n">ports_set</span> <span class="o">=</span> <span class="n">PortsRangeHelper</span><span class="o">.</span><span class="n">get_ports_set_from_rule</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ports_set</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">p</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ports</span><span class="p">:</span>
+                    <span class="n">ports</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">IsAllowed</span>
+
+        <span class="k">return</span> <span class="n">ports</span></div></div>
 </pre></div>
 
            </div>
