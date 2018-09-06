@@ -217,7 +217,7 @@
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">EventAction</span>
 <span class="kn">from</span> <span class="nn">c7n.cwe</span> <span class="k">import</span> <span class="n">CloudWatchEvents</span>
 <span class="kn">from</span> <span class="nn">c7n.ctx</span> <span class="k">import</span> <span class="n">ExecutionContext</span>
-<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span><span class="p">,</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span><span class="p">,</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">ResourceLimitExceeded</span>
 <span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">DEFAULT_NAMESPACE</span>
 <span class="kn">from</span> <span class="nn">c7n.resources</span> <span class="k">import</span> <span class="n">load_resources</span>
 <span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
@@ -426,7 +426,14 @@
                 <span class="n">version</span><span class="p">)</span>
 
             <span class="n">s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-            <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">resources</span><span class="p">()</span>
+            <span class="k">except</span> <span class="n">ResourceLimitExceeded</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
+                    <span class="s1">&#39;ResourceLimitExceeded&#39;</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">selection_count</span><span class="p">,</span> <span class="s2">&quot;Count&quot;</span><span class="p">)</span>
+                <span class="k">raise</span>
+
             <span class="n">rt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">s</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> resource:</span><span class="si">%s</span><span class="s2"> region:</span><span class="si">%s</span><span class="s2"> count:</span><span class="si">%d</span><span class="s2"> time:</span><span class="si">%0.2f</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
@@ -443,13 +450,6 @@
 
             <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[]</span>
-            <span class="k">elif</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">max_resources</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
-                  <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">max_resources</span><span class="p">):</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;policy </span><span class="si">%s</span><span class="s2"> matched </span><span class="si">%d</span><span class="s2"> resources max resources </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">max_resources</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
-                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">dryrun</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;dryrun: skipping actions&quot;</span><span class="p">)</span>
@@ -922,6 +922,10 @@
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">max_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max-resources&#39;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">max_resources_percent</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max-resources-percent&#39;</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>

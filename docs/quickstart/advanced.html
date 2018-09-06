@@ -90,6 +90,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#running-against-multiple-regions">Running against multiple regions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#reporting-against-multiple-regions">Reporting against multiple regions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#filtering-policy-execution-by-date">Filtering Policy Execution by Date</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#limiting-how-many-resources-custodian-affects">Limiting how many resources custodian affects</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#adding-custom-fields-to-reports">Adding custom fields to reports</a></li>
 </ul>
 </li>
@@ -199,6 +200,7 @@
 <li><a class="reference internal" href="#run-multiple-regions"><span class="std std-ref">Running against multiple regions</span></a></li>
 <li><a class="reference internal" href="#report-multiple-regions"><span class="std std-ref">Reporting against multiple regions</span></a></li>
 <li><a class="reference internal" href="#report-custom-fields"><span class="std std-ref">Adding custom fields to reports</span></a></li>
+<li><a class="reference internal" href="#policy-resource-limits"><span class="std std-ref">Limiting how many resources custodian affects</span></a></li>
 </ul>
 <div class="section" id="running-against-multiple-regions">
 <span id="run-multiple-regions"></span><h2>Running against multiple regions<a class="headerlink" href="#running-against-multiple-regions" title="Permalink to this headline">¶</a></h2>
@@ -299,6 +301,44 @@ If no <code class="docutils literal notranslate"><span class="pre">tz</span></co
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">start</span>
 </pre></div>
 </div>
+</div>
+<div class="section" id="limiting-how-many-resources-custodian-affects">
+<span id="policy-resource-limits"></span><h2>Limiting how many resources custodian affects<a class="headerlink" href="#limiting-how-many-resources-custodian-affects" title="Permalink to this headline">¶</a></h2>
+<p>Custodian by default will operate on as many resources exist within an
+environment that match a policy’s filters. Custodian also allows policy
+authors to stop policy execution if a policy affects more resources then
+expected, either as a number of resources or as a percentage of total extant
+resources.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">log-delete</span>
+    <span class="l l-Scalar l-Scalar-Plain">description</span><span class="p p-Indicator">:</span> <span class="p p-Indicator">|</span>
+      <span class="no">This policy will delete all log groups</span>
+      <span class="no">that haven&#39;t been written to in 5 days.</span>
+
+      <span class="no">As a safety belt, it will stop execution</span>
+      <span class="no">if the number of log groups that would</span>
+      <span class="no">be affected is more than 5% of the total</span>
+      <span class="no">log groups in the account&#39;s region.</span>
+    <span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.log-group</span>
+    <span class="l l-Scalar l-Scalar-Plain">max-resources-percent</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">5</span>
+    <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">last-write</span>
+        <span class="l l-Scalar l-Scalar-Plain">days</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">5</span>
+    <span class="l l-Scalar l-Scalar-Plain">actions</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">delete</span>
+</pre></div>
+</div>
+<p>Max resources can also be specified as an absolute number using
+<cite>max-resources</cite> specified on a policy. When executing if the limit
+is exceeded, policy execution is stopped before taking any actions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ custodian run -s out policy.yml
+custodian.commands:ERROR policy: log-delete exceeded resource limit: 2.5% found: 1 total: 1
+</pre></div>
+</div>
+<p>If metrics are being published (‘-m/–metrics-enabled’) then an additional
+metric named <cite>ResourceLimitExceeded</cite> will be published with the number
+of resources that matched the policy.</p>
 </div>
 <div class="section" id="adding-custom-fields-to-reports">
 <span id="report-custom-fields"></span><h2>Adding custom fields to reports<a class="headerlink" href="#adding-custom-fields-to-reports" title="Permalink to this headline">¶</a></h2>

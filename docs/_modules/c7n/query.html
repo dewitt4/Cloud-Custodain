@@ -217,7 +217,7 @@
 <span class="kn">from</span> <span class="nn">botocore.paginate</span> <span class="k">import</span> <span class="n">set_value_from_jmespath</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span>
-<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">ClientError</span><span class="p">,</span> <span class="n">ResourceLimitExceeded</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">MetricsFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">ResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
@@ -606,8 +606,34 @@
             <span class="n">query</span> <span class="o">=</span> <span class="p">{}</span>
 
         <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">resources</span><span class="p">(</span><span class="n">query</span><span class="p">))</span>
+        <span class="n">resource_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">resources</span><span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
+        <span class="n">resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_resources</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
+        <span class="c1"># Check if we&#39;re out of a policies execution limits.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_resource_limit</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="n">resource_count</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resources</span></div>
+
+<div class="viewcode-block" id="QueryResourceManager.check_resource_limit"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.query.QueryResourceManager.check_resource_limit">[docs]</a>    <span class="k">def</span> <span class="nf">check_resource_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">selection_count</span><span class="p">,</span> <span class="n">population_count</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check if policy&#39;s execution affects more resources then its limit.</span>
+
+<span class="sd">        Ideally this would be at a higher level but we&#39;ve hidden</span>
+<span class="sd">        filtering behind the resource manager facade for default usage.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">max_resources</span> <span class="ow">and</span> <span class="n">p</span><span class="o">.</span><span class="n">max_resources</span> <span class="o">&gt;</span> <span class="n">selection_count</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ResourceLimitExceeded</span><span class="p">(</span>
+                <span class="p">(</span><span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> exceeded resource limit: </span><span class="si">{limit}</span><span class="s2"> &quot;</span>
+                 <span class="s2">&quot;found: </span><span class="si">{selection_count}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="o">%</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="s2">&quot;max-resources&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">max_resources</span><span class="p">,</span> <span class="n">selection_count</span><span class="p">,</span> <span class="n">population_count</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">p</span><span class="o">.</span><span class="n">max_resources_percent</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">population_count</span> <span class="o">*</span> <span class="p">(</span>
+                    <span class="n">p</span><span class="o">.</span><span class="n">max_resources_percent</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">selection_count</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">ResourceLimitExceeded</span><span class="p">(</span>
+                    <span class="p">(</span><span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> exceeded resource limit: </span><span class="si">{limit}%%</span><span class="s2"> &quot;</span>
+                     <span class="s2">&quot;found: </span><span class="si">{selection_count}</span><span class="s2"> total: </span><span class="si">{population_count}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="o">%</span> <span class="n">p</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="s2">&quot;max-percent&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">max_resources_percent</span><span class="p">,</span> <span class="n">selection_count</span><span class="p">,</span> <span class="n">population_count</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
 
     <span class="k">def</span> <span class="nf">_get_cached_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span>
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_key</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
