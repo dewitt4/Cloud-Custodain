@@ -202,6 +202,7 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">os</span>
 
 <span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">FSOutput</span><span class="p">,</span> <span class="n">MetricsOutput</span><span class="p">,</span> <span class="n">CloudWatchLogOutput</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">reset_session_cache</span>
@@ -247,8 +248,12 @@
 
     <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-        <span class="c1"># clear policy execution thread local session cache</span>
-        <span class="n">reset_session_cache</span><span class="p">()</span>
+        <span class="c1"># Clear policy execution thread local session cache if running in tests.</span>
+        <span class="c1"># IMPORTANT: multi-account execution (c7n-org and others) need to manually reset this.</span>
+        <span class="c1"># Why: Not doing this means we get excessive memory usage from client</span>
+        <span class="c1"># reconstruction.</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;C7N_TEST_RUN&#39;</span><span class="p">):</span>
+            <span class="n">reset_session_cache</span><span class="p">()</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span> <span class="o">=</span> <span class="kc">None</span>
