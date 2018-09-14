@@ -321,8 +321,9 @@
 
 
 <span class="k">def</span> <span class="nf">_describe_appelb_tags</span><span class="p">(</span><span class="n">albs</span><span class="p">,</span> <span class="n">session_factory</span><span class="p">,</span> <span class="n">executor_factory</span><span class="p">,</span> <span class="n">retry</span><span class="p">):</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+
     <span class="k">def</span> <span class="nf">_process_tags</span><span class="p">(</span><span class="n">alb_set</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
         <span class="n">alb_map</span> <span class="o">=</span> <span class="p">{</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]:</span> <span class="n">alb</span> <span class="k">for</span> <span class="n">alb</span> <span class="ow">in</span> <span class="n">alb_set</span><span class="p">}</span>
 
         <span class="n">results</span> <span class="o">=</span> <span class="n">retry</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">describe_tags</span><span class="p">,</span> <span class="n">ResourceArns</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">alb_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
@@ -678,11 +679,11 @@
         <span class="s2">&quot;elasticloadbalancing:ModifyLoadBalancerAttributes&quot;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="AppELBDeleteAction.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBDeleteAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">load_balancers</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_alb</span><span class="p">,</span> <span class="n">load_balancers</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="AppELBDeleteAction.process_alb"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBDeleteAction.process_alb">[docs]</a>    <span class="k">def</span> <span class="nf">process_alb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alb</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">lb</span> <span class="ow">in</span> <span class="n">load_balancers</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_alb</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">lb</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AppELBDeleteAction.process_alb"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBDeleteAction.process_alb">[docs]</a>    <span class="k">def</span> <span class="nf">process_alb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">alb</span><span class="p">):</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;force&#39;</span><span class="p">):</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">modify_load_balancer_attributes</span><span class="p">(</span>
@@ -693,14 +694,12 @@
                     <span class="p">}])</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">delete_load_balancer</span><span class="p">,</span> <span class="n">LoadBalancerArn</span><span class="o">=</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">])</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;OperationNotPermitted&#39;</span><span class="p">,</span>
-                                               <span class="s1">&#39;LoadBalancerNotFound&#39;</span><span class="p">]:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                    <span class="s2">&quot;Exception trying to delete ALB: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
-                <span class="k">return</span>
-            <span class="k">raise</span></div></div>
+        <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">LoadBalancerNotFoundException</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">OperationNotPermittedException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Exception trying to delete ALB: </span><span class="si">%s</span><span class="s2"> error: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="AppELBListenerFilterBase"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBListenerFilterBase">[docs]</a><span class="k">class</span> <span class="nc">AppELBListenerFilterBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -709,16 +708,12 @@
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;elasticloadbalancing:DescribeListeners&quot;</span><span class="p">,)</span>
 
 <div class="viewcode-block" id="AppELBListenerFilterBase.initialize"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBListenerFilterBase.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
-        <span class="k">def</span> <span class="nf">_process_listeners</span><span class="p">(</span><span class="n">alb</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">alb</span> <span class="ow">in</span> <span class="n">albs</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_listeners</span><span class="p">(</span>
                 <span class="n">LoadBalancerArn</span><span class="o">=</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">])</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span><span class="p">[</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Listeners&#39;</span><span class="p">]</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_process_listeners</span><span class="p">,</span> <span class="n">albs</span><span class="p">))</span></div></div>
+            <span class="bp">self</span><span class="o">.</span><span class="n">listener_map</span><span class="p">[</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Listeners&#39;</span><span class="p">]</span></div></div>
 
 
 <div class="viewcode-block" id="parse_attribute_value"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.parse_attribute_value">[docs]</a><span class="k">def</span> <span class="nf">parse_attribute_value</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
@@ -736,12 +731,11 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="AppELBAttributeFilterBase.initialize"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBAttributeFilterBase.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+
         <span class="k">def</span> <span class="nf">_process_attributes</span><span class="p">(</span><span class="n">alb</span><span class="p">):</span>
             <span class="k">if</span> <span class="s1">&#39;Attributes&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">alb</span><span class="p">:</span>
                 <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-
-                <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
                 <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_load_balancer_attributes</span><span class="p">(</span>
                     <span class="n">LoadBalancerArn</span><span class="o">=</span><span class="n">alb</span><span class="p">[</span><span class="s1">&#39;LoadBalancerArn&#39;</span><span class="p">])</span>
                 <span class="c1"># flatten out the list of dicts and cast</span>
@@ -1082,8 +1076,9 @@
                 <span class="s2">&quot;elasticloadbalancing:DescribeTags&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AppELBTargetGroup.augment"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroup.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_groups</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+
         <span class="k">def</span> <span class="nf">_describe_target_group_health</span><span class="p">(</span><span class="n">target_group</span><span class="p">):</span>
-            <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_target_health</span><span class="p">(</span>
                 <span class="n">TargetGroupArn</span><span class="o">=</span><span class="n">target_group</span><span class="p">[</span><span class="s1">&#39;TargetGroupArn&#39;</span><span class="p">])</span>
             <span class="n">target_group</span><span class="p">[</span><span class="s1">&#39;TargetHealthDescriptions&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span>
@@ -1255,12 +1250,12 @@
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;elasticloadbalancing:DeleteTargetGroup&#39;</span><span class="p">,)</span>
 
-<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_targetgroup</span><span class="p">,</span> <span class="n">target_group</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process_targetgroup"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process_targetgroup">[docs]</a>    <span class="k">def</span> <span class="nf">process_targetgroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
+<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;elbv2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">tg</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">process_target_group</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">tg</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="AppELBTargetGroupDeleteAction.process_target_group"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBTargetGroupDeleteAction.process_target_group">[docs]</a>    <span class="k">def</span> <span class="nf">process_target_group</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">target_group</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
             <span class="n">client</span><span class="o">.</span><span class="n">delete_target_group</span><span class="p">,</span>
             <span class="n">TargetGroupArn</span><span class="o">=</span><span class="n">target_group</span><span class="p">[</span><span class="s1">&#39;TargetGroupArn&#39;</span><span class="p">])</span></div></div>
