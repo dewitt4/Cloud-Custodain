@@ -188,7 +188,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n.resources.appelb</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2016-2017 Capital One Services, LLC</span>
+<span></span><span class="c1"># Copyright 2016-2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -209,6 +209,7 @@
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">itertools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">six</span>
 
 <span class="kn">from</span> <span class="nn">collections</span> <span class="k">import</span> <span class="n">defaultdict</span>
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
@@ -240,15 +241,13 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="AppELB.resource_type"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELB.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;elbv2&#39;</span>
         <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;loadbalancer/app&#39;</span>
-
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;describe_load_balancers&#39;</span><span class="p">,</span> <span class="s1">&#39;LoadBalancers&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;LoadBalancerName&#39;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s1">&#39;LoadBalancerArn&#39;</span>
-        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">filter_type</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s2">&quot;Names&quot;</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="s2">&quot;list&quot;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="s2">&quot;LoadBalancer&quot;</span>
         <span class="n">date</span> <span class="o">=</span> <span class="s1">&#39;CreatedTime&#39;</span>
         <span class="n">config_type</span> <span class="o">=</span> <span class="s1">&#39;AWS::ElasticLoadBalancingV2::LoadBalancer&#39;</span></div>
@@ -278,6 +277,15 @@
 
 <div class="viewcode-block" id="DescribeAppElb"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.DescribeAppElb">[docs]</a><span class="k">class</span> <span class="nc">DescribeAppElb</span><span class="p">(</span><span class="n">DescribeSource</span><span class="p">):</span>
 
+<div class="viewcode-block" id="DescribeAppElb.get_resources"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.DescribeAppElb.get_resources">[docs]</a>    <span class="k">def</span> <span class="nf">get_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Support server side filtering on arns or names</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:&#39;</span><span class="p">):</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;LoadBalancerArns&#39;</span><span class="p">:</span> <span class="n">ids</span><span class="p">}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Names&#39;</span><span class="p">:</span> <span class="n">ids</span><span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">query</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span></div>
+
 <div class="viewcode-block" id="DescribeAppElb.augment"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.DescribeAppElb.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">albs</span><span class="p">):</span>
         <span class="n">_describe_appelb_tags</span><span class="p">(</span>
             <span class="n">albs</span><span class="p">,</span>
@@ -292,8 +300,23 @@
 
 <div class="viewcode-block" id="ConfigAppElb.load_resource"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.ConfigAppElb.load_resource">[docs]</a>    <span class="k">def</span> <span class="nf">load_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
         <span class="n">resource</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ConfigAppElb</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">load_resource</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
-        <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="sa">u</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span> <span class="sa">u</span><span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]}</span>
-          <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;supplementaryConfiguration&#39;</span><span class="p">][</span><span class="s1">&#39;Tags&#39;</span><span class="p">])]</span>
+        <span class="n">item_tags</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s1">&#39;supplementaryConfiguration&#39;</span><span class="p">][</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Config originally stored supplementaryconfig on elbv2 as json</span>
+        <span class="c1"># strings. Support that format for historical queries.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item_tags</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+            <span class="n">item_tags</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item_tags</span><span class="p">)</span>
+        <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]}</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">item_tags</span><span class="p">]</span>
+
+        <span class="n">item_attrs</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s1">&#39;supplementaryConfiguration&#39;</span><span class="p">][</span>
+            <span class="s1">&#39;LoadBalancerAttributes&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item_attrs</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">string_types</span><span class="p">):</span>
+            <span class="n">item_attrs</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">item_attrs</span><span class="p">)</span>
+        <span class="c1"># Matches annotation of AppELBAttributeFilterBase filter</span>
+        <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">attr</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">]:</span> <span class="n">parse_attribute_value</span><span class="p">(</span><span class="n">attr</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">])</span> <span class="k">for</span>
+            <span class="n">attr</span> <span class="ow">in</span> <span class="n">item_attrs</span><span class="p">}</span>
         <span class="k">return</span> <span class="n">resource</span></div></div>
 
 
@@ -698,6 +721,16 @@
             <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_process_listeners</span><span class="p">,</span> <span class="n">albs</span><span class="p">))</span></div></div>
 
 
+<div class="viewcode-block" id="parse_attribute_value"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.parse_attribute_value">[docs]</a><span class="k">def</span> <span class="nf">parse_attribute_value</span><span class="p">(</span><span class="n">v</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;false&#39;</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">return</span> <span class="n">v</span></div>
+
+
 <div class="viewcode-block" id="AppELBAttributeFilterBase"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.appelb.AppELBAttributeFilterBase">[docs]</a><span class="k">class</span> <span class="nc">AppELBAttributeFilterBase</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot; Mixin base class for filters that query LB attributes.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -714,13 +747,7 @@
                 <span class="c1"># flatten out the list of dicts and cast</span>
                 <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">]:</span>
                     <span class="n">k</span> <span class="o">=</span> <span class="n">pair</span><span class="p">[</span><span class="s1">&#39;Key&#39;</span><span class="p">]</span>
-                    <span class="n">v</span> <span class="o">=</span> <span class="n">pair</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span>
-                    <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
-                        <span class="n">v</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
-                    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span><span class="p">:</span>
-                        <span class="n">v</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="k">elif</span> <span class="n">v</span> <span class="o">==</span> <span class="s1">&#39;false&#39;</span><span class="p">:</span>
-                        <span class="n">v</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="n">v</span> <span class="o">=</span> <span class="n">parse_attribute_value</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">])</span>
                     <span class="n">alb</span><span class="p">[</span><span class="s1">&#39;Attributes&#39;</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
 
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
