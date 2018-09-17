@@ -228,6 +228,7 @@
     <span class="n">requirements</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;jmespath&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;retrying&#39;</span><span class="p">)</span>
+    <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;python-dateutil&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;ratelimiter&gt;=1.2.0.post0&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-auth&gt;=1.4.1&#39;</span><span class="p">)</span>
     <span class="n">requirements</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s1">&#39;google-auth-httplib2&gt;=0.0.3&#39;</span><span class="p">)</span>
@@ -347,8 +348,10 @@
         <span class="n">source_headers</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="n">source_info</span><span class="p">[</span><span class="s1">&#39;downloadUrl&#39;</span><span class="p">],</span> <span class="s1">&#39;HEAD&#39;</span><span class="p">)</span>
         <span class="c1"># &#39;x-goog-hash&#39;: &#39;crc32c=tIfQ9A==, md5=DqrN06/NbVGsG+3CdrVK+Q==&#39;</span>
         <span class="n">deployed_checksum</span> <span class="o">=</span> <span class="n">source_headers</span><span class="p">[</span><span class="s1">&#39;x-goog-hash&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;archive checksum </span><span class="si">%r</span><span class="s2"> deployed checksum </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">checksum</span><span class="p">,</span> <span class="n">deployed_checksum</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">deployed_checksum</span> <span class="o">!=</span> <span class="n">checksum</span>
+        <span class="n">modified</span> <span class="o">=</span> <span class="n">deployed_checksum</span> <span class="o">!=</span> <span class="n">checksum</span>
+        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;archive modified:</span><span class="si">%s</span><span class="s2"> checksum </span><span class="si">%r</span><span class="s2"> deployed checksum </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                  <span class="n">modified</span><span class="p">,</span> <span class="n">checksum</span><span class="p">,</span> <span class="n">deployed_checksum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">modified</span>
 
     <span class="k">def</span> <span class="nf">_upload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">archive</span><span class="p">,</span> <span class="n">region</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Upload function source and return source url</span>
@@ -368,7 +371,7 @@
                 <span class="s1">&#39;Content-Length&#39;</span><span class="p">:</span> <span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">archive</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
                 <span class="s1">&#39;x-goog-content-length-range&#39;</span><span class="p">:</span> <span class="s1">&#39;0,104857600&#39;</span>
             <span class="p">},</span>
-            <span class="n">body</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="n">archive</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+            <span class="n">body</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="n">archive</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span>
         <span class="p">)</span>
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;function code uploaded&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">headers</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;200&#39;</span><span class="p">:</span>
