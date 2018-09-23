@@ -1163,6 +1163,83 @@
                 <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
                     <span class="k">return</span>
                 <span class="k">raise</span></div></div>
+
+
+<div class="viewcode-block" id="XrayEncrypted"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.XrayEncrypted">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;xray-encrypt-key&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">XrayEncrypted</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Determine if xray is encrypted.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: xray-encrypt-with-default</span>
+<span class="sd">                resource: aws.account</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - type: xray-encrypt-key</span>
+<span class="sd">                    key: default</span>
+<span class="sd">              - name: xray-encrypt-with-kms</span>
+<span class="sd">                  - type: xray-encrypt-key</span>
+<span class="sd">                    key: kms</span>
+<span class="sd">              - name: xray-encrypt-with-specific-key</span>
+<span class="sd">                  -type: xray-encrypt-key</span>
+<span class="sd">                   key: alias/my-alias or arn or keyid</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;xray:GetEncryptionConfig&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;xray-encrypt-key&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span>
+        <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="XrayEncrypted.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.XrayEncrypted.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;xray&#39;</span><span class="p">)</span>
+        <span class="n">gec_result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_encryption_config</span><span class="p">()[</span><span class="s1">&#39;EncryptionConfig&#39;</span><span class="p">]</span>
+        <span class="n">resources</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;c7n:XrayEncryptionConfig&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">gec_result</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="s1">&#39;kms&#39;</span><span class="p">]:</span>
+            <span class="n">kmsclient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;kms&#39;</span><span class="p">)</span>
+            <span class="n">keyid</span> <span class="o">=</span> <span class="n">kmsclient</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span><span class="n">KeyId</span><span class="o">=</span><span class="n">k</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">][</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span>
+            <span class="n">rc</span> <span class="o">=</span> <span class="n">resources</span> <span class="k">if</span> <span class="p">(</span><span class="n">gec_result</span><span class="p">[</span><span class="s1">&#39;KeyId&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">keyid</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">kv</span> <span class="o">=</span> <span class="s1">&#39;KMS&#39;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;kms&#39;</span> <span class="k">else</span> <span class="s1">&#39;NONE&#39;</span>
+            <span class="n">rc</span> <span class="o">=</span> <span class="n">resources</span> <span class="k">if</span> <span class="p">(</span><span class="n">gec_result</span><span class="p">[</span><span class="s1">&#39;Type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">kv</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">rc</span></div></div>
+
+
+<div class="viewcode-block" id="SetXrayEncryption"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetXrayEncryption">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-xray-encrypt&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetXrayEncryption</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable specific xray encryption.</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: xray-default-encrypt</span>
+<span class="sd">                resource: aws.account</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: set-xray-encrypt</span>
+<span class="sd">                    key: default</span>
+<span class="sd">              - name: xray-kms-encrypt</span>
+<span class="sd">                  - type: set-xray-encrypt</span>
+<span class="sd">                    key: alias/some/alias/ke</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;xray:PutEncryptionConfig&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-xray-encrypt&#39;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span>
+        <span class="n">key</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="SetXrayEncryption.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetXrayEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;xray&#39;</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
+        <span class="n">req</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;NONE&#39;</span><span class="p">}</span> <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;default&#39;</span> <span class="k">else</span> <span class="p">{</span><span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;KMS&#39;</span><span class="p">,</span> <span class="s1">&#39;KeyId&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">}</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">put_encryption_config</span><span class="p">(</span><span class="o">**</span><span class="n">req</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
