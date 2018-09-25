@@ -353,6 +353,7 @@
                 <span class="p">{</span><span class="s1">&#39;required&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;NotPrincipal&#39;</span><span class="p">,</span> <span class="s1">&#39;NotAction&#39;</span><span class="p">,</span> <span class="s1">&#39;NotResource&#39;</span><span class="p">]}</span>
             <span class="p">]</span>
         <span class="p">},</span>
+        <span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{},</span>
         <span class="s1">&#39;filters&#39;</span><span class="p">:</span> <span class="p">{</span>
             <span class="s1">&#39;value&#39;</span><span class="p">:</span> <span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
             <span class="s1">&#39;event&#39;</span><span class="p">:</span> <span class="n">EventFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span>
@@ -420,7 +421,13 @@
             <span class="k">if</span> <span class="n">cloud_name</span> <span class="o">==</span> <span class="s1">&#39;aws&#39;</span><span class="p">:</span>
                 <span class="n">alias_name</span> <span class="o">=</span> <span class="n">type_name</span>
             <span class="n">resource_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="n">process_resource</span><span class="p">(</span><span class="n">r_type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">,</span> <span class="n">alias_name</span><span class="p">))</span>
+                <span class="n">process_resource</span><span class="p">(</span>
+                    <span class="n">r_type_name</span><span class="p">,</span>
+                    <span class="n">resource_type</span><span class="p">,</span>
+                    <span class="n">resource_defs</span><span class="p">,</span>
+                    <span class="n">alias_name</span><span class="p">,</span>
+                    <span class="n">definitions</span>
+                <span class="p">))</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s1">&#39;$schema&#39;</span><span class="p">:</span> <span class="s1">&#39;http://json-schema.org/schema#&#39;</span><span class="p">,</span>
@@ -442,7 +449,7 @@
     <span class="k">return</span> <span class="n">schema</span></div>
 
 
-<div class="viewcode-block" id="process_resource"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.schema.process_resource">[docs]</a><span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">,</span> <span class="n">alias_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="process_resource"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.schema.process_resource">[docs]</a><span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">resource_defs</span><span class="p">,</span> <span class="n">alias_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">definitions</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">resource_defs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;actions&#39;</span><span class="p">:</span> <span class="p">{},</span> <span class="s1">&#39;filters&#39;</span><span class="p">:</span> <span class="p">{}})</span>
 
     <span class="n">seen_actions</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>  <span class="c1"># Aliases get processed once</span>
@@ -452,10 +459,16 @@
             <span class="k">continue</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">seen_actions</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">r</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">][</span><span class="n">action_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">schema</span>
-        <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/resources/</span><span class="si">%s</span><span class="s1">/actions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
-                <span class="n">type_name</span><span class="p">,</span> <span class="n">action_name</span><span class="p">)})</span>
+        <span class="k">if</span> <span class="n">a</span><span class="o">.</span><span class="n">schema_alias</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">action_name</span> <span class="ow">in</span> <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">]:</span>
+                <span class="k">assert</span> <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">][</span><span class="n">action_name</span><span class="p">]</span> <span class="o">==</span> <span class="n">a</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="s2">&quot;Schema mismatch on action w/ schema alias&quot;</span>  <span class="c1"># NOQA</span>
+            <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">][</span><span class="n">action_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">schema</span>
+            <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/actions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">action_name</span><span class="p">})</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">][</span><span class="n">action_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">schema</span>
+            <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/resources/</span><span class="si">%s</span><span class="s1">/actions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">type_name</span><span class="p">,</span> <span class="n">action_name</span><span class="p">)})</span>
 
     <span class="c1"># one word action shortcuts</span>
     <span class="n">action_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -483,6 +496,13 @@
             <span class="n">filters_seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">filter_name</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;or&#39;</span><span class="p">,</span> <span class="s1">&#39;and&#39;</span><span class="p">,</span> <span class="s1">&#39;not&#39;</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">schema_alias</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">filter_name</span> <span class="ow">in</span> <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;filters&#39;</span><span class="p">]:</span>
+                <span class="k">assert</span> <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;filters&#39;</span><span class="p">][</span><span class="n">filter_name</span><span class="p">]</span> <span class="o">==</span> <span class="n">f</span><span class="o">.</span><span class="n">schema</span><span class="p">,</span> <span class="s2">&quot;Schema mismatch on filter w/ schema alias&quot;</span> <span class="c1"># NOQA</span>
+            <span class="n">definitions</span><span class="p">[</span><span class="s1">&#39;filters&#39;</span><span class="p">][</span><span class="n">filter_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">schema</span>
+            <span class="n">filter_refs</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                <span class="s1">&#39;$ref&#39;</span><span class="p">:</span> <span class="s1">&#39;#/definitions/filters/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filter_name</span><span class="p">})</span>
             <span class="k">continue</span>
         <span class="k">elif</span> <span class="n">filter_name</span> <span class="o">==</span> <span class="s1">&#39;value&#39;</span><span class="p">:</span>
             <span class="n">r</span><span class="p">[</span><span class="s1">&#39;filters&#39;</span><span class="p">][</span><span class="n">filter_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
