@@ -186,7 +186,23 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n_azure.functionapp_utils</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">logging</span>
+<span></span><span class="c1"># Copyright 2015-2018 Capital One Services, LLC</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1"># http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">binascii</span> <span class="k">import</span> <span class="n">hexlify</span>
 
 <span class="kn">from</span> <span class="nn">azure.mgmt.web.models</span> <span class="k">import</span> <span class="p">(</span><span class="n">Site</span><span class="p">,</span> <span class="n">SiteConfig</span><span class="p">,</span> <span class="n">NameValuePair</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
@@ -199,6 +215,11 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">local_session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.function_app_utils&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="FunctionAppUtilities.generate_machine_decryption_key"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.functionapp_utils.FunctionAppUtilities.generate_machine_decryption_key">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">generate_machine_decryption_key</span><span class="p">():</span>
+        <span class="c1"># randomly generated decryption key for Functions key</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">hexlify</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">urandom</span><span class="p">(</span><span class="mi">32</span><span class="p">))</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="FunctionAppUtilities.deploy_webapp"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.functionapp_utils.FunctionAppUtilities.deploy_webapp">[docs]</a>    <span class="k">def</span> <span class="nf">deploy_webapp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">,</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">service_plan</span><span class="p">,</span> <span class="n">storage_account_name</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deploying Function App </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%s</span><span class="s2">) in group </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
@@ -226,6 +247,9 @@
         <span class="n">site_config</span><span class="o">.</span><span class="n">app_settings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">NameValuePair</span><span class="p">(</span><span class="s1">&#39;FUNCTIONS_EXTENSION_VERSION&#39;</span><span class="p">,</span>
                                                       <span class="n">CONST_FUNCTIONS_EXT_VERSION</span><span class="p">))</span>
         <span class="n">site_config</span><span class="o">.</span><span class="n">app_settings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">NameValuePair</span><span class="p">(</span><span class="s1">&#39;FUNCTIONS_WORKER_RUNTIME&#39;</span><span class="p">,</span> <span class="s1">&#39;python&#39;</span><span class="p">))</span>
+        <span class="n">site_config</span><span class="o">.</span><span class="n">app_settings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">NameValuePair</span><span class="p">(</span><span class="s1">&#39;MACHINEKEY_DecryptionKey&#39;</span><span class="p">,</span>
+                          <span class="n">FunctionAppUtilities</span><span class="o">.</span><span class="n">generate_machine_decryption_key</span><span class="p">()))</span>
 
         <span class="c1">#: :type: azure.mgmt.web.WebSiteManagementClient</span>
         <span class="n">web_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">local_session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
@@ -252,7 +276,7 @@
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">app_insights</span> <span class="o">=</span> <span class="n">insights_client</span><span class="o">.</span><span class="n">components</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource_group_name</span><span class="p">,</span>
-                                                      <span class="n">application_insights_name</span><span class="p">)</span>
+                                                          <span class="n">application_insights_name</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">app_insights</span><span class="o">.</span><span class="n">instrumentation_key</span>
 
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
