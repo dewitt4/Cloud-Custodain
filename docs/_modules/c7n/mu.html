@@ -486,9 +486,8 @@
         <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Removing lambda function </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">delete_function</span><span class="p">(</span><span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span></div>
+        <span class="k">except</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+            <span class="k">pass</span></div>
 
 <div class="viewcode-block" id="LambdaManager.metrics"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.LambdaManager.metrics">[docs]</a>    <span class="k">def</span> <span class="nf">metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">funcs</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="mi">5</span> <span class="o">*</span> <span class="mi">60</span><span class="p">):</span>
 
@@ -523,18 +522,16 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="n">logs</span><span class="o">.</span><span class="n">describe_log_groups</span><span class="p">(</span>
                 <span class="n">logGroupNamePrefix</span><span class="o">=</span><span class="n">group_name</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">logs</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+            <span class="k">pass</span>
+
         <span class="k">try</span><span class="p">:</span>
             <span class="n">log_streams</span> <span class="o">=</span> <span class="n">logs</span><span class="o">.</span><span class="n">describe_log_streams</span><span class="p">(</span>
                 <span class="n">logGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span>
                 <span class="n">orderBy</span><span class="o">=</span><span class="s2">&quot;LastEventTime&quot;</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">descending</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">logs</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+            <span class="k">return</span>
+
         <span class="n">start</span> <span class="o">=</span> <span class="n">_timestamp_from_string</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
         <span class="n">end</span> <span class="o">=</span> <span class="n">_timestamp_from_string</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">log_streams</span><span class="p">[</span><span class="s1">&#39;logStreams&#39;</span><span class="p">]):</span>
@@ -542,8 +539,7 @@
                 <span class="n">logGroupName</span><span class="o">=</span><span class="n">group_name</span><span class="p">,</span>
                 <span class="n">logStreamName</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;logStreamName&#39;</span><span class="p">],</span>
                 <span class="n">startTime</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
-                <span class="n">endTime</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
-            <span class="p">)</span>
+                <span class="n">endTime</span><span class="o">=</span><span class="n">end</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s1">&#39;events&#39;</span><span class="p">]:</span>
                 <span class="k">yield</span> <span class="n">e</span></div>
 
@@ -1153,17 +1149,17 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">response</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;RuleArn&#39;</span><span class="p">:</span> <span class="n">rule</span><span class="p">[</span><span class="s1">&#39;Arn&#39;</span><span class="p">]}</span>
 
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
                 <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">StatementId</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">SourceArn</span><span class="o">=</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;RuleArn&#39;</span><span class="p">],</span>
                 <span class="n">Action</span><span class="o">=</span><span class="s1">&#39;lambda:InvokeFunction&#39;</span><span class="p">,</span>
                 <span class="n">Principal</span><span class="o">=</span><span class="s1">&#39;events.amazonaws.com&#39;</span><span class="p">)</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Added lambda invoke cwe rule permission&#39;</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceConflictException</span><span class="p">:</span>
+            <span class="k">pass</span>
 
         <span class="c1"># Add Targets</span>
         <span class="n">found</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1279,9 +1275,8 @@
             <span class="n">params</span><span class="p">[</span><span class="s1">&#39;SourceArn&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;arn:aws:s3:::%&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">lambda_client</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceConflictException</span><span class="p">:</span>
+            <span class="k">pass</span>
 
         <span class="n">notifies</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n_params</span><span class="p">)</span>
         <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_notification_configuration</span><span class="p">(</span>
@@ -1301,9 +1296,8 @@
                 <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="p">[</span><span class="s1">&#39;FunctionName&#39;</span><span class="p">],</span>
                 <span class="n">StatementId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">])</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Removed lambda permission result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">response</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+            <span class="k">pass</span>
 
         <span class="n">notifies</span><span class="p">[</span><span class="s1">&#39;LambdaFunctionConfigurations&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">found</span><span class="p">)</span>
         <span class="n">s3</span><span class="o">.</span><span class="n">put_bucket_notification_configuration</span><span class="p">(</span>
@@ -1340,9 +1334,8 @@
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added lambda ipo nvoke log group permission&quot;</span><span class="p">)</span>
                 <span class="c1"># iam eventual consistency and propagation</span>
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iam_delay</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                    <span class="k">raise</span>
+            <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceConflictException</span><span class="p">:</span>
+                <span class="k">pass</span>
             <span class="c1"># Consistent put semantics / ie no op if extant</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_subscription_filter</span><span class="p">(</span>
                 <span class="n">logGroupName</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">],</span>
@@ -1358,18 +1351,16 @@
                     <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                     <span class="n">StatementId</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">))</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Removed lambda permission result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">response</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                    <span class="k">raise</span>
+            <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+                <span class="k">pass</span>
 
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">delete_subscription_filter</span><span class="p">(</span>
                     <span class="n">logGroupName</span><span class="o">=</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">],</span> <span class="n">filterName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Removed subscription filter from: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
                           <span class="n">group</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">])</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                    <span class="k">raise</span></div></div>
+            <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+                <span class="k">pass</span></div></div>
 
 
 <div class="viewcode-block" id="SQSSubscription"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.mu.SQSSubscription">[docs]</a><span class="k">class</span> <span class="nc">SQSSubscription</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -1466,9 +1457,8 @@
                 <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Added permission for sns to invoke lambda&quot;</span><span class="p">)</span>
                 <span class="c1"># iam eventual consistency and propagation</span>
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iam_delay</span><span class="p">)</span>
-            <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                    <span class="k">raise</span>
+            <span class="k">except</span> <span class="n">lambda_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceConflictException</span><span class="p">:</span>
+                <span class="k">pass</span>
 
             <span class="c1"># Subscribe the lambda to the topic, idempotent</span>
             <span class="n">sns_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;sns&#39;</span><span class="p">)</span>
@@ -1496,6 +1486,7 @@
 
             <span class="k">class</span> <span class="nc">Done</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
                 <span class="k">pass</span>
+
             <span class="k">try</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">page</span> <span class="ow">in</span> <span class="n">paginator</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">TopicArn</span><span class="o">=</span><span class="n">topic_arn</span><span class="p">):</span>
                     <span class="k">for</span> <span class="n">subscription</span> <span class="ow">in</span> <span class="n">page</span><span class="p">[</span><span class="s1">&#39;Subscriptions&#39;</span><span class="p">]:</span>
@@ -1506,10 +1497,8 @@
                                 <span class="n">SubscriptionArn</span><span class="o">=</span><span class="n">subscription</span><span class="p">[</span><span class="s1">&#39;SubscriptionArn&#39;</span><span class="p">])</span>
                             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Unsubscribed </span><span class="si">%s</span><span class="s2"> from </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span>
                                 <span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">topic_name</span><span class="p">))</span>
-                        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-                            <span class="n">code</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span>
-                            <span class="k">if</span> <span class="n">code</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                                <span class="k">raise</span>
+                        <span class="k">except</span> <span class="n">sns_client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">NotFoundException</span><span class="p">:</span>
+                            <span class="k">pass</span>
                         <span class="k">raise</span> <span class="n">Done</span>  <span class="c1"># break out of both for loops</span>
             <span class="k">except</span> <span class="n">Done</span><span class="p">:</span>
                 <span class="k">pass</span></div></div>
@@ -1640,16 +1629,16 @@
         <span class="k">elif</span> <span class="n">rule</span><span class="p">:</span>
             <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Config rule up to date&quot;</span><span class="p">)</span>
             <span class="k">return</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;lambda&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">add_permission</span><span class="p">(</span>
                 <span class="n">FunctionName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">StatementId</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">SourceAccount</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">arn</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)[</span><span class="mi">4</span><span class="p">],</span>
                 <span class="n">Action</span><span class="o">=</span><span class="s1">&#39;lambda:InvokeFunction&#39;</span><span class="p">,</span>
                 <span class="n">Principal</span><span class="o">=</span><span class="s1">&#39;config.amazonaws.com&#39;</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceConflictException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span>
+        <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceConflictException</span><span class="p">:</span>
+            <span class="k">pass</span>
 
         <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Adding config rule for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">put_config_rule</span><span class="p">(</span><span class="n">ConfigRule</span><span class="o">=</span><span class="n">params</span><span class="p">)</span></div>
@@ -1662,9 +1651,8 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">delete_config_rule</span><span class="p">(</span>
                 <span class="n">ConfigRuleName</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-        <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">response</span><span class="p">[</span><span class="s1">&#39;Error&#39;</span><span class="p">][</span><span class="s1">&#39;Code&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s1">&#39;ResourceNotFoundException&#39;</span><span class="p">:</span>
-                <span class="k">raise</span></div></div>
+        <span class="k">except</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">NoSuchConfigRuleException</span><span class="p">:</span>
+            <span class="k">pass</span></div></div>
 </pre></div>
 
            </div>

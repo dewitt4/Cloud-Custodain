@@ -186,7 +186,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for c7n.ctx</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright 2015-2017 Capital One Services, LLC</span>
+<span></span><span class="c1"># Copyright 2015-2018 Capital One Services, LLC</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
 <span class="c1"># you may not use this file except in compliance with the License.</span>
@@ -202,10 +202,20 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
 <span class="kn">import</span> <span class="nn">os</span>
 
-<span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="n">FSOutput</span><span class="p">,</span> <span class="n">MetricsOutput</span><span class="p">,</span> <span class="n">CloudWatchLogOutput</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">reset_session_cache</span>
+
+<span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="p">(</span>
+    <span class="n">api_stats_outputs</span><span class="p">,</span>
+    <span class="n">blob_outputs</span><span class="p">,</span>
+    <span class="n">log_outputs</span><span class="p">,</span>
+    <span class="n">metrics_outputs</span><span class="p">,</span>
+    <span class="n">sys_stats_outputs</span><span class="p">,</span>
+    <span class="n">tracer_outputs</span><span class="p">)</span>
+
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">reset_session_cache</span><span class="p">,</span> <span class="n">dumps</span>
+<span class="kn">from</span> <span class="nn">c7n.version</span> <span class="k">import</span> <span class="n">version</span>
 
 
 <div class="viewcode-block" id="ExecutionContext"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.ctx.ExecutionContext">[docs]</a><span class="k">class</span> <span class="nc">ExecutionContext</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -215,50 +225,95 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">session_factory</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># Runtime initialized during policy execution</span>
+        <span class="c1"># We treat policies as a fly weight pre-execution.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execution_id</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span> <span class="o">=</span> <span class="kc">None</span>
 
-        <span class="n">metrics_enabled</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;metrics_enabled&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">factory</span> <span class="o">=</span> <span class="n">MetricsOutput</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">metrics_enabled</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span> <span class="o">=</span> <span class="n">factory</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="c1"># A few tests patch on metrics flush</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span> <span class="o">=</span> <span class="n">metrics_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">metrics_enabled</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
 
-        <span class="n">output_dir</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;output_dir&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">output_dir</span><span class="p">:</span>
-            <span class="n">factory</span> <span class="o">=</span> <span class="n">FSOutput</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output_path</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">factory</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Tracer is wired into core filtering code / which is getting</span>
+        <span class="c1"># invoked sans execution context entry in tests</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span> <span class="o">=</span> <span class="n">tracer_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">tracer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span> <span class="o">=</span> <span class="n">CloudWatchLogOutput</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+<div class="viewcode-block" id="ExecutionContext.initialize"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.ctx.ExecutionContext.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">blob_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logs</span> <span class="o">=</span> <span class="n">log_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
+        <span class="c1"># Look for customizations, but fallback to default</span>
+        <span class="k">for</span> <span class="n">api_stats_type</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">provider_name</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">api_stats_type</span> <span class="ow">in</span> <span class="n">api_stats_outputs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span> <span class="o">=</span> <span class="n">api_stats_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">api_stats_type</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+                <span class="k">break</span>
+        <span class="k">for</span> <span class="n">sys_stats_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;psutil&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">sys_stats_type</span> <span class="ow">in</span> <span class="n">sys_stats_outputs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span> <span class="o">=</span> <span class="n">sys_stats_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">sys_stats_type</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+                <span class="k">break</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execution_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span></div>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">log_dir</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">root_dir</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">root_dir</span>
 
     <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logs</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
         <span class="k">return</span> <span class="bp">self</span>
 
     <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
-        <span class="c1"># Clear policy execution thread local session cache if running in tests.</span>
-        <span class="c1"># IMPORTANT: multi-account execution (c7n-org and others) need to manually reset this.</span>
-        <span class="c1"># Why: Not doing this means we get excessive memory usage from client</span>
-        <span class="c1"># reconstruction.</span>
+        <span class="k">if</span> <span class="n">exc_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span><span class="s1">&#39;PolicyException&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Count&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">_write_file</span><span class="p">(</span>
+            <span class="s1">&#39;metadata.json&#39;</span><span class="p">,</span> <span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_metadata</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="n">subsegment</span><span class="p">(</span><span class="s1">&#39;output&#39;</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logs</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># IMPORTANT: multi-account execution (c7n-org and others) need</span>
+        <span class="c1"># to manually reset this.  Why: Not doing this means we get</span>
+        <span class="c1"># excessive memory usage from client reconstruction for dynamic-gen</span>
+        <span class="c1"># sdks.</span>
         <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;C7N_TEST_RUN&#39;</span><span class="p">):</span>
             <span class="n">reset_session_cache</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cloudwatch_logs</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ExecutionContext.get_metadata"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.ctx.ExecutionContext.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">include</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;sys-stats&#39;</span><span class="p">,</span> <span class="s1">&#39;api-stats&#39;</span><span class="p">,</span> <span class="s1">&#39;metrics&#39;</span><span class="p">)):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">md</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;policy&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
+            <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="n">version</span><span class="p">,</span>
+            <span class="s1">&#39;execution&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">execution_id</span><span class="p">,</span>
+                <span class="s1">&#39;start&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">,</span>
+                <span class="s1">&#39;end_time&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">,</span>
+                <span class="s1">&#39;duration&#39;</span><span class="p">:</span> <span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">start_time</span><span class="p">},</span>
+            <span class="s1">&#39;config&#39;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="s1">&#39;sys-stats&#39;</span> <span class="ow">in</span> <span class="n">include</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span><span class="p">:</span>
+            <span class="n">md</span><span class="p">[</span><span class="s1">&#39;sys-stats&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span><span class="o">.</span><span class="n">get_metadata</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;api-stats&#39;</span> <span class="ow">in</span> <span class="n">include</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span><span class="p">:</span>
+            <span class="n">md</span><span class="p">[</span><span class="s1">&#39;api-stats&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span><span class="o">.</span><span class="n">get_metadata</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s1">&#39;metrics&#39;</span> <span class="ow">in</span> <span class="n">include</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="p">:</span>
+            <span class="n">md</span><span class="p">[</span><span class="s1">&#39;metrics&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">get_metadata</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">md</span></div></div>
 </pre></div>
 
            </div>

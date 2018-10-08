@@ -200,94 +200,289 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Outputs metrics, logs, structured records across</span>
-<span class="sd">a variety of sources.</span>
+<span class="sd">Outputs metrics, logs, stats, traces, and structured records across</span>
+<span class="sd">a variety of sinks.</span>
 
 <span class="sd">See docs/usage/outputs.rst</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
-<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">gzip</span>
 <span class="kn">import</span> <span class="nn">logging</span>
-<span class="kn">import</span> <span class="nn">shutil</span>
-<span class="kn">import</span> <span class="nn">tempfile</span>
-
 <span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
 
+
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">InvalidOutputConfig</span>
 <span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
-<span class="kn">from</span> <span class="nn">c7n.log</span> <span class="k">import</span> <span class="n">CloudWatchLogHandler</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">parse_s3</span><span class="p">,</span> <span class="n">get_retry</span>
 
-<span class="n">DEFAULT_NAMESPACE</span> <span class="o">=</span> <span class="s2">&quot;CloudMaid&quot;</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">psutil</span>
+    <span class="n">HAVE_PSUTIL</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">HAVE_PSUTIL</span> <span class="o">=</span> <span class="kc">False</span>
 
 <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.output&#39;</span><span class="p">)</span>
 
 
-<span class="n">metrics_outputs</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.blob-outputs&#39;</span><span class="p">)</span>
-<span class="n">blob_outputs</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.blob-outputs&#39;</span><span class="p">)</span>
+<span class="c1"># TODO remove</span>
+<span class="n">DEFAULT_NAMESPACE</span> <span class="o">=</span> <span class="s2">&quot;CloudMaid&quot;</span>
 
 
-<div class="viewcode-block" id="MetricsOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput">[docs]</a><span class="nd">@metrics_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;aws&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MetricsOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Send metrics data to cloudwatch</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="OutputRegistry"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.OutputRegistry">[docs]</a><span class="k">class</span> <span class="nc">OutputRegistry</span><span class="p">(</span><span class="n">PluginRegistry</span><span class="p">):</span>
 
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;cloudWatch:PutMetricData&quot;</span><span class="p">,)</span>
+    <span class="n">default_protocol</span> <span class="o">=</span> <span class="kc">None</span>
 
-    <span class="n">retry</span> <span class="o">=</span> <span class="nb">staticmethod</span><span class="p">(</span><span class="n">get_retry</span><span class="p">((</span><span class="s1">&#39;Throttling&#39;</span><span class="p">,)))</span>
+<div class="viewcode-block" id="OutputRegistry.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.OutputRegistry.select">[docs]</a>    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">selector</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">selector</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">](</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;url&#39;</span><span class="p">:</span> <span class="n">selector</span><span class="p">})</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_protocol</span> <span class="ow">and</span> <span class="s1">&#39;://&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">selector</span><span class="p">:</span>
+            <span class="n">selector</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">://</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">default_protocol</span><span class="p">,</span> <span class="n">selector</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">selector</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">k</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">k</span><span class="p">](</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;url&#39;</span><span class="p">:</span> <span class="n">selector</span><span class="p">})</span>
+        <span class="k">raise</span> <span class="n">InvalidOutputConfig</span><span class="p">(</span><span class="s2">&quot;Invalid </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plugin_type</span><span class="p">,</span>
+            <span class="n">selector</span><span class="p">))</span></div></div>
 
-    <span class="n">BUFFER_SIZE</span> <span class="o">=</span> <span class="mi">20</span>
 
-<div class="viewcode-block" id="MetricsOutput.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.select">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">metrics_selector</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">NullMetricsOutput</span>
+<div class="viewcode-block" id="BlobOutputRegistry"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.BlobOutputRegistry">[docs]</a><span class="k">class</span> <span class="nc">BlobOutputRegistry</span><span class="p">(</span><span class="n">OutputRegistry</span><span class="p">):</span>
+
+    <span class="n">default_protocol</span> <span class="o">=</span> <span class="s2">&quot;file&quot;</span></div>
+
+
+<div class="viewcode-block" id="LogOutputRegistry"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogOutputRegistry">[docs]</a><span class="k">class</span> <span class="nc">LogOutputRegistry</span><span class="p">(</span><span class="n">OutputRegistry</span><span class="p">):</span>
+
+    <span class="n">default_protocol</span> <span class="o">=</span> <span class="s2">&quot;aws&quot;</span></div>
+
+
+<div class="viewcode-block" id="MetricsRegistry"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsRegistry">[docs]</a><span class="k">class</span> <span class="nc">MetricsRegistry</span><span class="p">(</span><span class="n">OutputRegistry</span><span class="p">):</span>
+
+<div class="viewcode-block" id="MetricsRegistry.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsRegistry.select">[docs]</a>    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">selector</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
         <span class="c1"># Compatibility for boolean configuration</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
-            <span class="n">metrics_selector</span> <span class="o">=</span> <span class="s1">&#39;aws&#39;</span>
-        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">metrics_outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">metrics_selector</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">metrics_outputs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;invalid metrics option </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">metrics_selector</span><span class="p">)</span></div>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">selector</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="ow">and</span> <span class="n">selector</span><span class="p">:</span>
+            <span class="n">selector</span> <span class="o">=</span> <span class="s1">&#39;aws&#39;</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">MetricsRegistry</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">selector</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span></div></div>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="n">DEFAULT_NAMESPACE</span><span class="p">):</span>
+
+<span class="n">api_stats_outputs</span> <span class="o">=</span> <span class="n">OutputRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.api_stats&#39;</span><span class="p">)</span>
+<span class="n">blob_outputs</span> <span class="o">=</span> <span class="n">BlobOutputRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.blob&#39;</span><span class="p">)</span>
+<span class="n">log_outputs</span> <span class="o">=</span> <span class="n">LogOutputRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.logs&#39;</span><span class="p">)</span>
+<span class="n">metrics_outputs</span> <span class="o">=</span> <span class="n">MetricsRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.metrics&#39;</span><span class="p">)</span>
+<span class="n">tracer_outputs</span> <span class="o">=</span> <span class="n">OutputRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.tracer&#39;</span><span class="p">)</span>
+<span class="n">sys_stats_outputs</span> <span class="o">=</span> <span class="n">OutputRegistry</span><span class="p">(</span><span class="s1">&#39;c7n.output.sys_stats&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="NullTracer"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullTracer">[docs]</a><span class="nd">@tracer_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">NullTracer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tracing provides for detailed analytics of a policy execution.</span>
+
+<span class="sd">    Uses native cloud provider integration (xray, stack driver trace).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">namespace</span> <span class="o">=</span> <span class="n">namespace</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="p">{}</span>
 
-<div class="viewcode-block" id="MetricsOutput.get_timestamp"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.get_timestamp">[docs]</a>    <span class="k">def</span> <span class="nf">get_timestamp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Now, if C7N_METRICS_TZ is set to TRUE, UTC timestamp will be used.</span>
-<span class="sd">        For backwards compatibility, if it is not set, UTC will be the default.</span>
-<span class="sd">        To disable this and use the system&#39;s time zone, C7N_METRICS_TZ shoule be set to FALSE.</span>
+<div class="viewcode-block" id="NullTracer.subsegment"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullTracer.subsegment">[docs]</a>    <span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+    <span class="k">def</span> <span class="nf">subsegment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Create a named subsegment as a context manager</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">yield</span> <span class="bp">self</span></div>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Enter main segment for policy execution.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;C7N_METRICS_TZ&quot;</span><span class="p">,</span> <span class="s1">&#39;TRUE&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;TRUE&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span></div>
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Exit main segment for policy execution.</span>
+<span class="sd">        &quot;&quot;&quot;</span></div>
 
-<div class="viewcode-block" id="MetricsOutput.flush"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.flush">[docs]</a>    <span class="k">def</span> <span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+<div class="viewcode-block" id="DeltaStats"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DeltaStats">[docs]</a><span class="k">class</span> <span class="nc">DeltaStats</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Capture stats (dictionary of string-&gt;integer) as a stack.</span>
+
+<span class="sd">    Popping the stack automatically creates a delta of the last</span>
+<span class="sd">    stack element to the current stats.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">snapshot_stack</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="DeltaStats.push_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DeltaStats.push_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">push_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">snapshot_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_snapshot</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="DeltaStats.pop_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DeltaStats.pop_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">pop_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">snapshot_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshot</span><span class="p">())</span></div>
+
+<div class="viewcode-block" id="DeltaStats.get_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DeltaStats.get_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">get_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{}</span></div>
+
+<div class="viewcode-block" id="DeltaStats.delta"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DeltaStats.delta">[docs]</a>    <span class="k">def</span> <span class="nf">delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">before</span><span class="p">,</span> <span class="n">after</span><span class="p">):</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">before</span><span class="p">:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">after</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">-</span> <span class="n">before</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">val</span><span class="p">:</span>
+                <span class="n">delta</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">val</span>
+        <span class="k">return</span> <span class="n">delta</span></div></div>
+
+
+<div class="viewcode-block" id="NullStats"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullStats">[docs]</a><span class="nd">@sys_stats_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="nd">@api_stats_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">NullStats</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Execution statistics/metrics collection.</span>
+
+<span class="sd">    Encompasses concrete implementations over system stats (memory, cpu, cache size)</span>
+<span class="sd">    and api calls.</span>
+
+<span class="sd">    The api supports stack nested snapshots, with delta consumption to support</span>
+<span class="sd">    tracing metadata annotation across nested subsegments.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="p">{}</span>
+
+<div class="viewcode-block" id="NullStats.push_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullStats.push_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">push_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Take a snapshot of the system stats and append to the stack.&quot;&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="NullStats.pop_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullStats.pop_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">pop_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Remove a snapshot from the snack and return a delta of the current stats to it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{}</span></div>
+
+<div class="viewcode-block" id="NullStats.get_metadata"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullStats.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Return default of current to last snapshot, without popping.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{}</span></div>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Push a snapshot</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Pop a snapshot</span>
+<span class="sd">        &quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="SystemStats"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.SystemStats">[docs]</a><span class="nd">@sys_stats_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;psutil&#39;</span><span class="p">,</span> <span class="n">condition</span><span class="o">=</span><span class="n">HAVE_PSUTIL</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SystemStats</span><span class="p">(</span><span class="n">DeltaStats</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Collect process statistics via psutil as deltas over policy execution.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SystemStats</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">process</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">Process</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">())</span>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">push_snapshot</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pop_snapshot</span><span class="p">()</span>
+
+<div class="viewcode-block" id="SystemStats.get_metadata"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.SystemStats.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">snapshot_stack</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">snapshot_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshot</span><span class="p">())</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_snapshot</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="SystemStats.get_snapshot"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.SystemStats.get_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">get_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">snapshot</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;num_threads&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">num_threads</span><span class="p">(),</span>
+            <span class="s1">&#39;num_fds&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">num_fds</span><span class="p">(),</span>
+            <span class="s1">&#39;snapshot_time&#39;</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span>
+            <span class="s1">&#39;cache_size&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">get_cache</span><span class="p">()</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">oneshot</span><span class="p">():</span>
+            <span class="c1"># simpler would be json.dumps(self.process.as_dict()), but</span>
+            <span class="c1"># that complicates delta diffing between snapshots.</span>
+            <span class="n">cpu_time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">cpu_times</span><span class="p">()</span>
+            <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;cpu_user&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cpu_time</span><span class="o">.</span><span class="n">user</span>
+            <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;cpu_system&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cpu_time</span><span class="o">.</span><span class="n">system</span>
+            <span class="p">(</span><span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;num_ctx_switches_voluntary&#39;</span><span class="p">],</span>
+                <span class="n">snapshot</span><span class="p">[</span><span class="s1">&#39;num_ctx_switches_involuntary&#39;</span><span class="p">])</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">num_ctx_switches</span><span class="p">()</span>
+            <span class="c1"># io counters ( not available on osx)</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="p">,</span> <span class="s1">&#39;io_counters&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+                <span class="n">io</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">io_counters</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">counter</span> <span class="ow">in</span> <span class="p">(</span>
+                        <span class="s1">&#39;read_count&#39;</span><span class="p">,</span> <span class="s1">&#39;write_count&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;write_bytes&#39;</span><span class="p">,</span> <span class="s1">&#39;read_bytes&#39;</span><span class="p">):</span>
+                    <span class="n">snapshot</span><span class="p">[</span><span class="n">counter</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">counter</span><span class="p">)</span>
+            <span class="c1"># memory counters</span>
+            <span class="n">mem</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process</span><span class="o">.</span><span class="n">memory_info</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">counter</span> <span class="ow">in</span> <span class="p">(</span>
+                    <span class="s1">&#39;rss&#39;</span><span class="p">,</span> <span class="s1">&#39;vms&#39;</span><span class="p">,</span> <span class="s1">&#39;shared&#39;</span><span class="p">,</span> <span class="s1">&#39;text&#39;</span><span class="p">,</span> <span class="s1">&#39;data&#39;</span><span class="p">,</span> <span class="s1">&#39;lib&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;pfaults&#39;</span><span class="p">,</span> <span class="s1">&#39;pageins&#39;</span><span class="p">):</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">mem</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">snapshot</span><span class="p">[</span><span class="n">counter</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">return</span> <span class="n">snapshot</span></div></div>
+
+
+<div class="viewcode-block" id="Metrics"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.Metrics">[docs]</a><span class="k">class</span> <span class="nc">Metrics</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">()</span>
+    <span class="n">namespace</span> <span class="o">=</span> <span class="n">DEFAULT_NAMESPACE</span>
+    <span class="n">BUFFER_SIZE</span> <span class="o">=</span> <span class="mi">20</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span> <span class="nf">_format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsiblity&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsiblity&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Metrics.flush"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.Metrics.flush">[docs]</a>    <span class="k">def</span> <span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">namespace</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-<div class="viewcode-block" id="MetricsOutput.put_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.MetricsOutput.put_metric">[docs]</a>    <span class="k">def</span> <span class="nf">put_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
+<div class="viewcode-block" id="Metrics.put_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.Metrics.put_metric">[docs]</a>    <span class="k">def</span> <span class="nf">put_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">buffer</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">dimensions</span><span class="p">):</span>
         <span class="n">point</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_metric</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">buffer</span><span class="p">:</span>
             <span class="c1"># Max metrics in a single request</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">BUFFER_SIZE</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span></div>
 
+<div class="viewcode-block" id="Metrics.get_metadata"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.Metrics.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="LogMetrics"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogMetrics">[docs]</a><span class="nd">@metrics_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">LogMetrics</span><span class="p">(</span><span class="n">Metrics</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Default metrics collection.</span>
+
+<span class="sd">    logs metrics, default handler should send to stderr</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;MetricName&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;ActionTime&#39;</span><span class="p">,</span> <span class="s1">&#39;ResourceTime&#39;</span><span class="p">):</span>
+                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">render_metric</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
+
+<div class="viewcode-block" id="LogMetrics.render_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogMetrics.render_metric">[docs]</a>    <span class="k">def</span> <span class="nf">render_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="s2">&quot;metric:</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="s1">&#39;MetricName&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Unit&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Dimensions&#39;</span><span class="p">]:</span>
+            <span class="n">label</span> <span class="o">+=</span> <span class="s2">&quot; </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">label</span></div>
+
     <span class="k">def</span> <span class="nf">_format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">):</span>
         <span class="n">d</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;MetricName&quot;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span>
-            <span class="s2">&quot;Timestamp&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_timestamp</span><span class="p">(),</span>
+            <span class="s2">&quot;Timestamp&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span>
             <span class="s2">&quot;Value&quot;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
             <span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="n">unit</span><span class="p">}</span>
         <span class="n">d</span><span class="p">[</span><span class="s2">&quot;Dimensions&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
@@ -297,40 +492,23 @@
             <span class="n">d</span><span class="p">[</span><span class="s1">&#39;Dimensions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;Name&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s2">&quot;Value&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">d</span>
 
-    <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
-        <span class="n">watch</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudwatch&#39;</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">metric_values</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">BUFFER_SIZE</span><span class="p">):</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
-                <span class="n">watch</span><span class="o">.</span><span class="n">put_metric_data</span><span class="p">,</span> <span class="n">Namespace</span><span class="o">=</span><span class="n">ns</span><span class="p">,</span> <span class="n">MetricData</span><span class="o">=</span><span class="n">metrics</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="NullMetricsOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullMetricsOutput">[docs]</a><span class="k">class</span> <span class="nc">NullMetricsOutput</span><span class="p">(</span><span class="n">MetricsOutput</span><span class="p">):</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">()</span>
-
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">namespace</span><span class="o">=</span><span class="n">DEFAULT_NAMESPACE</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">NullMetricsOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">namespace</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="p">[]</span>
-
-    <span class="k">def</span> <span class="nf">_put_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ns</span><span class="p">,</span> <span class="n">metrics</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;Namespace&#39;</span><span class="p">:</span> <span class="n">ns</span><span class="p">,</span> <span class="s1">&#39;MetricData&#39;</span><span class="p">:</span> <span class="n">metrics</span><span class="p">})</span>
-        <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">metrics</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;MetricName&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;ActionTime&#39;</span><span class="p">,</span> <span class="s1">&#39;ResourceTime&#39;</span><span class="p">):</span>
-                <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">format_metric</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
-
-<div class="viewcode-block" id="NullMetricsOutput.format_metric"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.NullMetricsOutput.format_metric">[docs]</a>    <span class="k">def</span> <span class="nf">format_metric</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">):</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="s2">&quot;metric:</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="s1">&#39;MetricName&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Unit&#39;</span><span class="p">],</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">])</span>
-        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">m</span><span class="p">[</span><span class="s1">&#39;Dimensions&#39;</span><span class="p">]:</span>
-            <span class="n">label</span> <span class="o">+=</span> <span class="s2">&quot; </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;Value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
-        <span class="k">return</span> <span class="n">label</span></div></div>
+<div class="viewcode-block" id="LogMetrics.get_metadata"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogMetrics.get_metadata">[docs]</a>    <span class="k">def</span> <span class="nf">get_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">buf</span><span class="p">:</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+            <span class="n">k</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;Dimensions&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">res</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">res</span></div></div>
 
 
 <div class="viewcode-block" id="LogOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogOutput">[docs]</a><span class="k">class</span> <span class="nc">LogOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 
     <span class="n">log_format</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">handler</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="LogOutput.get_handler"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogOutput.get_handler">[docs]</a>    <span class="k">def</span> <span class="nf">get_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span></div>
@@ -359,47 +537,43 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">handler</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div></div>
 
 
-<div class="viewcode-block" id="CloudWatchLogOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.CloudWatchLogOutput">[docs]</a><span class="k">class</span> <span class="nc">CloudWatchLogOutput</span><span class="p">(</span><span class="n">LogOutput</span><span class="p">):</span>
+<div class="viewcode-block" id="LogFile"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogFile">[docs]</a><span class="nd">@log_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">LogFile</span><span class="p">(</span><span class="n">LogOutput</span><span class="p">):</span>
 
-    <span class="n">log_format</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span>
+<div class="viewcode-block" id="LogFile.get_handler"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.LogFile.get_handler">[docs]</a>    <span class="k">def</span> <span class="nf">get_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">logging</span><span class="o">.</span><span class="n">FileHandler</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">log_dir</span><span class="p">,</span> <span class="s1">&#39;custodian-run.log&#39;</span><span class="p">))</span></div></div>
 
-<div class="viewcode-block" id="CloudWatchLogOutput.get_handler"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.CloudWatchLogOutput.get_handler">[docs]</a>    <span class="k">def</span> <span class="nf">get_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">CloudWatchLogHandler</span><span class="p">(</span>
-            <span class="n">log_group</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">,</span>
-            <span class="n">log_stream</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-            <span class="n">session_factory</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="o">=</span><span class="kc">None</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span>
-                <span class="n">assume</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="DirectoryOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;file&#39;</span><span class="p">)</span>
+<span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;default&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">DirectoryOutput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span> <span class="o">=</span> <span class="n">ctx</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+
+        <span class="n">output_path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_output_path</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s1">&#39;url&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;file://&#39;</span><span class="p">):</span>
+            <span class="n">output_path</span> <span class="o">=</span> <span class="n">output_path</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s1">&#39;file://&#39;</span><span class="p">):]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span> <span class="o">=</span> <span class="n">output_path</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span>
 
     <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to group:</span><span class="si">%s</span><span class="s2"> stream:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to dir:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span>
 
-
-<div class="viewcode-block" id="FSOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.FSOutput">[docs]</a><span class="k">class</span> <span class="nc">FSOutput</span><span class="p">(</span><span class="n">LogOutput</span><span class="p">):</span>
-
-<div class="viewcode-block" id="FSOutput.select"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.FSOutput.select">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">blob_outputs</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">://&#39;</span> <span class="o">%</span> <span class="n">k</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">blob_outputs</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
-        <span class="c1"># Fall back local disk</span>
-        <span class="k">return</span> <span class="n">blob_outputs</span><span class="p">[</span><span class="s1">&#39;file&#39;</span><span class="p">]</span></div>
-
-<div class="viewcode-block" id="FSOutput.join"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.FSOutput.join">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="o">*</span><span class="n">parts</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="o">*</span><span class="n">parts</span><span class="p">)</span></div>
-
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span> <span class="ow">or</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">()</span>
-
-<div class="viewcode-block" id="FSOutput.get_handler"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.FSOutput.get_handler">[docs]</a>    <span class="k">def</span> <span class="nf">get_handler</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">logging</span><span class="o">.</span><span class="n">FileHandler</span><span class="p">(</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">,</span> <span class="s1">&#39;custodian-run.log&#39;</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="FSOutput.compress"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.FSOutput.compress">[docs]</a>    <span class="k">def</span> <span class="nf">compress</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="DirectoryOutput.compress"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput.compress">[docs]</a>    <span class="k">def</span> <span class="nf">compress</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Compress files individually so thats easy to walk them, without</span>
         <span class="c1"># downloading tar and extracting.</span>
         <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">):</span>
@@ -408,86 +582,34 @@
                 <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">fp</span> <span class="o">+</span> <span class="s2">&quot;.gz&quot;</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">,</span> <span class="n">compresslevel</span><span class="o">=</span><span class="mi">7</span><span class="p">)</span> <span class="k">as</span> <span class="n">zfh</span><span class="p">:</span>
                     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sfh</span><span class="p">:</span>
                         <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">sfh</span><span class="p">,</span> <span class="n">zfh</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mi">2</span><span class="o">**</span><span class="mi">15</span><span class="p">)</span>
-                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span></div></div>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fp</span><span class="p">)</span></div>
 
+<div class="viewcode-block" id="DirectoryOutput.get_output_path"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput.get_output_path">[docs]</a>    <span class="k">def</span> <span class="nf">get_output_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_url</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">&#39;{&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">output_url</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_url</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output_url</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">get_output_vars</span><span class="p">())</span></div>
 
-<div class="viewcode-block" id="DirectoryOutput"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;file&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">DirectoryOutput</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
+<div class="viewcode-block" id="DirectoryOutput.get_output_vars"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput.get_output_vars">[docs]</a>    <span class="k">def</span> <span class="nf">get_output_vars</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;account_id&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+            <span class="s1">&#39;policy&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s1">&#39;now&#39;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">(),</span>
+            <span class="s1">&#39;uuid&#39;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())}</span>
+        <span class="k">return</span> <span class="n">data</span></div>
 
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">()</span>
+<div class="viewcode-block" id="DirectoryOutput.get_resource_set"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.DirectoryOutput.get_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">record_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">,</span> <span class="s1">&#39;resources.json&#39;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">DirectoryOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;file://&#39;</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s1">&#39;file://&#39;</span><span class="p">):]</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">):</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">record_path</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[]</span>
 
-    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to dir:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span></div>
+        <span class="n">mdate</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">record_path</span><span class="p">)</span><span class="o">.</span><span class="n">st_ctime</span><span class="p">)</span>
 
-
-<div class="viewcode-block" id="S3Output"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.S3Output">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">S3Output</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Usage:</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">       with S3Output(session_factory, &#39;s3://bucket/prefix&#39;):</span>
-<span class="sd">           log.info(&#39;xyz&#39;)  # -&gt; log messages sent to custodian-run.log.gz</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;S3:PutObject&#39;</span><span class="p">,)</span>
-
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">S3Output</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">date_path</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">/%H&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">s3_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_prefix</span> <span class="o">=</span> <span class="n">parse_s3</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="kc">None</span>
-
-    <span class="k">def</span> <span class="nf">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;&lt;</span><span class="si">%s</span><span class="s2"> to bucket:</span><span class="si">%s</span><span class="s2"> prefix:</span><span class="si">%s</span><span class="s2">&gt;&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span>
-            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">key_prefix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_path</span><span class="p">))</span>
-
-<div class="viewcode-block" id="S3Output.join"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.S3Output.join">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">join</span><span class="p">(</span><span class="o">*</span><span class="n">parts</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">])</span></div>
-
-    <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="kn">from</span> <span class="nn">boto3.s3.transfer</span> <span class="k">import</span> <span class="n">S3Transfer</span><span class="p">,</span> <span class="n">TransferConfig</span>
-        <span class="k">if</span> <span class="n">exc_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error while executing policy&quot;</span><span class="p">)</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Uploading policy logs&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">leave_log</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">compress</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="n">S3Transfer</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">(</span><span class="n">assume</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">),</span>
-            <span class="n">config</span><span class="o">=</span><span class="n">TransferConfig</span><span class="p">(</span><span class="n">use_threads</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">upload</span><span class="p">()</span>
-        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">)</span>
-        <span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Policy Logs uploaded&quot;</span><span class="p">)</span>
-
-<div class="viewcode-block" id="S3Output.upload"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.output.S3Output.upload">[docs]</a>    <span class="k">def</span> <span class="nf">upload</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
-                <span class="n">key</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">key_prefix</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">date_path</span><span class="p">,</span>
-                    <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-                        <span class="n">root</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root_dir</span><span class="p">):],</span> <span class="n">f</span><span class="p">))</span>
-                <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span><span class="o">.</span><span class="n">upload_file</span><span class="p">(</span>
-                    <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span>
-                    <span class="n">extra_args</span><span class="o">=</span><span class="p">{</span>
-                        <span class="s1">&#39;ACL&#39;</span><span class="p">:</span> <span class="s1">&#39;bucket-owner-full-control&#39;</span><span class="p">,</span>
-                        <span class="s1">&#39;ServerSideEncryption&#39;</span><span class="p">:</span> <span class="s1">&#39;AES256&#39;</span><span class="p">})</span></div></div>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">record_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">records</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">fh</span><span class="p">)</span>
+            <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="fm">__setitem__</span><span class="p">(</span><span class="s1">&#39;CustodianDate&#39;</span><span class="p">,</span> <span class="n">mdate</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">records</span></div></div>
 </pre></div>
 
            </div>

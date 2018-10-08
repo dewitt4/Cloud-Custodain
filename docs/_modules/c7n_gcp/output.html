@@ -200,15 +200,15 @@
 
 <span class="kn">from</span> <span class="nn">c7n.output</span> <span class="k">import</span> <span class="p">(</span>
     <span class="n">blob_outputs</span><span class="p">,</span>
-    <span class="n">FSOutput</span><span class="p">,</span>
     <span class="n">metrics_outputs</span><span class="p">,</span>
-    <span class="n">MetricsOutput</span><span class="p">,</span>
+    <span class="n">DirectoryOutput</span><span class="p">,</span>
+    <span class="n">Metrics</span><span class="p">,</span>
     <span class="n">LogOutput</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
 
 <div class="viewcode-block" id="StackDriverMetrics"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMetrics">[docs]</a><span class="nd">@metrics_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;gcp&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">StackDriverMetrics</span><span class="p">(</span><span class="n">MetricsOutput</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">StackDriverMetrics</span><span class="p">(</span><span class="n">Metrics</span><span class="p">):</span>
 
     <span class="n">METRICS_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;custom.googleapis.com/custodian/policy&#39;</span>
 
@@ -247,9 +247,10 @@
 
     <span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;c7n_gcp.metrics&#39;</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">StackDriverMetrics</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">()</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">StackDriverMetrics</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">project_id</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">get_default_project</span><span class="p">()</span>
 
 <div class="viewcode-block" id="StackDriverMetrics.initialize"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.StackDriverMetrics.initialize">[docs]</a>    <span class="k">def</span> <span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;One time initialization of metrics descriptors.</span>
@@ -281,7 +282,7 @@
         <span class="c1"># Resource is a Google controlled vocabulary with artificial</span>
         <span class="c1"># limitations on resource type there&#39;s not much useful we can</span>
         <span class="c1"># utilize.</span>
-        <span class="n">now</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_timestamp</span><span class="p">()</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
         <span class="n">metrics_series</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;metric&#39;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;custom.googleapis.com/custodian/policy/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">key</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span>
@@ -346,10 +347,10 @@
 
 
 <div class="viewcode-block" id="GCPStorageOutput"><a class="viewcode-back" href="../../generated/gcp/c7n_gcp.html#c7n_gcp.output.GCPStorageOutput">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;gs&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">GCPStorageOutput</span><span class="p">(</span><span class="n">FSOutput</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">GCPStorageOutput</span><span class="p">(</span><span class="n">DirectoryOutput</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">GCPStorageOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">GCPStorageOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">date_path</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y/%m/</span><span class="si">%d</span><span class="s1">/%H&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">gs_path</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bucket</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_prefix</span> <span class="o">=</span> <span class="n">parse_gs</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">output_path</span><span class="p">)</span>

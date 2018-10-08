@@ -202,6 +202,7 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">io</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
@@ -209,6 +210,8 @@
 <span class="kn">import</span> <span class="nn">tempfile</span>
 <span class="kn">import</span> <span class="nn">unittest</span>
 
+
+<span class="kn">import</span> <span class="nn">mock</span>
 <span class="kn">import</span> <span class="nn">six</span>
 <span class="kn">import</span> <span class="nn">yaml</span>
 
@@ -271,8 +274,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">context_output_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_temp_dir</span><span class="p">()</span>
             <span class="n">config</span> <span class="o">=</span> <span class="n">Config</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">output_dir</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">context_output_dir</span><span class="p">)</span>
         <span class="n">ctx</span> <span class="o">=</span> <span class="n">ExecutionContext</span><span class="p">(</span>
-            <span class="n">session_factory</span><span class="p">,</span> <span class="n">policy</span> <span class="ow">or</span> <span class="n">Bag</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;test-policy&quot;</span><span class="p">}),</span> <span class="n">config</span>
-        <span class="p">)</span>
+            <span class="n">session_factory</span><span class="p">,</span> <span class="n">policy</span> <span class="ow">or</span> <span class="n">Bag</span><span class="p">({</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;test-policy&quot;</span><span class="p">,</span> <span class="s2">&quot;provider_name&quot;</span><span class="p">:</span> <span class="s2">&quot;aws&quot;</span><span class="p">}),</span> <span class="n">config</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ctx</span></div>
 
 <div class="viewcode-block" id="TestUtils.load_policy"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.testing.TestUtils.load_policy">[docs]</a>    <span class="k">def</span> <span class="nf">load_policy</span><span class="p">(</span>
@@ -385,6 +388,41 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">six</span><span class="o">.</span><span class="n">text_type</span><span class="p">):</span>
             <span class="n">b</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">TextTestIO</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">b</span><span class="p">)</span></div></div>
+
+
+<span class="c1"># Per http://blog.xelnor.net/python-mocking-datetime/</span>
+<span class="c1"># naive implementation has issues with pypy</span>
+
+<span class="n">real_datetime_class</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span>
+
+
+<div class="viewcode-block" id="mock_datetime_now"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.testing.mock_datetime_now">[docs]</a><span class="k">def</span> <span class="nf">mock_datetime_now</span><span class="p">(</span><span class="n">tgt</span><span class="p">,</span> <span class="n">dt</span><span class="p">):</span>
+
+    <span class="k">class</span> <span class="nc">DatetimeSubclassMeta</span><span class="p">(</span><span class="nb">type</span><span class="p">):</span>
+
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">__instancecheck__</span><span class="p">(</span><span class="n">mcs</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">real_datetime_class</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">BaseMockedDatetime</span><span class="p">(</span><span class="n">real_datetime_class</span><span class="p">):</span>
+        <span class="n">target</span> <span class="o">=</span> <span class="n">tgt</span>
+
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">now</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tzinfo</span><span class="o">=</span><span class="n">tz</span><span class="p">)</span>
+
+        <span class="nd">@classmethod</span>
+        <span class="k">def</span> <span class="nf">utcnow</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">target</span>
+
+        <span class="c1"># Python2 &amp; Python3 compatible metaclass</span>
+
+    <span class="n">MockedDatetime</span> <span class="o">=</span> <span class="n">DatetimeSubclassMeta</span><span class="p">(</span>
+        <span class="sa">b</span><span class="s2">&quot;datetime&quot;</span> <span class="k">if</span> <span class="nb">str</span> <span class="ow">is</span> <span class="nb">bytes</span> <span class="k">else</span> <span class="s2">&quot;datetime&quot;</span><span class="p">,</span>  <span class="c1"># hack Python2/3 port</span>
+        <span class="p">(</span><span class="n">BaseMockedDatetime</span><span class="p">,),</span>
+        <span class="p">{},</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mock</span><span class="o">.</span><span class="n">patch</span><span class="o">.</span><span class="n">object</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="s2">&quot;datetime&quot;</span><span class="p">,</span> <span class="n">MockedDatetime</span><span class="p">)</span></div>
 </pre></div>
 
            </div>

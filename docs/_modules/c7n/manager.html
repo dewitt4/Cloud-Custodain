@@ -205,6 +205,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">cache</span>
 <span class="kn">from</span> <span class="nn">c7n.executor</span> <span class="k">import</span> <span class="n">ThreadPoolExecutor</span>
+<span class="kn">from</span> <span class="nn">c7n.provider</span> <span class="k">import</span> <span class="n">clouds</span>
 <span class="kn">from</span> <span class="nn">c7n.registry</span> <span class="k">import</span> <span class="n">PluginRegistry</span>
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">c7n.resources.aws</span> <span class="k">import</span> <span class="n">AWS</span>
@@ -227,7 +228,6 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">options</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log_dir</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">log_dir</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_cache</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">factory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">options</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.resources.</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">()))</span>
@@ -258,13 +258,24 @@
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="ResourceManager.get_resource_manager"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.manager.ResourceManager.get_resource_manager">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_manager</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource_type</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">klass</span> <span class="o">=</span> <span class="n">resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource_type</span><span class="p">)</span>
+        <span class="sd">&quot;&quot;&quot;get a resource manager or a given resource type.</span>
+
+<span class="sd">        assumes the query is for the same underlying cloud provider.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s1">&#39;.&#39;</span> <span class="ow">in</span> <span class="n">resource_type</span><span class="p">:</span>
+            <span class="n">provider_name</span><span class="p">,</span> <span class="n">resource_type</span> <span class="o">=</span> <span class="n">resource_type</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">provider_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">provider_name</span>
+
+        <span class="n">provider_resources</span> <span class="o">=</span> <span class="n">clouds</span><span class="p">[</span><span class="n">provider_name</span><span class="p">]</span><span class="o">.</span><span class="n">resources</span>
+        <span class="n">klass</span> <span class="o">=</span> <span class="n">provider_resources</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">resource_type</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">klass</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">resource_type</span><span class="p">)</span>
+
         <span class="c1"># if we&#39;re already querying via config carry it forward</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_type</span> <span class="o">==</span> <span class="s1">&#39;config&#39;</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span>
                 <span class="n">klass</span><span class="o">.</span><span class="n">get_model</span><span class="p">(),</span> <span class="s1">&#39;config_type&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">klass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_type</span><span class="p">})</span>
+            <span class="k">return</span> <span class="n">klass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;source&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_type</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">klass</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span> <span class="ow">or</span> <span class="p">{})</span></div>
 
 <div class="viewcode-block" id="ResourceManager.filter_resources"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.manager.ResourceManager.filter_resources">[docs]</a>    <span class="k">def</span> <span class="nf">filter_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -276,7 +287,10 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">resources</span><span class="p">:</span>
                 <span class="k">break</span>
             <span class="n">rcount</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
-            <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="n">subsegment</span><span class="p">(</span><span class="s2">&quot;filter:</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">f</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                <span class="n">resources</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+
             <span class="k">if</span> <span class="n">event</span> <span class="ow">and</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;debug&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
                     <span class="s2">&quot;applied filter </span><span class="si">%s</span><span class="s2"> </span><span class="si">%d</span><span class="s2">-&gt;</span><span class="si">%d</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">rcount</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">))</span>

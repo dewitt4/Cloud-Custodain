@@ -210,7 +210,6 @@
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
-
 <span class="kn">import</span> <span class="nn">jmespath</span>
 <span class="kn">import</span> <span class="nn">six</span>
 
@@ -458,7 +457,8 @@
             <span class="n">at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">actions</span><span class="p">:</span>
                 <span class="n">s</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                <span class="n">results</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="n">subsegment</span><span class="p">(</span><span class="s1">&#39;action:</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">a</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
+                    <span class="n">results</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                     <span class="s2">&quot;policy: </span><span class="si">%s</span><span class="s2"> action: </span><span class="si">%s</span><span class="s2">&quot;</span>
                     <span class="s2">&quot; resources: </span><span class="si">%d</span><span class="s2">&quot;</span>
@@ -931,6 +931,9 @@
     <span class="k">def</span> <span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">())</span>
 
+<div class="viewcode-block" id="Policy.get_cache"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.policy.Policy.get_cache">[docs]</a>    <span class="k">def</span> <span class="nf">get_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">resource_manager</span><span class="o">.</span><span class="n">_cache</span></div>
+
 <div class="viewcode-block" id="Policy.get_execution_mode"><a class="viewcode-back" href="../../generated/aws/c7n.html#c7n.policy.Policy.get_execution_mode">[docs]</a>    <span class="k">def</span> <span class="nf">get_execution_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">exec_mode_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;pull&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
         <span class="n">exec_mode</span> <span class="o">=</span> <span class="n">execution</span><span class="p">[</span><span class="n">exec_mode_type</span><span class="p">]</span>
@@ -1049,7 +1052,6 @@
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Run policy in default mode&quot;&quot;&quot;</span>
         <span class="n">mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_execution_mode</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session_factory</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">dryrun</span><span class="p">:</span>
             <span class="n">resources</span> <span class="o">=</span> <span class="n">PullMode</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">mode</span><span class="p">,</span> <span class="n">ServerlessExecutionMode</span><span class="p">):</span>
