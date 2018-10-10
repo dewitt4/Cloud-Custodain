@@ -247,8 +247,6 @@
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.AzureFunctionMode&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">template_util</span> <span class="o">=</span> <span class="n">TemplateUtilities</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_parameters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">template_util</span><span class="p">)</span>
@@ -262,7 +260,10 @@
 
 <div class="viewcode-block" id="AzureFunctionMode.provision"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Provision any resources needed for the policy.&quot;&quot;&quot;</span>
-        <span class="n">existing_service_plan</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">app_service_plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
+
+        <span class="n">existing_service_plan</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">app_service_plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">group_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">[</span><span class="s1">&#39;servicePlanName&#39;</span><span class="p">][</span><span class="s1">&#39;value&#39;</span><span class="p">])</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_service_plan</span><span class="p">:</span>
@@ -273,7 +274,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">group_name</span><span class="p">,</span> <span class="s1">&#39;dedicated_functionapp.json&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
 
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">existing_webapp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">web_apps</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">webapp_name</span><span class="p">)</span>
+            <span class="n">existing_webapp</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">web_apps</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">webapp_name</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">existing_webapp</span><span class="p">:</span>
                 <span class="n">functionapp_util</span> <span class="o">=</span> <span class="n">FunctionAppUtilities</span><span class="p">()</span>
                 <span class="n">functionapp_util</span><span class="o">.</span><span class="n">deploy_webapp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">webapp_name</span><span class="p">,</span>
@@ -370,7 +371,8 @@
 
 <div class="viewcode-block" id="AzureEventGridMode.provision"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureEventGridMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">AzureEventGridMode</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">provision</span><span class="p">()</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_webhook_key</span><span class="p">()</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_webhook_key</span><span class="p">(</span><span class="n">session</span><span class="p">)</span>
         <span class="n">webhook_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.azurewebsites.net/api/</span><span class="si">%s</span><span class="s1">?code=</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">webapp_name</span><span class="p">,</span>
                                                                        <span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
         <span class="n">destination</span> <span class="o">=</span> <span class="n">WebHookEventSubscriptionDestination</span><span class="p">(</span>
@@ -380,10 +382,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating Event Grid subscription&quot;</span><span class="p">)</span>
         <span class="n">event_filter</span> <span class="o">=</span> <span class="n">EventSubscriptionFilter</span><span class="p">()</span>
         <span class="n">event_info</span> <span class="o">=</span> <span class="n">EventSubscription</span><span class="p">(</span><span class="n">destination</span><span class="o">=</span><span class="n">destination</span><span class="p">,</span> <span class="nb">filter</span><span class="o">=</span><span class="n">event_filter</span><span class="p">)</span>
-        <span class="n">scope</span> <span class="o">=</span> <span class="s1">&#39;/subscriptions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">subscription_id</span>
+        <span class="n">scope</span> <span class="o">=</span> <span class="s1">&#39;/subscriptions/</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">session</span><span class="o">.</span><span class="n">subscription_id</span>
 
         <span class="c1">#: :type: azure.mgmt.eventgrid.EventGridManagementClient</span>
-        <span class="n">eventgrid_client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.eventgrid.EventGridManagementClient&#39;</span><span class="p">)</span>
+        <span class="n">eventgrid_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.eventgrid.EventGridManagementClient&#39;</span><span class="p">)</span>
 
         <span class="n">status_success</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">while</span> <span class="ow">not</span> <span class="n">status_success</span><span class="p">:</span>
@@ -399,17 +401,17 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Retrying in 30 seconds&#39;</span><span class="p">)</span>
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">30</span><span class="p">)</span></div>
 
-    <span class="k">def</span> <span class="nf">_get_webhook_key</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_get_webhook_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Fetching Function&#39;s API keys&quot;</span><span class="p">)</span>
         <span class="n">token_headers</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s1">&#39;Authorization&#39;</span><span class="p">:</span> <span class="s1">&#39;Bearer </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">()</span>
+            <span class="s1">&#39;Authorization&#39;</span><span class="p">:</span> <span class="s1">&#39;Bearer </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">session</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">()</span>
         <span class="p">}</span>
 
         <span class="n">key_url</span> <span class="o">=</span> <span class="p">(</span>
             <span class="s1">&#39;https://management.azure.com&#39;</span>
             <span class="s1">&#39;/subscriptions/</span><span class="si">{0}</span><span class="s1">/resourceGroups/</span><span class="si">{1}</span><span class="s1">/&#39;</span>
             <span class="s1">&#39;providers/Microsoft.Web/sites/</span><span class="si">{2}</span><span class="s1">/</span><span class="si">{3}</span><span class="s1">&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">,</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">subscription_id</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">group_name</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">webapp_name</span><span class="p">,</span>
             <span class="n">CONST_AZURE_FUNCTION_KEY_URL</span><span class="p">)</span>
