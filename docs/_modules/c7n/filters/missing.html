@@ -202,9 +202,10 @@
 
 <span class="kn">from</span> <span class="nn">.core</span> <span class="k">import</span> <span class="n">Filter</span>
 
+<span class="kn">from</span> <span class="nn">c7n.provider</span> <span class="k">import</span> <span class="n">clouds</span>
 <span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
-<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">PolicyCollection</span>
 
 
 <div class="viewcode-block" id="Missing"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.missing.Missing">[docs]</a><span class="k">class</span> <span class="nc">Missing</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
@@ -215,12 +216,14 @@
 <span class="sd">    This works as an effectively an embedded policy thats evaluated.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
-        <span class="s1">&#39;missing&#39;</span><span class="p">,</span> <span class="n">policy</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span> <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">])</span>
+        <span class="s1">&#39;missing&#39;</span><span class="p">,</span> <span class="n">policy</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">])</span>
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">Missing</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">][</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">name</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span> <span class="o">=</span> <span class="n">Policy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span> <span class="o">=</span> <span class="n">Policy</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Missing.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.missing.Missing.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="s1">&#39;mode&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;policy&#39;</span><span class="p">]:</span>
@@ -239,8 +242,28 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">get_permissions</span><span class="p">()</span></div>
 
 <div class="viewcode-block" id="Missing.process"><a class="viewcode-back" href="../../../generated/aws/c7n.filters.html#c7n.filters.missing.Missing.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">check_resources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">check_resources</span><span class="p">:</span>
+
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">clouds</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">provider_name</span><span class="p">]()</span>
+
+        <span class="c1"># if the embedded policy only specifies one region, or only</span>
+        <span class="c1"># being executed on a single region.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">region</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">regions</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">region</span> <span class="ow">and</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">region</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">[]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">expand_variables</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">get_variables</span><span class="p">())</span>
+            <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span> <span class="ow">and</span> <span class="n">resources</span> <span class="ow">or</span> <span class="p">[]</span>
+
+        <span class="c1"># For regional resources and multi-region execution, the policy matches if</span>
+        <span class="c1"># the resource is missing in any region.</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">provider</span><span class="o">.</span><span class="n">initialize_policies</span><span class="p">(</span>
+                <span class="n">PolicyCollection</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">embedded_policy</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="p">),</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="p">):</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">expand_variables</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">get_variables</span><span class="p">())</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+            <span class="n">found</span><span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">poll</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">found</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
             <span class="k">return</span> <span class="n">resources</span>
         <span class="k">return</span> <span class="p">[]</span></div></div>
 </pre></div>
