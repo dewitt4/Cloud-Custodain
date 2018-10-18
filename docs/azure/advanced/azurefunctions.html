@@ -218,7 +218,7 @@ them to run inexpensively in your subscription.</p>
 yet supported.</p>
 <div class="section" id="provision-options">
 <h3>Provision Options<a class="headerlink" href="#provision-options" title="Permalink to this headline">¶</a></h3>
-<p>When deploying an Azure function the following ARM resources are required and created on demand:</p>
+<p>When deploying an Azure function the following ARM resources are required and created on demand if necessary:</p>
 <ul class="simple">
 <li>Storage (shared across functions)</li>
 <li>Application Insights (shared across functions)</li>
@@ -233,17 +233,34 @@ shared plan resources.</p>
 resources. To override these settings you must set ‘provision-options’ with one of the following
 keys:</p>
 <ul class="simple">
-<li>location (default: West US 2)</li>
-<li>appInsightsLocation (default: West US 2)</li>
-<li>servicePlanName (default: cloud-custodian)</li>
-<li>sku (default: Basic)</li>
-<li>skuCode (default: B1)</li>
-<li>workerSize (default: 0)</li>
+<li>servicePlan
+- name (default: cloud-custodian)
+- location (default: West US 2)
+- resourceGroupName (default: cloud-custodian)
+- skuTier (default: Basic)
+- skuName (default: B1)</li>
+<li>storageAccount
+- name (default: custodianstorageaccount)
+- location (default: servicePlan location)
+- resourceGroupName (default: servicePlan resource group)</li>
+<li>appInsights
+- name (default: servicePlan resource group)
+- location (default: servicePlan location)
+- resourceGroupName (default: servicePlan name)</li>
 </ul>
 <p>The location allows you to choose the region to deploy the resource group and resources that will be
 provisioned. Application Insights has six available locations and thus can not always be in the same
 region as the other resources: West US 2, East US, North Europe, South Central US, Southeast Asia, and
 West Europe. The sku, skuCode, and workerSize correlate to scaling up the App Service Plan.</p>
+<p>If specified resources already exist in the subscription (discoverable by resource group name and resource name), Cloud Custodian won’t make any changes (location, sku)
+and will use existing resources as-is. If resource doesn’t exist, it will be provisioned using provided configuration.</p>
+<p>If you have existing infrastructure, you can specify resource ids for the following itesm (instead of applying previous schema):</p>
+<ul class="simple">
+<li>storageAccount</li>
+<li>servicePlan</li>
+<li>appInsights</li>
+</ul>
+<p>If you provide resource ids, Cloud Custodian verifies that resource exists before function app provisioning. It returns an error if resource is missing.</p>
 <p>An example on how to set the servicePlanName and accept defaults for the other values:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
   <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
@@ -251,7 +268,8 @@ West Europe. The sku, skuCode, and workerSize correlate to scaling up the App Se
         <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure-periodic</span>
         <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&#39;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&#39;</span>
         <span class="l l-Scalar l-Scalar-Plain">provision-options</span><span class="p p-Indicator">:</span>
-          <span class="l l-Scalar l-Scalar-Plain">servicePlanName</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
+          <span class="l l-Scalar l-Scalar-Plain">servicePlan</span><span class="p p-Indicator">:</span>
+            <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
     <span class=" -Error"> </span><span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.vm</span>
      <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">instance-view</span>
@@ -268,11 +286,35 @@ West Europe. The sku, skuCode, and workerSize correlate to scaling up the App Se
         <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure-periodic</span>
         <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&#39;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&#39;</span>
         <span class="l l-Scalar l-Scalar-Plain">provision-options</span><span class="p p-Indicator">:</span>
-          <span class="l l-Scalar l-Scalar-Plain">servicePlanName</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
-          <span class="l l-Scalar l-Scalar-Plain">location</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">East US</span>
-          <span class="l l-Scalar l-Scalar-Plain">appInsightsLocation</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">East US</span>
-          <span class="l l-Scalar l-Scalar-Plain">sku</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">Standard</span>
-          <span class="l l-Scalar l-Scalar-Plain">skuCode</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">S1</span>
+          <span class="l l-Scalar l-Scalar-Plain">servicePlan</span><span class="p p-Indicator">:</span>
+            <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
+            <span class="l l-Scalar l-Scalar-Plain">location</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">East US</span>
+            <span class="l l-Scalar l-Scalar-Plain">skuTier</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">Standard</span>
+            <span class="l l-Scalar l-Scalar-Plain">skuName</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">S1</span>
+          <span class="l l-Scalar l-Scalar-Plain">appInsights</span><span class="p p-Indicator">:</span>
+            <span class="l l-Scalar l-Scalar-Plain">location</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">East US</span>
+          <span class="l l-Scalar l-Scalar-Plain">storageAccount</span><span class="p p-Indicator">:</span>
+            <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">sampleaccount</span>
+            <span class="l l-Scalar l-Scalar-Plain">location</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">East US</span>
+    <span class=" -Error"> </span><span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.vm</span>
+     <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">instance-view</span>
+        <span class="l l-Scalar l-Scalar-Plain">key</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">statuses[].code</span>
+        <span class="l l-Scalar l-Scalar-Plain">op</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">not-in</span>
+        <span class="l l-Scalar l-Scalar-Plain">value_type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">swap</span>
+        <span class="l l-Scalar l-Scalar-Plain">value</span><span class="p p-Indicator">:</span> <span class="s">&quot;PowerState/running&quot;</span>
+</pre></div>
+</div>
+<p>An example on how to use existing infrastructure:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="l l-Scalar l-Scalar-Plain">policies</span><span class="p p-Indicator">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
+    <span class="l l-Scalar l-Scalar-Plain">mode</span><span class="p p-Indicator">:</span>
+        <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure-periodic</span>
+        <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&#39;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&#39;</span>
+        <span class="l l-Scalar l-Scalar-Plain">provision-options</span><span class="p p-Indicator">:</span>
+          <span class="l l-Scalar l-Scalar-Plain">servicePlan</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">/subscriptions/&lt;subscription_id&gt;/resourceGroups/cloud-custodian/providers/Microsoft.Web/serverFarms/existingResource</span>
+          <span class="l l-Scalar l-Scalar-Plain">appInsights</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">/subscriptions/&lt;subscription_id&gt;/resourceGroups/cloud-custodian/providers/microsoft.insights/components/existingResource</span>
+          <span class="l l-Scalar l-Scalar-Plain">storageAccount</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">/subscriptions/&lt;subscription_id&gt;/resourceGroups/cloud-custodian/providers/Microsoft.Storage/storageAccounts/existingResource</span>
     <span class=" -Error"> </span><span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.vm</span>
      <span class="l l-Scalar l-Scalar-Plain">filters</span><span class="p p-Indicator">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">instance-view</span>
@@ -300,7 +342,8 @@ be provided on the command line in non-serverless scenarios.</p>
         <span class="l l-Scalar l-Scalar-Plain">type</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure-periodic</span>
         <span class="l l-Scalar l-Scalar-Plain">schedule</span><span class="p p-Indicator">:</span> <span class="s">&#39;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&#39;</span>
         <span class="l l-Scalar l-Scalar-Plain">provision-options</span><span class="p p-Indicator">:</span>
-          <span class="l l-Scalar l-Scalar-Plain">servicePlanName</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
+          <span class="l l-Scalar l-Scalar-Plain">servicePlan</span><span class="p p-Indicator">:</span>
+            <span class="l l-Scalar l-Scalar-Plain">name</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
         <span class="l l-Scalar l-Scalar-Plain">execution-options</span><span class="p p-Indicator">:</span>
           <span class="l l-Scalar l-Scalar-Plain">output_dir</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure://yourstorageaccount.blob.core.windows.net/custodian</span>
     <span class=" -Error"> </span><span class="l l-Scalar l-Scalar-Plain">resource</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.vm</span>
