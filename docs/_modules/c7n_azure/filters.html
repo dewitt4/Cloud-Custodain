@@ -200,19 +200,20 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="k">import</span> <span class="n">as_completed</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 
+<span class="kn">from</span> <span class="nn">azure.mgmt.policyinsights</span> <span class="k">import</span> <span class="n">PolicyInsightsClient</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">Math</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">now</span>
 <span class="kn">from</span> <span class="nn">dateutil</span> <span class="k">import</span> <span class="n">zoneinfo</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 
-<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.core</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
-
-<span class="kn">from</span> <span class="nn">azure.mgmt.policyinsights</span> <span class="k">import</span> <span class="n">PolicyInsightsClient</span>
 
 
 <div class="viewcode-block" id="MetricFilter"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.MetricFilter">[docs]</a><span class="k">class</span> <span class="nc">MetricFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
@@ -432,6 +433,44 @@
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_date</span> <span class="o">&gt;=</span> <span class="p">(</span>
             <span class="n">action_date</span> <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">skew</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">skew_hours</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="DiagnosticSettingsFilter"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.DiagnosticSettingsFilter">[docs]</a><span class="k">class</span> <span class="nc">DiagnosticSettingsFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;diagnostic-settings&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DiagnosticSettingsFilter.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.DiagnosticSettingsFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># Process each resource in a separate thread, returning all that pass filter</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">resource_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="mi">20</span><span class="p">):</span>
+                <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">,</span> <span class="n">resource_set</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Diagnostic settings filter error: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">f</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+                    <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">())</span>
+
+            <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="DiagnosticSettingsFilter.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.DiagnosticSettingsFilter.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="c1">#: :type: azure.mgmt.monitor.MonitorManagementClient</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.monitor.MonitorManagementClient&#39;</span><span class="p">)</span>
+        <span class="n">matched</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">settings</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">diagnostic_settings</span><span class="o">.</span><span class="n">list</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+            <span class="n">settings</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">settings</span><span class="o">.</span><span class="n">value</span><span class="p">]</span>
+
+            <span class="n">filtered_settings</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">DiagnosticSettingsFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">filtered_settings</span><span class="p">:</span>
+                <span class="n">matched</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">resource</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">matched</span></div></div>
 
 
 <div class="viewcode-block" id="PolicyCompliantFilter"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.PolicyCompliantFilter">[docs]</a><span class="k">class</span> <span class="nc">PolicyCompliantFilter</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
