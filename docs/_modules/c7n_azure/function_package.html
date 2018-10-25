@@ -199,7 +199,7 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-
+<span class="kn">import</span> <span class="nn">distutils.util</span>
 <span class="kn">import</span> <span class="nn">fnmatch</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
@@ -208,7 +208,9 @@
 <span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">import</span> <span class="nn">requests</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span> <span class="n">FUNCTION_TIME_TRIGGER_MODE</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="n">ENV_CUSTODIAN_DISABLE_SSL_CERT_VERIFICATION</span><span class="p">,</span> \
+    <span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span> <span class="n">FUNCTION_TIME_TRIGGER_MODE</span>
+
 <span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
 
 <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">PythonPackageArchive</span>
@@ -223,6 +225,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">function_path</span> <span class="o">=</span> <span class="n">function_path</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
             <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)),</span> <span class="s1">&#39;function.py&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enable_ssl_cert</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">distutils</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">strtobool</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ENV_CUSTODIAN_DISABLE_SSL_CERT_VERIFICATION</span><span class="p">,</span> <span class="s1">&#39;no&#39;</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_ssl_cert</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;SSL Certificate Validation is disabled&#39;</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_add_functions_required_files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_path</span><span class="p">,</span>
@@ -369,9 +376,9 @@
         <span class="c1"># cffi module needs special handling</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_add_cffi_module</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="FunctionPackage.wait_for_status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.wait_for_status">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">,</span> <span class="n">retries</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">delay</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
+<div class="viewcode-block" id="FunctionPackage.wait_for_status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.wait_for_status">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deployment_creds</span><span class="p">,</span> <span class="n">retries</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">delay</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">retries</span><span class="p">):</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">(</span><span class="n">app_name</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">status</span><span class="p">(</span><span class="n">deployment_creds</span><span class="p">):</span>
                 <span class="k">return</span> <span class="kc">True</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;(</span><span class="si">%s</span><span class="s1">/</span><span class="si">%s</span><span class="s1">) Will retry Function App status check in </span><span class="si">%s</span><span class="s1"> seconds...&#39;</span>
@@ -379,15 +386,11 @@
                 <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="FunctionPackage.status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.status">[docs]</a>    <span class="k">def</span> <span class="nf">status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
-        <span class="n">status_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.scm.azurewebsites.net/api/deployments&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s1">&#39;Authorization&#39;</span><span class="p">:</span> <span class="s1">&#39;Bearer </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">())</span>
-        <span class="p">}</span>
+<div class="viewcode-block" id="FunctionPackage.status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.status">[docs]</a>    <span class="k">def</span> <span class="nf">status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deployment_creds</span><span class="p">):</span>
+        <span class="n">status_url</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/api/deployments&#39;</span> <span class="o">%</span> <span class="n">deployment_creds</span><span class="o">.</span><span class="n">scm_uri</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">status_url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">status_url</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">enable_ssl_cert</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ReadTimeout</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Your Function app is not responding to a status request.&quot;</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">False</span>
@@ -399,31 +402,25 @@
 
         <span class="k">return</span> <span class="kc">True</span></div>
 
-<div class="viewcode-block" id="FunctionPackage.publish"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app_name</span><span class="p">):</span>
+<div class="viewcode-block" id="FunctionPackage.publish"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deployment_creds</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
         <span class="c1"># update perms of the package</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_update_perms_package</span><span class="p">()</span>
-
-        <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
-        <span class="n">zip_api_url</span> <span class="o">=</span> <span class="s1">&#39;https://</span><span class="si">%s</span><span class="s1">.scm.azurewebsites.net/api/zipdeploy?isAsync=true&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">app_name</span><span class="p">)</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s1">&#39;Content-type&#39;</span><span class="p">:</span> <span class="s1">&#39;application/zip&#39;</span><span class="p">,</span>
-            <span class="s1">&#39;Authorization&#39;</span><span class="p">:</span> <span class="s1">&#39;Bearer </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get_bearer_token</span><span class="p">())</span>
-        <span class="p">}</span>
+        <span class="n">zip_api_url</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">/api/zipdeploy?isAsync=true&#39;</span> <span class="o">%</span> <span class="n">deployment_creds</span><span class="o">.</span><span class="n">scm_uri</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Publishing Function package from </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
 
         <span class="n">zip_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
 
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">zip_api_url</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">zip_file</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">zip_api_url</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">zip_file</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">enable_ssl_cert</span><span class="p">)</span>
         <span class="k">except</span> <span class="n">requests</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ReadTimeout</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Your Function App deployment timed out after 5 minutes. Try again.&quot;</span><span class="p">)</span>
 
         <span class="n">r</span><span class="o">.</span><span class="n">raise_for_status</span><span class="p">()</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function publish result: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">status_code</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">text</span><span class="p">))</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function publish result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">r</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.close"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
@@ -449,8 +446,8 @@
                 <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;Lib&quot;</span><span class="p">,</span> <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
             <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span> <span class="o">==</span> <span class="s1">&#39;/&#39;</span><span class="p">:</span>
                 <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span>
-                                                 <span class="s2">&quot;python&quot;</span> <span class="o">+</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span>
-                                                 <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
+                                                  <span class="s2">&quot;python&quot;</span> <span class="o">+</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span>
+                                                  <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
                 <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span> <span class="s2">&quot;site-python&quot;</span><span class="p">))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>

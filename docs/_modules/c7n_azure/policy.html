@@ -280,7 +280,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.AzureFunctionMode&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="AzureFunctionMode.get_function_app_params"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.get_function_app_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_function_app_params</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
@@ -325,13 +325,14 @@
                 <span class="s1">&#39;resource_group_name&#39;</span><span class="p">:</span> <span class="n">rg_name</span>
             <span class="p">})</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">+</span> <span class="s1">&#39;-&#39;</span> <span class="o">+</span> <span class="n">function_suffix</span>
+        <span class="n">function_app_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span> <span class="o">+</span> <span class="s1">&#39;-&#39;</span> <span class="o">+</span> <span class="n">function_suffix</span>
 
         <span class="n">params</span> <span class="o">=</span> <span class="n">FunctionAppUtilities</span><span class="o">.</span><span class="n">FunctionAppInfrastructureParameters</span><span class="p">(</span>
             <span class="n">app_insights</span><span class="o">=</span><span class="n">app_insights</span><span class="p">,</span>
             <span class="n">service_plan</span><span class="o">=</span><span class="n">service_plan</span><span class="p">,</span>
             <span class="n">storage_account</span><span class="o">=</span><span class="n">storage_account</span><span class="p">,</span>
-            <span class="n">functionapp_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span>
+            <span class="n">function_app_resource_group_name</span><span class="o">=</span><span class="n">service_plan</span><span class="p">[</span><span class="s1">&#39;resource_group_name&#39;</span><span class="p">],</span>
+            <span class="n">function_app_name</span><span class="o">=</span><span class="n">function_app_name</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">params</span></div>
 
@@ -355,8 +356,8 @@
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsibility&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AzureFunctionMode.provision"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_function_app_params</span><span class="p">()</span>
-        <span class="n">FunctionAppUtilities</span><span class="p">()</span><span class="o">.</span><span class="n">deploy_dedicated_function_app</span><span class="p">(</span><span class="n">params</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_function_app_params</span><span class="p">()</span>
+        <span class="n">FunctionAppUtilities</span><span class="p">()</span><span class="o">.</span><span class="n">deploy_dedicated_function_app</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AzureFunctionMode.get_logs"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.get_logs">[docs]</a>    <span class="k">def</span> <span class="nf">get_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Retrieve logs for the policy&quot;&quot;&quot;</span>
@@ -366,7 +367,7 @@
         <span class="sd">&quot;&quot;&quot;Validate configuration settings for execution mode.&quot;&quot;&quot;</span></div>
 
     <span class="k">def</span> <span class="nf">_publish_functions_package</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Building function package for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Building function package for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span>
 
         <span class="n">archive</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span><span class="p">)</span>
         <span class="n">archive</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="n">queue_name</span><span class="p">)</span>
@@ -374,15 +375,21 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function package built, size is </span><span class="si">%d</span><span class="s2">MB&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">archive</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">size</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)))</span>
 
-        <span class="k">if</span> <span class="n">archive</span><span class="o">.</span><span class="n">wait_for_status</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">):</span>
-            <span class="n">archive</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>\
+            <span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
+        <span class="n">publish_creds</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">web_apps</span><span class="o">.</span><span class="n">list_publishing_credentials</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_resource_group_name</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">archive</span><span class="o">.</span><span class="n">wait_for_status</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">):</span>
+            <span class="n">archive</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Aborted deployment, ensure Application Service is healthy.&quot;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="AzurePeriodicMode"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzurePeriodicMode">[docs]</a><span class="nd">@execution</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">FUNCTION_TIME_TRIGGER_MODE</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">AzurePeriodicMode</span><span class="p">(</span><span class="n">AzureFunctionMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;A policy that runs/executes in azure functions at specified</span>
+    <span class="sd">&quot;&quot;&quot;A policy that runs/execute s in azure functions at specified</span>
 <span class="sd">    time intervals.&quot;&quot;&quot;</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span><span class="n">FUNCTION_TIME_TRIGGER_MODE</span><span class="p">,</span>
                                <span class="n">schedule</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
@@ -424,7 +431,7 @@
         <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
 
         <span class="c1"># queue name is restricted to lowercase letters, numbers, and single hyphens</span>
-        <span class="n">queue_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;(-{2,})+&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">functionapp_name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+        <span class="n">queue_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;(-{2,})+&#39;</span><span class="p">,</span> <span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_name</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
         <span class="n">storage_account</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_storage_queue</span><span class="p">(</span><span class="n">queue_name</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_create_event_subscription</span><span class="p">(</span><span class="n">storage_account</span><span class="p">,</span> <span class="n">queue_name</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_publish_functions_package</span><span class="p">(</span><span class="n">queue_name</span><span class="p">)</span></div>
@@ -486,7 +493,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating storage queue&quot;</span><span class="p">)</span>
         <span class="n">storage_client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.storage.StorageManagementClient&#39;</span><span class="p">)</span>
         <span class="n">storage_account</span> <span class="o">=</span> <span class="n">storage_client</span><span class="o">.</span><span class="n">storage_accounts</span><span class="o">.</span><span class="n">get_properties</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">storage_account</span><span class="p">[</span><span class="s1">&#39;resource_group_name&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">storage_account</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">storage_account</span><span class="p">[</span><span class="s1">&#39;resource_group_name&#39;</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">storage_account</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">])</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">StorageUtilities</span><span class="o">.</span><span class="n">create_queue_from_storage_account</span><span class="p">(</span><span class="n">storage_account</span><span class="p">,</span> <span class="n">queue_name</span><span class="p">)</span>
