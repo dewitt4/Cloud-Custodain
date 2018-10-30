@@ -320,15 +320,15 @@
             <span class="p">{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;ServiceName&#39;</span><span class="p">,</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;serviceName&#39;</span><span class="p">]}]</span></div></div>
 
 
-<div class="viewcode-block" id="ServiceTaskFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ServiceTaskFilter">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">ServiceTaskFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+<div class="viewcode-block" id="RelatedTaskDefinitionFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.RelatedTaskDefinitionFilter">[docs]</a><span class="k">class</span> <span class="nc">RelatedTaskDefinitionFilter</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
     <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;ecs:DescribeTaskDefinition&#39;</span><span class="p">,</span>
                    <span class="s1">&#39;ecs:ListTaskDefinitions&#39;</span><span class="p">)</span>
+    <span class="n">related_key</span> <span class="o">=</span> <span class="s1">&#39;taskDefinition&#39;</span>
 
-<div class="viewcode-block" id="ServiceTaskFilter.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ServiceTaskFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="n">task_def_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;taskDefinition&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">]</span>
+<div class="viewcode-block" id="RelatedTaskDefinitionFilter.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.RelatedTaskDefinitionFilter.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">task_def_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">({</span><span class="n">s</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">related_key</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">})</span>
         <span class="n">task_def_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span>
             <span class="s1">&#39;ecs-task-definition&#39;</span><span class="p">)</span>
 
@@ -345,11 +345,38 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">task_defs</span> <span class="o">=</span> <span class="n">task_def_manager</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">task_def_ids</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">task_defs</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">[</span><span class="s1">&#39;taskDefinitionArn&#39;</span><span class="p">]:</span> <span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">task_defs</span><span class="p">}</span>
-        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">ServiceTaskFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">RelatedTaskDefinitionFilter</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span></div>
 
     <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_defs</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="s1">&#39;taskDefinition&#39;</span><span class="p">]]</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_defs</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">related_key</span><span class="p">]]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">task</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ServiceTaskDefinitionFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ServiceTaskDefinitionFilter">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ServiceTaskDefinitionFilter</span><span class="p">(</span><span class="n">RelatedTaskDefinitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter services by their task definitions.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">     Find any fargate services that are running with a particular</span>
+<span class="sd">     image in the task and delete them.</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">       policies:</span>
+<span class="sd">         - name: fargate-readonly-tasks</span>
+<span class="sd">           resource: ecs-task</span>
+<span class="sd">           filters:</span>
+<span class="sd">            - launchType: FARGATE</span>
+<span class="sd">            - type: task-definition</span>
+<span class="sd">              key: &quot;containerDefinitions[].image&quot;</span>
+<span class="sd">              value: &quot;elasticsearch/elasticsearch:6.4.3</span>
+<span class="sd">              value_type: swap</span>
+<span class="sd">              op: contains</span>
+<span class="sd">           actions:</span>
+<span class="sd">            - delete</span>
+
+<span class="sd">    &quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="DeleteService"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.DeleteService">[docs]</a><span class="nd">@Service</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
@@ -410,6 +437,34 @@
         <span class="k">if</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;describe&#39;</span><span class="p">,</span> <span class="s1">&#39;describe-child&#39;</span><span class="p">):</span>
             <span class="n">source</span> <span class="o">=</span> <span class="s1">&#39;describe-ecs-task&#39;</span>
         <span class="k">return</span> <span class="n">source</span></div>
+
+
+<div class="viewcode-block" id="TaskTaskDefinitionFilter"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.TaskTaskDefinitionFilter">[docs]</a><span class="nd">@Task</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;task-definition&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">TaskTaskDefinitionFilter</span><span class="p">(</span><span class="n">RelatedTaskDefinitionFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filter tasks by their task definition.</span>
+
+<span class="sd">    :Example:</span>
+
+<span class="sd">     Find any fargate tasks that are running without read only root</span>
+<span class="sd">     and stop them.</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">       policies:</span>
+<span class="sd">         - name: fargate-readonly-tasks</span>
+<span class="sd">           resource: ecs-task</span>
+<span class="sd">           filters:</span>
+<span class="sd">            - launchType: FARGATE</span>
+<span class="sd">            - type: task-definition</span>
+<span class="sd">              key: &quot;containerDefinitions[].readonlyRootFilesystem&quot;</span>
+<span class="sd">              value: None</span>
+<span class="sd">              value_type: swap</span>
+<span class="sd">              op: contains</span>
+<span class="sd">           actions:</span>
+<span class="sd">            - stop</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">related_key</span> <span class="o">=</span> <span class="s1">&#39;taskDefinitionArn&#39;</span></div>
 
 
 <div class="viewcode-block" id="StopTask"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.StopTask">[docs]</a><span class="nd">@Task</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;stop&#39;</span><span class="p">)</span>
