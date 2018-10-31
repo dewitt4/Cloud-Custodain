@@ -277,18 +277,17 @@ class TagTrim(BaseAction):
 
     def __init__(self, data=None, manager=None, log_dir=None):
         super(TagTrim, self).__init__(data, manager, log_dir)
+        self.preserve = set(self.data.get('preserve', {}))
+        self.space = self.data.get('space', 1)
 
     def validate(self):
-        if self.data.get('space') < 0 or self.data.get('space') > 15:
+        if self.space < 0 or self.space > 15:
             raise FilterValidationError("Space must be between 0 and 15")
 
         return self
 
     def process(self, resources):
         self.session = self.manager.get_session()
-        self.preserve = set(self.data.get('preserve', {}))
-        self.space = self.data.get('space', 1)
-
         with self.executor_factory(max_workers=3) as w:
             list(w.map(self.process_resource, resources))
 
