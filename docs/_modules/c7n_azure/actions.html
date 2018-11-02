@@ -203,8 +203,11 @@
 <span class="sd">Actions to perform on Azure resources</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 
+<span class="kn">import</span> <span class="nn">jmespath</span>
+<span class="kn">from</span> <span class="nn">c7n_azure</span> <span class="k">import</span> <span class="n">constants</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.storage_utils</span> <span class="k">import</span> <span class="n">StorageUtilities</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">utcnow</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.tags</span> <span class="k">import</span> <span class="n">TagHelper</span>
@@ -212,7 +215,7 @@
 <span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
 
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">BaseNotify</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span><span class="p">,</span> <span class="n">BaseNotify</span><span class="p">,</span> <span class="n">EventAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.core</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
@@ -305,7 +308,7 @@
         <span class="n">TagHelper</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags_to_delete</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="AutoTagUser"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser">[docs]</a><span class="k">class</span> <span class="nc">AutoTagUser</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="AutoTagUser"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser">[docs]</a><span class="k">class</span> <span class="nc">AutoTagUser</span><span class="p">(</span><span class="n">EventAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Attempts to tag a resource with the first user who created/modified it.</span>
 
 <span class="sd">    .. code-block:: yaml</span>
@@ -329,6 +332,11 @@
     <span class="n">query_select</span> <span class="o">=</span> <span class="s2">&quot;eventTimestamp, operationName, caller&quot;</span>
     <span class="n">max_query_days</span> <span class="o">=</span> <span class="mi">90</span>
 
+    <span class="c1"># compiled JMES paths</span>
+    <span class="n">sp_jmes_path</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">EVENT_GRID_SP_NAME_JMES_PATH</span><span class="p">)</span>
+    <span class="n">user_jmes_path</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">EVENT_GRID_USER_NAME_JMES_PATH</span><span class="p">)</span>
+    <span class="n">principal_type_jmes_path</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">constants</span><span class="o">.</span><span class="n">EVENT_GRID_PRINCIPAL_TYPE_JMES_PATH</span><span class="p">)</span>
+
     <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
         <span class="s1">&#39;auto-tag-user&#39;</span><span class="p">,</span>
         <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">],</span>
@@ -338,10 +346,17 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">log_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">AutoTagUser</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;custodian.azure.actions.auto-tag-user&#39;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="AutoTagUser.validate"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Resource does not support tagging&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;mode&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;azure-event-grid&#39;</span> \
+                <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Auto tag user in event mode does not use days.&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
                 <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">90</span><span class="p">)):</span>
@@ -349,54 +364,67 @@
 
         <span class="k">return</span> <span class="bp">self</span></div>
 
-<div class="viewcode-block" id="AutoTagUser.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+<div class="viewcode-block" id="AutoTagUser.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.monitor.MonitorManagementClient&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag&#39;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">should_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;update&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="AutoTagUser.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">event</span><span class="p">:</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="AutoTagUser.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">event_item</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="c1"># if the auto-tag-user policy set update to False (or it&#39;s unset) then we</span>
         <span class="c1"># will skip writing their UserName tag and not overwrite pre-existing values</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">should_update</span> <span class="ow">and</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
             <span class="k">return</span>
 
         <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_user</span>
-
-        <span class="c1"># Calculate start time</span>
-        <span class="n">delta_days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_query_days</span><span class="p">)</span>
-        <span class="n">start_time</span> <span class="o">=</span> <span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">delta_days</span><span class="p">)</span>
-
-        <span class="c1"># resource group type</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;resourcegroup&#39;</span><span class="p">:</span>
-            <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;Microsoft.Resources/subscriptions/resourcegroups&quot;</span>
-            <span class="n">query_filter</span> <span class="o">=</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
-                <span class="s2">&quot;eventTimestamp ge &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">start_time</span><span class="p">,</span>
-                <span class="s2">&quot;resourceGroupName eq &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
-                <span class="s2">&quot;eventChannels eq &#39;Operation&#39;&quot;</span>
-            <span class="p">])</span>
-        <span class="c1"># other Azure resources</span>
+        <span class="k">if</span> <span class="n">event_item</span><span class="p">:</span>
+            <span class="n">principal_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">principal_type_jmes_path</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">event_item</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">principal_type</span> <span class="o">==</span> <span class="s1">&#39;User&#39;</span><span class="p">:</span>
+                <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">user_jmes_path</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">event_item</span><span class="p">)</span> <span class="ow">or</span> <span class="n">user</span>
+            <span class="k">elif</span> <span class="n">principal_type</span> <span class="o">==</span> <span class="s1">&#39;ServicePrincipal&#39;</span><span class="p">:</span>
+                <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sp_jmes_path</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">event_item</span><span class="p">)</span> <span class="ow">or</span> <span class="n">user</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">&#39;Principal type of event cannot be determined.&#39;</span><span class="p">)</span>
+                <span class="k">return</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">resource_type</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
-            <span class="n">query_filter</span> <span class="o">=</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
-                <span class="s2">&quot;eventTimestamp ge &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">start_time</span><span class="p">,</span>
-                <span class="s2">&quot;resourceUri eq &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
-                <span class="s2">&quot;eventChannels eq &#39;Operation&#39;&quot;</span>
-            <span class="p">])</span>
+            <span class="c1"># Calculate start time</span>
+            <span class="n">delta_days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_query_days</span><span class="p">)</span>
+            <span class="n">start_time</span> <span class="o">=</span> <span class="n">utcnow</span><span class="p">()</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="n">delta_days</span><span class="p">)</span>
 
-        <span class="c1"># fetch activity logs</span>
-        <span class="n">logs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">activity_logs</span><span class="o">.</span><span class="n">list</span><span class="p">(</span>
-            <span class="nb">filter</span><span class="o">=</span><span class="n">query_filter</span><span class="p">,</span>
-            <span class="n">select</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_select</span>
-        <span class="p">)</span>
+            <span class="c1"># resource group type</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;resourcegroup&#39;</span><span class="p">:</span>
+                <span class="n">resource_type</span> <span class="o">=</span> <span class="s2">&quot;Microsoft.Resources/subscriptions/resourcegroups&quot;</span>
+                <span class="n">query_filter</span> <span class="o">=</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
+                    <span class="s2">&quot;eventTimestamp ge &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">start_time</span><span class="p">,</span>
+                    <span class="s2">&quot;resourceGroupName eq &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span>
+                    <span class="s2">&quot;eventChannels eq &#39;Operation&#39;&quot;</span>
+                <span class="p">])</span>
+            <span class="c1"># other Azure resources</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">resource_type</span> <span class="o">=</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span>
+                <span class="n">query_filter</span> <span class="o">=</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
+                    <span class="s2">&quot;eventTimestamp ge &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">start_time</span><span class="p">,</span>
+                    <span class="s2">&quot;resourceUri eq &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+                    <span class="s2">&quot;eventChannels eq &#39;Operation&#39;&quot;</span>
+                <span class="p">])</span>
 
-        <span class="c1"># get the user who issued the first operation</span>
-        <span class="n">operation_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/write&quot;</span> <span class="o">%</span> <span class="n">resource_type</span>
-        <span class="n">first_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_first_operation</span><span class="p">(</span><span class="n">logs</span><span class="p">,</span> <span class="n">operation_name</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">first_op</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">user</span> <span class="o">=</span> <span class="n">first_op</span><span class="o">.</span><span class="n">caller</span>
+            <span class="c1"># fetch activity logs</span>
+            <span class="n">logs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">activity_logs</span><span class="o">.</span><span class="n">list</span><span class="p">(</span>
+                <span class="nb">filter</span><span class="o">=</span><span class="n">query_filter</span><span class="p">,</span>
+                <span class="n">select</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">query_select</span>
+            <span class="p">)</span>
+
+            <span class="c1"># get the user who issued the first operation</span>
+            <span class="n">operation_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/write&quot;</span> <span class="o">%</span> <span class="n">resource_type</span>
+            <span class="n">first_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_first_operation</span><span class="p">(</span><span class="n">logs</span><span class="p">,</span> <span class="n">operation_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">first_op</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">user</span> <span class="o">=</span> <span class="n">first_op</span><span class="o">.</span><span class="n">caller</span>
 
         <span class="c1"># issue tag action to label user</span>
         <span class="k">try</span><span class="p">:</span>
