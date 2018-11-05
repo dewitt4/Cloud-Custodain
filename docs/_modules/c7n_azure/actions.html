@@ -202,15 +202,17 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Actions to perform on Azure resources</span>
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">abc</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 
 <span class="kn">import</span> <span class="nn">jmespath</span>
+<span class="kn">import</span> <span class="nn">six</span>
 <span class="kn">from</span> <span class="nn">c7n_azure</span> <span class="k">import</span> <span class="n">constants</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.storage_utils</span> <span class="k">import</span> <span class="n">StorageUtilities</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">utcnow</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.tags</span> <span class="k">import</span> <span class="n">TagHelper</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">utcnow</span><span class="p">,</span> <span class="n">ThreadHelper</span>
 <span class="kn">from</span> <span class="nn">dateutil</span> <span class="k">import</span> <span class="n">zoneinfo</span>
 <span class="kn">from</span> <span class="nn">msrestazure.azure_exceptions</span> <span class="k">import</span> <span class="n">CloudError</span>
 
@@ -223,7 +225,43 @@
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
-<div class="viewcode-block" id="Tag"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Tag">[docs]</a><span class="k">class</span> <span class="nc">Tag</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="AzureBaseAction"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AzureBaseAction">[docs]</a><span class="nd">@six</span><span class="o">.</span><span class="n">add_metaclass</span><span class="p">(</span><span class="n">abc</span><span class="o">.</span><span class="n">ABCMeta</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">AzureBaseAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">max_workers</span> <span class="o">=</span> <span class="n">constants</span><span class="o">.</span><span class="n">DEFAULT_MAX_THREAD_WORKERS</span>
+    <span class="n">chunk_size</span> <span class="o">=</span> <span class="n">constants</span><span class="o">.</span><span class="n">DEFAULT_CHUNK_SIZE</span>
+
+<div class="viewcode-block" id="AzureBaseAction.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AzureBaseAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
+        <span class="n">results</span><span class="p">,</span> <span class="n">exceptions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_in_parallel</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">exceptions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">handle_exceptions</span><span class="p">(</span><span class="n">exceptions</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">results</span></div>
+
+<div class="viewcode-block" id="AzureBaseAction.handle_exceptions"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AzureBaseAction.handle_exceptions">[docs]</a>    <span class="k">def</span> <span class="nf">handle_exceptions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exceptions</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;raising one exception re-raises the last exception and maintains</span>
+<span class="sd">        the stack trace&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="n">exceptions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="AzureBaseAction.process_in_parallel"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AzureBaseAction.process_in_parallel">[docs]</a>    <span class="k">def</span> <span class="nf">process_in_parallel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">ThreadHelper</span><span class="o">.</span><span class="n">execute_in_parallel</span><span class="p">(</span>
+            <span class="n">resources</span><span class="o">=</span><span class="n">resources</span><span class="p">,</span>
+            <span class="n">execution_method</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource_set</span><span class="p">,</span>
+            <span class="n">executor_factory</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">,</span>
+            <span class="n">log</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">,</span>
+            <span class="n">max_workers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">max_workers</span><span class="p">,</span>
+            <span class="n">chunk_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AzureBaseAction.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AzureBaseAction.process_resource_set">[docs]</a>    <span class="nd">@abc</span><span class="o">.</span><span class="n">abstractmethod</span>
+    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;Base action class does not implement behavior&quot;</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="Tag"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Tag">[docs]</a><span class="k">class</span> <span class="nc">Tag</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Adds tags to Azure resources</span>
 
 <span class="sd">        .. code-block:: yaml</span>
@@ -262,17 +300,13 @@
 
         <span class="k">return</span> <span class="bp">self</span></div>
 
-<div class="viewcode-block" id="Tag.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Tag.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="Tag.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Tag.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="n">new_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)}</span>
-        <span class="n">TagHelper</span><span class="o">.</span><span class="n">add_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">new_tags</span><span class="p">)</span></div></div>
+<div class="viewcode-block" id="Tag.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Tag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">new_tags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">):</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;value&#39;</span><span class="p">)}</span>
+            <span class="n">TagHelper</span><span class="o">.</span><span class="n">add_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">new_tags</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="RemoveTag"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.RemoveTag">[docs]</a><span class="k">class</span> <span class="nc">RemoveTag</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="RemoveTag"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.RemoveTag">[docs]</a><span class="k">class</span> <span class="nc">RemoveTag</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Removes tags from Azure resources</span>
 
 <span class="sd">        .. code-block:: yaml</span>
@@ -298,14 +332,10 @@
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Must specify tags&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
-<div class="viewcode-block" id="RemoveTag.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.RemoveTag.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="RemoveTag.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.RemoveTag.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="n">tags_to_delete</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span>
-        <span class="n">TagHelper</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags_to_delete</span><span class="p">)</span></div></div>
+<div class="viewcode-block" id="RemoveTag.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.RemoveTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">tags_to_delete</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span>
+            <span class="n">TagHelper</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags_to_delete</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="AutoTagUser"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.AutoTagUser">[docs]</a><span class="k">class</span> <span class="nc">AutoTagUser</span><span class="p">(</span><span class="n">EventAction</span><span class="p">):</span>
@@ -444,9 +474,8 @@
         <span class="k">return</span> <span class="n">first_operation</span></div></div>
 
 
-<div class="viewcode-block" id="TagTrim"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim">[docs]</a><span class="k">class</span> <span class="nc">TagTrim</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="TagTrim"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim">[docs]</a><span class="k">class</span> <span class="nc">TagTrim</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Automatically remove tags from an azure resource.</span>
-
 <span class="sd">    Azure Resources and Resource Groups have a limit of 15 tags.</span>
 <span class="sd">    In order to make additional tag space on a set of resources,</span>
 <span class="sd">    this action can be used to remove enough tags to make the</span>
@@ -499,37 +528,33 @@
 <div class="viewcode-block" id="TagTrim.validate"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">&gt;</span> <span class="mi">15</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">FilterValidationError</span><span class="p">(</span><span class="s2">&quot;Space must be between 0 and 15&quot;</span><span class="p">)</span>
-
         <span class="k">return</span> <span class="bp">self</span></div>
 
-<div class="viewcode-block" id="TagTrim.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
+<div class="viewcode-block" id="TagTrim.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="c1"># get existing tags</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
 
-<div class="viewcode-block" id="TagTrim.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagTrim.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="c1"># get existing tags</span>
-        <span class="n">tags</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_tag_count</span><span class="p">:</span>
+                <span class="k">return</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_tag_count</span><span class="p">:</span>
-            <span class="k">return</span>
+            <span class="c1"># delete tags</span>
+            <span class="n">keys</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+            <span class="n">tags_to_preserve</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preserve</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+            <span class="n">candidates</span> <span class="o">=</span> <span class="n">keys</span> <span class="o">-</span> <span class="n">tags_to_preserve</span>
 
-        <span class="c1"># delete tags</span>
-        <span class="n">keys</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
-        <span class="n">tags_to_preserve</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preserve</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
-        <span class="n">candidates</span> <span class="o">=</span> <span class="n">keys</span> <span class="o">-</span> <span class="n">tags_to_preserve</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span><span class="p">:</span>
+                <span class="c1"># Free up slots to fit</span>
+                <span class="n">remove</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span> <span class="o">-</span>
+                          <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_tag_count</span> <span class="o">-</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags_to_preserve</span><span class="p">))))</span>
+                <span class="n">candidates</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">candidates</span><span class="p">))[:</span><span class="n">remove</span><span class="p">]</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">space</span><span class="p">:</span>
-            <span class="c1"># Free up slots to fit</span>
-            <span class="n">remove</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_tag_count</span> <span class="o">-</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">space</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags_to_preserve</span><span class="p">)))</span>
-            <span class="n">candidates</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">candidates</span><span class="p">))[:</span><span class="n">remove</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">candidates</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;Could not find any candidates to trim </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+                <span class="k">return</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">candidates</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="s2">&quot;Could not find any candidates to trim </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
-            <span class="k">return</span>
-
-        <span class="n">TagHelper</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">candidates</span><span class="p">)</span></div></div>
+            <span class="n">TagHelper</span><span class="o">.</span><span class="n">remove_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">candidates</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="Notify"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.Notify">[docs]</a><span class="k">class</span> <span class="nc">Notify</span><span class="p">(</span><span class="n">BaseNotify</span><span class="p">):</span>
@@ -598,7 +623,7 @@
 <span class="n">DEFAULT_TAG</span> <span class="o">=</span> <span class="s2">&quot;custodian_status&quot;</span>
 
 
-<div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="TagDelayedAction"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction">[docs]</a><span class="k">class</span> <span class="nc">TagDelayedAction</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Tag resources for future action.</span>
 
 <span class="sd">    The optional &#39;tz&#39; parameter can be used to adjust the clock to align</span>
@@ -634,6 +659,19 @@
 
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">manager</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">log_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">TagDelayedAction</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">manager</span><span class="p">,</span> <span class="n">log_dir</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span>
+            <span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
+
+        <span class="n">msg_tmpl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;msg&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_template</span><span class="p">)</span>
+
+        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;stop&#39;</span><span class="p">)</span>
+        <span class="n">days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">hours</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hours&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">action_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_timestamp</span><span class="p">(</span><span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">msg</span> <span class="o">=</span> <span class="n">msg_tmpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="o">=</span><span class="n">action_date</span><span class="p">)</span>
 
 <div class="viewcode-block" id="TagDelayedAction.validate"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">)</span>
@@ -664,49 +702,26 @@
 
         <span class="k">return</span> <span class="n">action_date_string</span></div>
 
-<div class="viewcode-block" id="TagDelayedAction.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">tz</span> <span class="o">=</span> <span class="n">zoneinfo</span><span class="o">.</span><span class="n">gettz</span><span class="p">(</span>
-            <span class="n">Time</span><span class="o">.</span><span class="n">TZ_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tz&#39;</span><span class="p">,</span> <span class="s1">&#39;utc&#39;</span><span class="p">)))</span>
+<div class="viewcode-block" id="TagDelayedAction.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="c1"># get existing tags</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
 
-        <span class="n">msg_tmpl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;msg&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_template</span><span class="p">)</span>
+            <span class="c1"># add new tag</span>
+            <span class="n">tags</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">tag</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">msg</span>
 
-        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;op&#39;</span><span class="p">,</span> <span class="s1">&#39;stop&#39;</span><span class="p">)</span>
-        <span class="n">days</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;days&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="n">hours</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;hours&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-        <span class="n">action_date</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_timestamp</span><span class="p">(</span><span class="n">days</span><span class="p">,</span> <span class="n">hours</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">tag</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">,</span> <span class="n">DEFAULT_TAG</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">msg</span> <span class="o">=</span> <span class="n">msg_tmpl</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-            <span class="n">op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="o">=</span><span class="n">action_date</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Tagging </span><span class="si">%d</span><span class="s2"> resources for </span><span class="si">%s</span><span class="s2"> on </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">resources</span><span class="p">),</span> <span class="n">op</span><span class="p">,</span> <span class="n">action_date</span><span class="p">))</span>
-
-        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">executor_factory</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">process_resource</span><span class="p">,</span> <span class="n">resources</span><span class="p">))</span></div>
-
-<div class="viewcode-block" id="TagDelayedAction.process_resource"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.TagDelayedAction.process_resource">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
-        <span class="c1"># get existing tags</span>
-        <span class="n">tags</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">,</span> <span class="p">{})</span>
-
-        <span class="c1"># add new tag</span>
-        <span class="n">tags</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">tag</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">msg</span>
-
-        <span class="n">TagHelper</span><span class="o">.</span><span class="n">update_resource_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span></div></div>
+            <span class="n">TagHelper</span><span class="o">.</span><span class="n">update_resource_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resource</span><span class="p">,</span> <span class="n">tags</span><span class="p">)</span></div></div>
 
 
-<div class="viewcode-block" id="DeleteAction"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.DeleteAction">[docs]</a><span class="k">class</span> <span class="nc">DeleteAction</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+<div class="viewcode-block" id="DeleteAction"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.DeleteAction">[docs]</a><span class="k">class</span> <span class="nc">DeleteAction</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
     <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;delete&#39;</span><span class="p">)</span>
 
-<div class="viewcode-block" id="DeleteAction.process"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.DeleteAction.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="n">session</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_session</span><span class="p">()</span>
+<div class="viewcode-block" id="DeleteAction.process_resource_set"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.actions.DeleteAction.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
         <span class="c1">#: :type: azure.mgmt.resource.ResourceManagementClient</span>
         <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.resource.ResourceManagementClient&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">resource</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
             <span class="n">client</span><span class="o">.</span><span class="n">resources</span><span class="o">.</span><span class="n">delete_by_id</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
-                                          <span class="n">session</span><span class="o">.</span><span class="n">resource_api_version</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]))</span></div></div>
+                                          <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">resource_api_version</span><span class="p">(</span><span class="n">resource</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]))</span></div></div>
 </pre></div>
 
            </div>
