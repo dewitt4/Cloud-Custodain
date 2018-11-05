@@ -1945,8 +1945,12 @@
             <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
             <span class="s1">&#39;DeliverLogsPermissionArn&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
             <span class="s1">&#39;LogGroupName&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
-            <span class="s1">&#39;TrafficType&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
-                            <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ACCEPT&#39;</span><span class="p">,</span> <span class="s1">&#39;REJECT&#39;</span><span class="p">,</span> <span class="s1">&#39;ALL&#39;</span><span class="p">]}</span>
+            <span class="s1">&#39;LogDestination&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;LogDestinationType&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;s3&#39;</span><span class="p">,</span> <span class="s1">&#39;cloud-watch-logs&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;TrafficType&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;ACCEPT&#39;</span><span class="p">,</span> <span class="s1">&#39;REJECT&#39;</span><span class="p">,</span> <span class="s1">&#39;ALL&#39;</span><span class="p">]</span>
+            <span class="p">}</span>
         <span class="p">}</span>
     <span class="p">}</span>
 
@@ -1963,16 +1967,18 @@
                 <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
                     <span class="s1">&#39;DeliverLogsPermissionArn required when &#39;</span>
                     <span class="s1">&#39;creating flow-logs on </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">,))</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogGroupName&#39;</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="s1">&#39;LogGroupName required when creating flow-logs on </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+            <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogGroupName&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogDestination&#39;</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s1">&#39;Either LogGroupName or LogDestination required&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogDestinationType&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;s3&#39;</span> <span class="ow">and</span>
+               <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;LogDestination&#39;</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                    <span class="s1">&#39;LogDestination required when LogDestinationType is s3&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 <div class="viewcode-block" id="CreateFlowLogs.delete_flow_logs"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.vpc.CreateFlowLogs.delete_flow_logs">[docs]</a>    <span class="k">def</span> <span class="nf">delete_flow_logs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">rids</span><span class="p">):</span>
         <span class="n">flow_logs</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_flow_logs</span><span class="p">(</span>
             <span class="n">Filters</span><span class="o">=</span><span class="p">[{</span><span class="s1">&#39;Name&#39;</span><span class="p">:</span> <span class="s1">&#39;resource-id&#39;</span><span class="p">,</span> <span class="s1">&#39;Values&#39;</span><span class="p">:</span> <span class="n">rids</span><span class="p">}])[</span><span class="s1">&#39;FlowLogs&#39;</span><span class="p">]</span>
-
         <span class="k">try</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">delete_flow_logs</span><span class="p">(</span>
                 <span class="n">FlowLogIds</span><span class="o">=</span><span class="p">[</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;FlowLogId&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">flow_logs</span><span class="p">])</span>
