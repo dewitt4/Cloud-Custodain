@@ -209,6 +209,7 @@
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">ActionRegistry</span><span class="p">,</span> <span class="n">BaseAction</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">FilterRegistry</span><span class="p">,</span> <span class="n">ValueFilter</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.iamaccess</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span><span class="p">,</span> <span class="n">ResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span><span class="p">,</span> <span class="n">utils</span>
 
@@ -309,6 +310,52 @@
         <span class="n">dimension</span> <span class="o">=</span> <span class="s1">&#39;GatewayName&#39;</span></div></div>
 
 
+<div class="viewcode-block" id="RestApiCrossAccount"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.apigw.RestApiCrossAccount">[docs]</a><span class="nd">@RestAPI</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cross-account&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RestApiCrossAccount</span><span class="p">(</span><span class="n">CrossAccountAccessFilter</span><span class="p">):</span>
+
+    <span class="n">policy_attribute</span> <span class="o">=</span> <span class="s1">&#39;policy&#39;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;apigateway:GET&#39;</span><span class="p">,)</span></div>
+
+
+<div class="viewcode-block" id="UpdateAPI"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.apigw.UpdateAPI">[docs]</a><span class="nd">@RestAPI</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;update&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">UpdateAPI</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Update configuration of a REST API.</span>
+
+<span class="sd">    Non-exhaustive list of updateable attributes.</span>
+<span class="sd">    https://docs.aws.amazon.com/apigateway/api-reference/link-relation/restapi-update/#remarks</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    contrived example to update description on api gateways</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">       policies:</span>
+<span class="sd">         - name: apigw-description</span>
+<span class="sd">           filters:</span>
+<span class="sd">             - description: empty</span>
+<span class="sd">           actions:</span>
+<span class="sd">             - type: update</span>
+<span class="sd">               patch:</span>
+<span class="sd">                - op: replace</span>
+<span class="sd">                  path: /description</span>
+<span class="sd">                  value: &quot;not empty :-)&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;apigateway:PATCH&#39;</span><span class="p">,)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;update&#39;</span><span class="p">,</span>
+        <span class="n">patch</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;array&#39;</span><span class="p">,</span> <span class="s1">&#39;items&#39;</span><span class="p">:</span> <span class="n">OP_SCHEMA</span><span class="p">},</span>
+        <span class="n">required</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;patch&#39;</span><span class="p">])</span>
+
+<div class="viewcode-block" id="UpdateAPI.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.apigw.UpdateAPI.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;apigateway&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">update_rest_api</span><span class="p">(</span>
+                <span class="n">restApiId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">],</span>
+                <span class="n">patchOperations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;patch&#39;</span><span class="p">])</span></div></div>
+
+
 <div class="viewcode-block" id="RestStage"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.apigw.RestStage">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;rest-stage&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">RestStage</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">ChildResourceManager</span><span class="p">):</span>
 
@@ -376,7 +423,8 @@
         <span class="n">client</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;apigateway&#39;</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
-            <span class="n">client</span><span class="o">.</span><span class="n">update_stage</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_stage</span><span class="p">,</span>
                 <span class="n">restApiId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;restApiId&#39;</span><span class="p">],</span>
                 <span class="n">stageName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;stageName&#39;</span><span class="p">],</span>
                 <span class="n">patchOperations</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;patch&#39;</span><span class="p">])</span></div></div>
