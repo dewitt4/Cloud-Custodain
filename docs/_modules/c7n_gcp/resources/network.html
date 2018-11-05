@@ -199,9 +199,13 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">c7n_gcp.actions</span> <span class="k">import</span> <span class="n">MethodAction</span>
 <span class="kn">from</span> <span class="nn">c7n_gcp.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">TypeInfo</span>
 
 <span class="kn">from</span> <span class="nn">c7n_gcp.provider</span> <span class="k">import</span> <span class="n">resources</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
 
 <div class="viewcode-block" id="Network"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Network">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;vpc&#39;</span><span class="p">)</span>
@@ -220,9 +224,72 @@
 <div class="viewcode-block" id="Subnet.resource_type"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Subnet.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">TypeInfo</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;compute&#39;</span>
         <span class="n">version</span> <span class="o">=</span> <span class="s1">&#39;v1&#39;</span>
-        <span class="n">component</span> <span class="o">=</span> <span class="s1">&#39;networks&#39;</span>
+        <span class="n">component</span> <span class="o">=</span> <span class="s1">&#39;subnetworks&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;aggregatedList&#39;</span><span class="p">,</span> <span class="s1">&#39;items.*.subnetworks[]&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">scope_template</span> <span class="o">=</span> <span class="s2">&quot;projects/</span><span class="si">{}</span><span class="s2">/aggregated/subnetworks&quot;</span></div></div>
+
+<div class="viewcode-block" id="Subnet.resource_type.get"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Subnet.resource_type.get">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">resource_info</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span>
+                <span class="s1">&#39;get&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="n">resource_info</span><span class="p">[</span><span class="s1">&#39;project_id&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="n">resource_info</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;subnetwork&#39;</span><span class="p">:</span> <span class="n">resource_info</span><span class="p">[</span><span class="s1">&#39;subnetwork_name&#39;</span><span class="p">]})</span></div></div></div>
+
+
+<div class="viewcode-block" id="SubnetAction"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SubnetAction">[docs]</a><span class="k">class</span> <span class="nc">SubnetAction</span><span class="p">(</span><span class="n">MethodAction</span><span class="p">):</span>
+
+    <span class="n">path_param_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+        <span class="s1">&#39;.*?/projects/(.*?)/regions/(.*?)/subnetworks/(.*)&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SubnetAction.get_resource_params"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SubnetAction.get_resource_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">resource</span><span class="p">):</span>
+        <span class="n">project</span><span class="p">,</span> <span class="n">region</span><span class="p">,</span> <span class="n">subnet</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_param_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span>
+            <span class="n">resource</span><span class="p">[</span><span class="s1">&#39;selfLink&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">groups</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="n">project</span><span class="p">,</span> <span class="s1">&#39;region&#39;</span><span class="p">:</span> <span class="n">region</span><span class="p">,</span> <span class="s1">&#39;subnetwork&#39;</span><span class="p">:</span> <span class="n">subnet</span><span class="p">}</span></div></div>
+
+
+<div class="viewcode-block" id="SetFlowLog"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SetFlowLog">[docs]</a><span class="nd">@Subnet</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-flow-log&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetFlowLog</span><span class="p">(</span><span class="n">SubnetAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable vpc flow logs on a subnet.</span>
+
+<span class="sd">    :example: Enable flow logs on all subnets</span>
+
+<span class="sd">    .. yaml:</span>
+
+<span class="sd">     policies:</span>
+<span class="sd">       - name: flow-active</span>
+<span class="sd">         resource: gcp.subnet</span>
+<span class="sd">         filters:</span>
+<span class="sd">          - enableFlowLogs: empty</span>
+<span class="sd">         actions:</span>
+<span class="sd">          - set-flow-log</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-flow-log&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+    <span class="n">method_spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;patch&#39;</span><span class="p">}</span>
+
+<div class="viewcode-block" id="SetFlowLog.get_resource_params"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SetFlowLog.get_resource_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">SetFlowLog</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_resource_params</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">][</span><span class="s1">&#39;enableFlowLogs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">params</span></div></div>
+
+
+<div class="viewcode-block" id="SetGcpPrivateAccess"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SetGcpPrivateAccess">[docs]</a><span class="nd">@Subnet</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-private-api&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetGcpPrivateAccess</span><span class="p">(</span><span class="n">SubnetAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enable/Disable GCP Private IP Access for a subnet&quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-gcp-private&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+    <span class="n">method_spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;setPrivateIpGoogleAccess&#39;</span><span class="p">}</span>
+
+<div class="viewcode-block" id="SetGcpPrivateAccess.get_resource_params"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.SetGcpPrivateAccess.get_resource_params">[docs]</a>    <span class="k">def</span> <span class="nf">get_resource_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">SetGcpPrivateAccess</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">get_resource_params</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+        <span class="n">params</span><span class="p">[</span><span class="s1">&#39;body&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;privateIpGoogleAccess&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)}</span>
+        <span class="k">return</span> <span class="n">params</span></div></div>
 
 
 <div class="viewcode-block" id="Firewall"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Firewall">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;firewall&#39;</span><span class="p">)</span>
@@ -231,7 +298,13 @@
 <div class="viewcode-block" id="Firewall.resource_type"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Firewall.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="n">TypeInfo</span><span class="p">):</span>
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;compute&#39;</span>
         <span class="n">version</span> <span class="o">=</span> <span class="s1">&#39;v1&#39;</span>
-        <span class="n">component</span> <span class="o">=</span> <span class="s1">&#39;firewalls&#39;</span></div></div>
+        <span class="n">component</span> <span class="o">=</span> <span class="s1">&#39;firewalls&#39;</span>
+
+<div class="viewcode-block" id="Firewall.resource_type.get"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Firewall.resource_type.get">[docs]</a>        <span class="nd">@staticmethod</span>
+        <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">resource_info</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span>
+                <span class="s1">&#39;get&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;project&#39;</span><span class="p">:</span> <span class="n">resource_info</span><span class="p">[</span><span class="s1">&#39;project_id&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;firewall&#39;</span><span class="p">:</span> <span class="n">resource_info</span><span class="p">[</span><span class="s1">&#39;resourceName&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]})</span></div></div></div>
 
 
 <div class="viewcode-block" id="Router"><a class="viewcode-back" href="../../../generated/gcp/c7n_gcp.resources.html#c7n_gcp.resources.network.Router">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;router&#39;</span><span class="p">)</span>
