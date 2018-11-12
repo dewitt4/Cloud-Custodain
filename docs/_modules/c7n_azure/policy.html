@@ -202,21 +202,23 @@
 
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
 
 <span class="kn">import</span> <span class="nn">six</span>
-<span class="kn">from</span> <span class="nn">azure.mgmt.eventgrid.models</span> <span class="k">import</span> <span class="n">StorageQueueEventSubscriptionDestination</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.azure_events</span> <span class="k">import</span> <span class="n">AzureEventSubscription</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.azure_events</span> <span class="k">import</span> <span class="n">AzureEvents</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="p">(</span><span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span> <span class="n">FUNCTION_TIME_TRIGGER_MODE</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">azure.mgmt.eventgrid.models</span> <span class="k">import</span> \
+    <span class="n">StorageQueueEventSubscriptionDestination</span>
+
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">EventAction</span>
+<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">PullMode</span><span class="p">,</span> <span class="n">ServerlessExecutionMode</span><span class="p">,</span> <span class="n">execution</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.azure_events</span> <span class="k">import</span> <span class="n">AzureEvents</span><span class="p">,</span> <span class="n">AzureEventSubscription</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="p">(</span><span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span>
+                                 <span class="n">FUNCTION_TIME_TRIGGER_MODE</span><span class="p">)</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.function_package</span> <span class="k">import</span> <span class="n">FunctionPackage</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.functionapp_utils</span> <span class="k">import</span> <span class="n">FunctionAppUtilities</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.storage_utils</span> <span class="k">import</span> <span class="n">StorageUtilities</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">ResourceIdParser</span><span class="p">,</span> <span class="n">StringUtils</span>
-
-<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
-<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">EventAction</span>
-<span class="kn">from</span> <span class="nn">c7n.policy</span> <span class="k">import</span> <span class="n">ServerlessExecutionMode</span><span class="p">,</span> <span class="n">PullMode</span><span class="p">,</span> <span class="n">execution</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
 
 
 <div class="viewcode-block" id="AzureFunctionMode"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode">[docs]</a><span class="k">class</span> <span class="nc">AzureFunctionMode</span><span class="p">(</span><span class="n">ServerlessExecutionMode</span><span class="p">):</span>
@@ -356,6 +358,10 @@
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;subclass responsibility&quot;</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="AzureFunctionMode.provision"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.provision">[docs]</a>    <span class="k">def</span> <span class="nf">provision</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Python 2.7 is not supported for deploying Azure Functions.&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_function_app_params</span><span class="p">()</span>
         <span class="n">FunctionAppUtilities</span><span class="p">()</span><span class="o">.</span><span class="n">deploy_dedicated_function_app</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="p">)</span></div>
 
@@ -366,14 +372,23 @@
 <div class="viewcode-block" id="AzureFunctionMode.validate"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.policy.AzureFunctionMode.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Validate configuration settings for execution mode.&quot;&quot;&quot;</span></div>
 
+    <span class="k">def</span> <span class="nf">_build_functions_package</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue_name</span><span class="p">):</span>
+        <span class="n">package</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span><span class="p">,</span>
+                                  <span class="p">)</span>
+        <span class="n">package</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
+                      <span class="n">modules</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;c7n-azure&#39;</span><span class="p">],</span>
+                      <span class="n">non_binary_packages</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;pyyaml&#39;</span><span class="p">,</span> <span class="s1">&#39;pycparser&#39;</span><span class="p">,</span> <span class="s1">&#39;tabulate&#39;</span><span class="p">],</span>
+                      <span class="n">excluded_packages</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;azure-cli-core&#39;</span><span class="p">,</span> <span class="s1">&#39;distlib&#39;</span><span class="p">,</span> <span class="s1">&#39;futures&#39;</span><span class="p">],</span>
+                      <span class="n">queue_name</span><span class="o">=</span><span class="n">queue_name</span><span class="p">)</span>
+        <span class="n">package</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">package</span>
+
     <span class="k">def</span> <span class="nf">_publish_functions_package</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Building function package for </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span>
 
-        <span class="n">archive</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_name</span><span class="p">)</span>
-        <span class="n">archive</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="n">queue_name</span><span class="p">)</span>
-        <span class="n">archive</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">package</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_functions_package</span><span class="p">(</span><span class="n">queue_name</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function package built, size is </span><span class="si">%d</span><span class="s2">MB&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">archive</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">size</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function package built, size is </span><span class="si">%d</span><span class="s2">MB&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">package</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">size</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">)))</span>
 
         <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>\
             <span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;azure.mgmt.web.WebSiteManagementClient&#39;</span><span class="p">)</span>
@@ -381,8 +396,8 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_resource_group_name</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">function_params</span><span class="o">.</span><span class="n">function_app_name</span><span class="p">)</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="n">archive</span><span class="o">.</span><span class="n">wait_for_status</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">):</span>
-            <span class="n">archive</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">package</span><span class="o">.</span><span class="n">wait_for_status</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">):</span>
+            <span class="n">package</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span><span class="n">publish_creds</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Aborted deployment, ensure Application Service is healthy.&quot;</span><span class="p">)</span></div>
 

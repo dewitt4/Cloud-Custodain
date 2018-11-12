@@ -200,21 +200,21 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 <span class="kn">import</span> <span class="nn">distutils.util</span>
-<span class="kn">import</span> <span class="nn">fnmatch</span>
 <span class="kn">import</span> <span class="nn">json</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
 <span class="kn">import</span> <span class="nn">time</span>
 
 <span class="kn">import</span> <span class="nn">requests</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="n">ENV_CUSTODIAN_DISABLE_SSL_CERT_VERIFICATION</span><span class="p">,</span> \
-    <span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span> <span class="n">FUNCTION_TIME_TRIGGER_MODE</span>
-
-<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
 
 <span class="kn">from</span> <span class="nn">c7n.mu</span> <span class="k">import</span> <span class="n">PythonPackageArchive</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">local_session</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.constants</span> <span class="k">import</span> <span class="p">(</span><span class="n">ENV_CUSTODIAN_DISABLE_SSL_CERT_VERIFICATION</span><span class="p">,</span>
+                                 <span class="n">FUNCTION_EVENT_TRIGGER_MODE</span><span class="p">,</span>
+                                 <span class="n">FUNCTION_TIME_TRIGGER_MODE</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.dependency_manager</span> <span class="k">import</span> <span class="n">DependencyManager</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.session</span> <span class="k">import</span> <span class="n">Session</span>
 
 
 <div class="viewcode-block" id="FunctionPackage"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage">[docs]</a><span class="k">class</span> <span class="nc">FunctionPackage</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
@@ -316,65 +316,64 @@
     <span class="k">def</span> <span class="nf">_get_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s1">&#39;policies&#39;</span><span class="p">:</span> <span class="p">[</span><span class="n">policy</span><span class="p">]},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">_add_cffi_module</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;CFFI native bits aren&#39;t discovered automatically</span>
-<span class="sd">        so for now we grab them manually from supported platforms&quot;&quot;&quot;</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="s1">&#39;cffi&#39;</span><span class="p">)</span>
-
-        <span class="c1"># Add native libraries that are missing</span>
-        <span class="n">site_pkg</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="o">.</span><span class="n">_get_site_packages</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
-
-        <span class="c1"># linux</span>
-        <span class="n">platform</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span>
-        <span class="k">if</span> <span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;linux&quot;</span> <span class="ow">or</span> <span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;linux2&quot;</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">so_file</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">site_pkg</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">fnmatch</span><span class="o">.</span><span class="n">fnmatch</span><span class="p">(</span><span class="n">so_file</span><span class="p">,</span> <span class="s1">&#39;*ffi*.so*&#39;</span><span class="p">):</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">site_pkg</span><span class="p">,</span> <span class="n">so_file</span><span class="p">))</span>
-
-            <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_directory</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">site_pkg</span><span class="p">,</span> <span class="s1">&#39;.libs_cffi_backend&#39;</span><span class="p">))</span>
-
-        <span class="c1"># MacOS</span>
-        <span class="k">elif</span> <span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;darwin&quot;</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Cannot package Azure Function in MacOS host OS, &#39;</span>
-                                      <span class="s1">&#39;please use linux.&#39;</span><span class="p">)</span>
-        <span class="c1"># Windows</span>
-        <span class="k">elif</span> <span class="n">platform</span> <span class="o">==</span> <span class="s2">&quot;win32&quot;</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s1">&#39;Cannot package Azure Function in Windows host OS, &#39;</span>
-                                      <span class="s1">&#39;please use linux or WSL.&#39;</span><span class="p">)</span>
-
     <span class="k">def</span> <span class="nf">_update_perms_package</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="mo">0o0644</span><span class="p">)</span>
 
-<div class="viewcode-block" id="FunctionPackage.build"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.build">[docs]</a>    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">entry_point</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">extra_modules</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="c1"># Get dependencies for azure entry point</span>
-        <span class="n">entry_point</span> <span class="o">=</span> <span class="n">entry_point</span> <span class="ow">or</span> \
-            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">realpath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)),</span> <span class="s1">&#39;entry.py&#39;</span><span class="p">)</span>
-        <span class="n">modules</span><span class="p">,</span> <span class="n">so_files</span> <span class="o">=</span> <span class="n">FunctionPackage</span><span class="o">.</span><span class="n">_get_dependencies</span><span class="p">(</span><span class="n">entry_point</span><span class="p">)</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cache_folder</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">c7n_azure_root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">c7n_azure_root</span><span class="p">,</span> <span class="s1">&#39;cache&#39;</span><span class="p">)</span>
 
-        <span class="c1"># add all loaded modules</span>
-        <span class="n">modules</span><span class="o">.</span><span class="n">discard</span><span class="p">(</span><span class="s1">&#39;azure&#39;</span><span class="p">)</span>
-        <span class="n">modules</span> <span class="o">=</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">({</span><span class="s1">&#39;c7n&#39;</span><span class="p">,</span> <span class="s1">&#39;c7n_azure&#39;</span><span class="p">,</span> <span class="s1">&#39;pkg_resources&#39;</span><span class="p">,</span>
-                                 <span class="s1">&#39;knack&#39;</span><span class="p">,</span> <span class="s1">&#39;argcomplete&#39;</span><span class="p">,</span> <span class="s1">&#39;applicationinsights&#39;</span><span class="p">})</span>
-        <span class="k">if</span> <span class="n">extra_modules</span><span class="p">:</span>
-            <span class="n">modules</span> <span class="o">=</span> <span class="n">modules</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">extra_modules</span><span class="p">)</span>
+<div class="viewcode-block" id="FunctionPackage.build"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.build">[docs]</a>    <span class="k">def</span> <span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">modules</span><span class="p">,</span> <span class="n">non_binary_packages</span><span class="p">,</span> <span class="n">excluded_packages</span><span class="p">,</span> <span class="n">queue_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,):</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">modules</span><span class="p">)</span>
+        <span class="n">wheels_folder</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">,</span> <span class="s1">&#39;wheels&#39;</span><span class="p">)</span>
+        <span class="n">wheels_install_folder</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">,</span> <span class="s1">&#39;dependencies&#39;</span><span class="p">)</span>
 
-        <span class="c1"># adding azure manually</span>
-        <span class="c1"># we need to ignore the __init__.py of the azure namespace for packaging</span>
-        <span class="c1"># https://www.python.org/dev/peps/pep-0420/</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="n">f</span> <span class="o">==</span> <span class="s1">&#39;azure/__init__.py&#39;</span><span class="p">,</span> <span class="s1">&#39;azure&#39;</span><span class="p">)</span>
+        <span class="n">packages</span> <span class="o">=</span> \
+            <span class="n">DependencyManager</span><span class="o">.</span><span class="n">get_dependency_packages_list</span><span class="p">(</span><span class="n">modules</span><span class="p">,</span> <span class="n">excluded_packages</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">DependencyManager</span><span class="o">.</span><span class="n">check_cache</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">,</span> <span class="n">wheels_install_folder</span><span class="p">,</span> <span class="n">packages</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Cached packages not found or requirements were changed.&quot;</span><span class="p">)</span>
+            <span class="c1"># If cache check fails, wipe all previous wheels, installations etc</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Removing cache folder...&quot;</span><span class="p">)</span>
+                <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Preparing non binary wheels...&quot;</span><span class="p">)</span>
+            <span class="n">DependencyManager</span><span class="o">.</span><span class="n">prepare_non_binary_wheels</span><span class="p">(</span><span class="n">non_binary_packages</span><span class="p">,</span> <span class="n">wheels_folder</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Downloading wheels...&quot;</span><span class="p">)</span>
+            <span class="n">DependencyManager</span><span class="o">.</span><span class="n">download_wheels</span><span class="p">(</span><span class="n">packages</span><span class="p">,</span> <span class="n">wheels_folder</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Installing wheels...&quot;</span><span class="p">)</span>
+            <span class="n">DependencyManager</span><span class="o">.</span><span class="n">install_wheels</span><span class="p">(</span><span class="n">wheels_folder</span><span class="p">,</span> <span class="n">wheels_install_folder</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Updating metadata file...&quot;</span><span class="p">)</span>
+            <span class="n">DependencyManager</span><span class="o">.</span><span class="n">create_cache_metadata</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_folder</span><span class="p">,</span>
+                                                    <span class="n">wheels_install_folder</span><span class="p">,</span>
+                                                    <span class="n">packages</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">wheels_install_folder</span><span class="p">):</span>
+            <span class="n">arc_prefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">wheels_install_folder</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+                <span class="n">dest_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">arc_prefix</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.pyc&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.c&#39;</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="n">f_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="n">f_path</span><span class="p">,</span> <span class="n">dest_path</span><span class="p">)</span>
+
+        <span class="n">exclude</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="s1">&#39;/cache/&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">sep</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_modules</span><span class="p">(</span><span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="p">(</span><span class="n">exclude</span> <span class="ow">in</span> <span class="n">f</span><span class="p">),</span>
+                             <span class="o">*</span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">modules</span><span class="p">])</span>
 
         <span class="c1"># add config and policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_add_functions_required_files</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">queue_name</span><span class="p">)</span>
 
         <span class="c1"># generate and add auth</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">Session</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/auth.json&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">get_functions_auth_string</span><span class="p">())</span>
-
-        <span class="c1"># cffi module needs special handling</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_add_cffi_module</span><span class="p">()</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">add_contents</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;/auth.json&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">get_functions_auth_string</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.wait_for_status"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.wait_for_status">[docs]</a>    <span class="k">def</span> <span class="nf">wait_for_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deployment_creds</span><span class="p">,</span> <span class="n">retries</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">delay</span><span class="o">=</span><span class="mi">15</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">retries</span><span class="p">):</span>
@@ -402,6 +401,10 @@
 
         <span class="k">return</span> <span class="kc">True</span></div>
 
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_temporary_opener</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">flag</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="mo">0o777</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">flag</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">O_TEMPORARY</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+
 <div class="viewcode-block" id="FunctionPackage.publish"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.publish">[docs]</a>    <span class="k">def</span> <span class="nf">publish</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">deployment_creds</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
@@ -411,7 +414,11 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Publishing Function package from </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
 
-        <span class="n">zip_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="c1"># Windows requires TEMPORARY flag if you want to open files created by tempfile library</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;nt&#39;</span><span class="p">:</span>
+            <span class="n">zip_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">,</span> <span class="n">opener</span><span class="o">=</span><span class="n">FunctionPackage</span><span class="o">.</span><span class="n">_temporary_opener</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">zip_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="n">zip_api_url</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">zip_file</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">verify</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">enable_ssl_cert</span><span class="p">)</span>
@@ -423,56 +430,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Function publish result: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">r</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span></div>
 
 <div class="viewcode-block" id="FunctionPackage.close"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.function_package.FunctionPackage.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">_get_site_packages</span><span class="p">():</span>
-        <span class="sd">&quot;&quot;&quot;Returns a list containing all global site-packages directories</span>
-<span class="sd">        (and possibly site-python).</span>
-<span class="sd">        For each directory present in the global ``PREFIXES``, this function</span>
-<span class="sd">        will find its `site-packages` subdirectory depending on the system</span>
-<span class="sd">        environment, and will return a list of full paths.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">site_packages</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-        <span class="n">prefixes</span> <span class="o">=</span> <span class="p">[</span><span class="n">sys</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">exec_prefix</span><span class="p">]</span>
-
-        <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">prefixes</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">prefix</span> <span class="ow">or</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;os2emx&#39;</span><span class="p">,</span> <span class="s1">&#39;riscos&#39;</span><span class="p">):</span>
-                <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;Lib&quot;</span><span class="p">,</span> <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
-            <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span> <span class="o">==</span> <span class="s1">&#39;/&#39;</span><span class="p">:</span>
-                <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span>
-                                                  <span class="s2">&quot;python&quot;</span> <span class="o">+</span> <span class="n">sys</span><span class="o">.</span><span class="n">version</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span>
-                                                  <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
-                <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span> <span class="s2">&quot;site-python&quot;</span><span class="p">))</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
-                <span class="n">site_packages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="s2">&quot;lib&quot;</span><span class="p">,</span> <span class="s2">&quot;site-packages&quot;</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">site_packages</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span> <span class="nf">_get_dependencies</span><span class="p">(</span><span class="n">entry_point</span><span class="p">):</span>
-        <span class="c1"># Dynamically find all imported modules</span>
-        <span class="kn">from</span> <span class="nn">modulefinder</span> <span class="k">import</span> <span class="n">ModuleFinder</span>
-        <span class="n">finder</span> <span class="o">=</span> <span class="n">ModuleFinder</span><span class="p">()</span>
-        <span class="n">finder</span><span class="o">.</span><span class="n">run_script</span><span class="p">(</span><span class="n">entry_point</span><span class="p">)</span>
-        <span class="n">imports</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="vm">__file__</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;site-packages/&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-                            <span class="k">for</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="ow">in</span> <span class="n">finder</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                            <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">&quot;site-packages&quot;</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span><span class="p">]))</span>
-
-        <span class="c1"># Get just the modules, ignore the so and py now (maybe useful for calls to add_file)</span>
-        <span class="n">modules</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.py&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">imports</span> <span class="k">if</span> <span class="s2">&quot;.so&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">i</span><span class="p">]</span>
-
-        <span class="n">so_files</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">v</span><span class="o">.</span><span class="vm">__file__</span>
-                             <span class="k">for</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="ow">in</span> <span class="n">finder</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                             <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">&quot;site-packages&quot;</span> <span class="ow">in</span>
-                             <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span> <span class="ow">and</span> <span class="s2">&quot;.so&quot;</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="vm">__file__</span><span class="p">]))</span>
-
-        <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">modules</span><span class="p">),</span> <span class="n">so_files</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pkg</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div></div>
 </pre></div>
 
            </div>
