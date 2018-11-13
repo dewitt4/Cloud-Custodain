@@ -204,14 +204,16 @@
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">timedelta</span>
 
 <span class="kn">from</span> <span class="nn">azure.mgmt.policyinsights</span> <span class="k">import</span> <span class="n">PolicyInsightsClient</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">Math</span>
-<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">now</span>
 <span class="kn">from</span> <span class="nn">dateutil</span> <span class="k">import</span> <span class="n">zoneinfo</span>
 <span class="kn">from</span> <span class="nn">dateutil.parser</span> <span class="k">import</span> <span class="n">parse</span>
 
+<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">Math</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.utils</span> <span class="k">import</span> <span class="n">now</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.tags</span> <span class="k">import</span> <span class="n">TagHelper</span>
+
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">ValueFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.core</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
-<span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span>
+<span class="kn">from</span> <span class="nn">c7n.filters.offhours</span> <span class="k">import</span> <span class="n">Time</span><span class="p">,</span> <span class="n">OffHour</span><span class="p">,</span> <span class="n">OnHour</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span>
 <span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">type_schema</span>
 
@@ -528,6 +530,32 @@
             <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">non_compliant</span><span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="n">non_compliant</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="AzureOffHour"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.AzureOffHour">[docs]</a><span class="k">class</span> <span class="nc">AzureOffHour</span><span class="p">(</span><span class="n">OffHour</span><span class="p">):</span>
+
+    <span class="c1"># Override get_tag_value because Azure stores tags differently from AWS</span>
+<div class="viewcode-block" id="AzureOffHour.get_tag_value"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.AzureOffHour.get_tag_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_tag_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">tag_value</span> <span class="o">=</span> <span class="n">TagHelper</span><span class="o">.</span><span class="n">get_tag_value</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
+                                            <span class="n">tag</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span><span class="p">,</span>
+                                            <span class="n">utf_8</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">tag_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="n">tag_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tag_value</span></div></div>
+
+
+<div class="viewcode-block" id="AzureOnHour"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.AzureOnHour">[docs]</a><span class="k">class</span> <span class="nc">AzureOnHour</span><span class="p">(</span><span class="n">OnHour</span><span class="p">):</span>
+
+    <span class="c1"># Override get_tag_value because Azure stores tags differently from AWS</span>
+<div class="viewcode-block" id="AzureOnHour.get_tag_value"><a class="viewcode-back" href="../../generated/azure/c7n_azure.html#c7n_azure.filters.AzureOnHour.get_tag_value">[docs]</a>    <span class="k">def</span> <span class="nf">get_tag_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="n">tag_value</span> <span class="o">=</span> <span class="n">TagHelper</span><span class="o">.</span><span class="n">get_tag_value</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
+                                            <span class="n">tag</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_key</span><span class="p">,</span>
+                                            <span class="n">utf_8</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">tag_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="n">tag_value</span> <span class="o">=</span> <span class="n">tag_value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;&#39;</span><span class="se">\&quot;</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tag_value</span></div></div>
 </pre></div>
 
            </div>

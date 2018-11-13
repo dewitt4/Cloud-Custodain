@@ -200,8 +200,13 @@
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
 
+<span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">utils</span>
+
 <span class="kn">from</span> <span class="nn">c7n_azure.provider</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n_azure.resources.arm</span> <span class="k">import</span> <span class="n">ArmResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.actions</span> <span class="k">import</span> <span class="n">AzureBaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n_azure.filters</span> <span class="k">import</span> <span class="n">AzureOffHour</span><span class="p">,</span> <span class="n">AzureOnHour</span>
+<span class="kn">from</span> <span class="nn">azure.mgmt.web</span> <span class="k">import</span> <span class="n">models</span>
 
 
 <div class="viewcode-block" id="AppServicePlan"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.appserviceplan.AppServicePlan">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;appserviceplan&#39;</span><span class="p">)</span>
@@ -216,7 +221,70 @@
             <span class="s1">&#39;location&#39;</span><span class="p">,</span>
             <span class="s1">&#39;resourceGroup&#39;</span><span class="p">,</span>
             <span class="s1">&#39;kind&#39;</span>
-        <span class="p">)</span></div></div>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="AppServicePlan.register"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.appserviceplan.AppServicePlan.register">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">register</span><span class="p">(</span><span class="n">registry</span><span class="p">,</span> <span class="n">_</span><span class="p">):</span>
+        <span class="c1"># Additional filters/actions registered for this resource type</span>
+        <span class="n">AppServicePlan</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;offhour&quot;</span><span class="p">,</span> <span class="n">AzureOffHour</span><span class="p">)</span>
+        <span class="n">AppServicePlan</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;onhour&quot;</span><span class="p">,</span> <span class="n">AzureOnHour</span><span class="p">)</span></div></div>
+
+
+<span class="n">resources</span><span class="o">.</span><span class="n">subscribe</span><span class="p">(</span><span class="n">resources</span><span class="o">.</span><span class="n">EVENT_FINAL</span><span class="p">,</span> <span class="n">AppServicePlan</span><span class="o">.</span><span class="n">register</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ResizePlan"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.appserviceplan.ResizePlan">[docs]</a><span class="nd">@AppServicePlan</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;resize-plan&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ResizePlan</span><span class="p">(</span><span class="n">AzureBaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Resize App Service Plans</span>
+
+<span class="sd">        .. code-block:: yaml</span>
+
+<span class="sd">          policies:</span>
+<span class="sd">            - name: azure-resize-plan</span>
+<span class="sd">              resource: azure.appserviceplan</span>
+<span class="sd">              actions:</span>
+<span class="sd">               - type: resize-plan</span>
+<span class="sd">                 size: F1 # F1, D1, S1, S2, S3, P1, P2, P3</span>
+<span class="sd">                 count: 1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;resize-plan&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;size&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;enum&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;F1&#39;</span><span class="p">,</span> <span class="s1">&#39;D1&#39;</span><span class="p">,</span> <span class="s1">&#39;S1&#39;</span><span class="p">,</span> <span class="s1">&#39;S2&#39;</span><span class="p">,</span> <span class="s1">&#39;S3&#39;</span><span class="p">,</span> <span class="s1">&#39;P1&#39;</span><span class="p">,</span> <span class="s1">&#39;P2&#39;</span><span class="p">,</span> <span class="s1">&#39;P3&#39;</span><span class="p">]},</span>
+            <span class="s1">&#39;count&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;integer&#39;</span><span class="p">}</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="ResizePlan.process_resource_set"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.appserviceplan.ResizePlan.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plans</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_client</span><span class="p">()</span>  <span class="c1"># type: azure.mgmt.web.WebSiteManagementClient</span>
+
+        <span class="k">for</span> <span class="n">plan</span> <span class="ow">in</span> <span class="n">plans</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">AppServicePlan</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">plan</span><span class="p">[</span><span class="s1">&#39;location&#39;</span><span class="p">])</span>
+
+            <span class="k">if</span> <span class="s1">&#39;size&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="n">size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;size&#39;</span><span class="p">)</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span> <span class="o">=</span> <span class="n">models</span><span class="o">.</span><span class="n">SkuDescription</span><span class="p">()</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span><span class="o">.</span><span class="n">tier</span> <span class="o">=</span> <span class="n">ResizePlan</span><span class="o">.</span><span class="n">lookup_tier</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span><span class="o">.</span><span class="n">capacity</span> <span class="o">=</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">size</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span><span class="o">.</span><span class="n">family</span> <span class="o">=</span> <span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">sku</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">size</span>
+
+            <span class="k">if</span> <span class="s1">&#39;count&#39;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">target_worker_count</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;count&#39;</span><span class="p">)</span>
+
+            <span class="n">client</span><span class="o">.</span><span class="n">app_service_plans</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">plan</span><span class="p">[</span><span class="s1">&#39;resourceGroup&#39;</span><span class="p">],</span> <span class="n">plan</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">model</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="ResizePlan.lookup_tier"><a class="viewcode-back" href="../../../generated/azure/c7n_azure.resources.html#c7n_azure.resources.appserviceplan.ResizePlan.lookup_tier">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">lookup_tier</span><span class="p">(</span><span class="n">size</span><span class="p">):</span>
+        <span class="n">tiers</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;F&#39;</span><span class="p">:</span> <span class="s1">&#39;Free&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;S&#39;</span><span class="p">:</span> <span class="s1">&#39;Standard&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;D&#39;</span><span class="p">:</span> <span class="s1">&#39;Shared&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;P&#39;</span><span class="p">:</span> <span class="s1">&#39;Premium&#39;</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">tiers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div></div>
 </pre></div>
 
            </div>
