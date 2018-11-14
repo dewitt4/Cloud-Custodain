@@ -245,6 +245,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">blob_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logs</span> <span class="o">=</span> <span class="n">log_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">log_group</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
 
+        <span class="c1"># Always do file/blob storage outputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">logs</span><span class="p">,</span> <span class="n">log_outputs</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span> <span class="o">=</span> <span class="n">log_outputs</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
+
         <span class="c1"># Look for customizations, but fallback to default</span>
         <span class="k">for</span> <span class="n">api_stats_type</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">provider_name</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">api_stats_type</span> <span class="ow">in</span> <span class="n">api_stats_outputs</span><span class="p">:</span>
@@ -268,6 +273,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">sys_stats</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">logs</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">api_stats</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
         <span class="k">return</span> <span class="bp">self</span>
@@ -282,6 +290,8 @@
         <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="n">subsegment</span><span class="p">(</span><span class="s1">&#39;output&#39;</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">logs</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">output_logs</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="n">exc_type</span><span class="p">,</span> <span class="n">exc_value</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">tracer</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">()</span>
