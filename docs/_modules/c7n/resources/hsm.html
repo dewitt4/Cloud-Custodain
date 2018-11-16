@@ -203,8 +203,108 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">import</span> <span class="nn">functools</span>
+
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
+<span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="p">(</span><span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span><span class="p">,</span> <span class="n">universal_augment</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span>
+
+
+<div class="viewcode-block" id="CloudHSMCluster"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.CloudHSMCluster">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;cloudhsm-cluster&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">CloudHSMCluster</span><span class="p">(</span><span class="n">QueryResourceManager</span><span class="p">):</span>
+
+<div class="viewcode-block" id="CloudHSMCluster.resource_type"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.CloudHSMCluster.resource_type">[docs]</a>    <span class="k">class</span> <span class="nc">resource_type</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+        <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;cloudhsmv2&#39;</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="s1">&#39;cluster&#39;</span>
+        <span class="n">resource_type</span> <span class="o">=</span> <span class="s1">&#39;cloudhsm&#39;</span>
+        <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;describe_clusters&#39;</span><span class="p">,</span> <span class="s1">&#39;Clusters&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;ClusterId&#39;</span>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="s1">&#39;Filters&#39;</span>
+        <span class="n">filter_type</span> <span class="o">=</span> <span class="s1">&#39;scalar&#39;</span>
+        <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span></div>
+        <span class="c1"># universal_taggable = True</span>
+        <span class="c1"># Note: resourcegroupstaggingapi still points to hsm-classic</span>
+
+    <span class="n">augment</span> <span class="o">=</span> <span class="n">universal_augment</span>
+    <span class="n">_generate_arn</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">generate_arn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span> <span class="o">=</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span>
+                <span class="n">generate_arn</span><span class="p">,</span>
+                <span class="s1">&#39;cloudhsm&#39;</span><span class="p">,</span>
+                <span class="n">region</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span><span class="p">,</span>
+                <span class="n">account_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="n">resource_type</span><span class="o">=</span><span class="s1">&#39;cluster&#39;</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_arn</span></div>
+
+
+<div class="viewcode-block" id="tag_function"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.tag_function">[docs]</a><span class="k">def</span> <span class="nf">tag_function</span><span class="p">(</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">tags</span><span class="p">,</span> <span class="n">log</span><span class="p">):</span>
+    <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudhsmv2&#39;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;ClusterId&#39;</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">tag_resource</span><span class="p">(</span><span class="n">ResourceId</span><span class="o">=</span><span class="nb">id</span><span class="p">,</span> <span class="n">TagList</span><span class="o">=</span><span class="n">tags</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s1">&#39;Exception tagging cloudhsm cluster </span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="p">,</span>
+                <span class="n">c</span><span class="p">[</span><span class="s1">&#39;ClusterId&#39;</span><span class="p">],</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">continue</span></div>
+
+
+<div class="viewcode-block" id="Tag"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.Tag">[docs]</a><span class="nd">@CloudHSMCluster</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;tag&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Tag</span><span class="p">(</span><span class="n">Tag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to add tag(s) to CloudHSM Cluster(s)</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: cloudhsm</span>
+<span class="sd">                resource: aws.cloudhsm-cluster</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:OwnerName&quot;: missing</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: tag</span>
+<span class="sd">                    key: OwnerName</span>
+<span class="sd">                    value: OwnerName</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudhsmv2:TagResource&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="Tag.process_resource_set"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.Tag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="n">tag_function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">tags</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="RemoveTag"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.RemoveTag">[docs]</a><span class="nd">@CloudHSMCluster</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;remove-tag&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">RemoveTag</span><span class="p">(</span><span class="n">RemoveTag</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to remove tag(s) from CloudHSM Cluster(s)</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: cloudhsm</span>
+<span class="sd">                resource: aws.cloudhsm-cluster</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - &quot;tag:OldTagKey&quot;: present</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: remove-tag</span>
+<span class="sd">                    tags: [OldTagKey1, OldTagKey2]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;cloudhsmv2:UntagResource&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="RemoveTag.process_resource_set"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.RemoveTag.process_resource_set">[docs]</a>    <span class="k">def</span> <span class="nf">process_resource_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clusters</span><span class="p">,</span> <span class="n">tag_keys</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;cloudhsmv2&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">clusters</span><span class="p">:</span>
+            <span class="nb">id</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="s1">&#39;ClusterId&#39;</span><span class="p">]</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">untag_resource</span><span class="p">(</span><span class="n">ResourceId</span><span class="o">=</span><span class="nb">id</span><span class="p">,</span> <span class="n">TagKeyList</span><span class="o">=</span><span class="n">tag_keys</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="CloudHSM"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.hsm.CloudHSM">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;hsm&#39;</span><span class="p">)</span>
