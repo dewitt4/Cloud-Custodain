@@ -1237,10 +1237,117 @@
     <span class="p">)</span>
 
 <div class="viewcode-block" id="SetXrayEncryption.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetXrayEncryption.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">()</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;xray&#39;</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;xray&#39;</span><span class="p">)</span>
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">)</span>
         <span class="n">req</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;NONE&#39;</span><span class="p">}</span> <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s1">&#39;default&#39;</span> <span class="k">else</span> <span class="p">{</span><span class="s1">&#39;Type&#39;</span><span class="p">:</span> <span class="s1">&#39;KMS&#39;</span><span class="p">,</span> <span class="s1">&#39;KeyId&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">}</span>
         <span class="n">client</span><span class="o">.</span><span class="n">put_encryption_config</span><span class="p">(</span><span class="o">**</span><span class="n">req</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="S3PublicBlock"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.S3PublicBlock">[docs]</a><span class="nd">@filters</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;s3-public-block&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">S3PublicBlock</span><span class="p">(</span><span class="n">ValueFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Check for s3 public blocks on an account.</span>
+
+<span class="sd">    https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-block-public-access.html</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">annotation_key</span> <span class="o">=</span> <span class="s1">&#39;c7n:s3-public-block&#39;</span>
+    <span class="n">annotate</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># no annotation from value filter</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;s3-public-block&#39;</span><span class="p">,</span> <span class="n">rinherit</span><span class="o">=</span><span class="n">ValueFilter</span><span class="o">.</span><span class="n">schema</span><span class="p">)</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:GetAccountPublicAccessBlock&#39;</span><span class="p">,)</span>
+
+<div class="viewcode-block" id="S3PublicBlock.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.S3PublicBlock.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">augment</span><span class="p">([</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">r</span><span class="p">])</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">S3PublicBlock</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="S3PublicBlock.augment"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.S3PublicBlock.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3control&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_public_access_block</span><span class="p">(</span>
+                    <span class="n">AccountId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;PublicAccessBlockConfiguration&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">NoSuchPublicAccessBlockConfiguration</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span></div>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">S3PublicBlock</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__call__</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SetS3PublicBlock"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetS3PublicBlock">[docs]</a><span class="nd">@actions</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-s3-public-block&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetS3PublicBlock</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Configure S3 Public Access Block on an account.</span>
+
+<span class="sd">    All public access block attributes can be set. If not specified they are merged</span>
+<span class="sd">    with the extant configuration.</span>
+
+<span class="sd">    https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-block-public-access.html</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. yaml:</span>
+
+<span class="sd">      policies:</span>
+<span class="sd">        - name: restrict-public-buckets</span>
+<span class="sd">          resource: aws.account</span>
+<span class="sd">          filters:</span>
+<span class="sd">            - not:</span>
+<span class="sd">               - type: s3-public-block</span>
+<span class="sd">                 key: RestrictPublicBuckets</span>
+<span class="sd">                 value: true</span>
+<span class="sd">          actions:</span>
+<span class="sd">            - type: set-s3-public-block</span>
+<span class="sd">              RestrictPublicBuckets: true</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-s3-public-block&#39;</span><span class="p">,</span>
+        <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+        <span class="n">BlockPublicAcls</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">IgnorePublicAcls</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">BlockPublicPolicy</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+        <span class="n">RestrictPublicBuckets</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;s3:PutAccountPublicAccessBlock&#39;</span><span class="p">,</span> <span class="s1">&#39;s33:GetAccountPublicAccessBlock&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SetS3PublicBlock.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetS3PublicBlock.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">False</span> <span class="ow">and</span> <span class="n">config</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> cant set state false with controls specified&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">type</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="SetS3PublicBlock.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.account.SetS3PublicBlock.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;s3control&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">delete_public_access_block</span><span class="p">(</span><span class="n">AccountId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">])</span>
+            <span class="k">return</span>
+
+        <span class="n">keys</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s1">&#39;BlockPublicPolicy&#39;</span><span class="p">,</span> <span class="s1">&#39;BlockPublicAcls&#39;</span><span class="p">,</span> <span class="s1">&#39;IgnorePublicAcls&#39;</span><span class="p">,</span> <span class="s1">&#39;RestrictPublicBuckets&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="c1"># try to merge with existing configuration if not explicitly set.</span>
+            <span class="n">base</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">if</span> <span class="n">S3PublicBlock</span><span class="o">.</span><span class="n">annotation_key</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+                <span class="n">base</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="n">S3PublicBlock</span><span class="o">.</span><span class="n">annotation_key</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">base</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_public_access_block</span><span class="p">(</span><span class="n">AccountId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                        <span class="s1">&#39;PublicAccessBlockConfiguration&#39;</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">NoSuchPublicAccessBlockConfiguration</span><span class="p">:</span>
+                    <span class="n">base</span> <span class="o">=</span> <span class="p">{}</span>
+
+            <span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="n">config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+                <span class="k">elif</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">base</span><span class="p">:</span>
+                    <span class="n">config</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">base</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+
+            <span class="n">client</span><span class="o">.</span><span class="n">put_public_access_block</span><span class="p">(</span>
+                <span class="n">AccountId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;account_id&#39;</span><span class="p">],</span>
+                <span class="n">PublicAccessBlockConfiguration</span><span class="o">=</span><span class="n">config</span><span class="p">)</span></div></div>
 </pre></div>
 
            </div>
