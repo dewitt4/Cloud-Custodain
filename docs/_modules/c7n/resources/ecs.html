@@ -212,6 +212,30 @@
 <span class="kn">from</span> <span class="nn">c7n</span> <span class="k">import</span> <span class="n">query</span>
 
 
+<div class="viewcode-block" id="ecs_tag_normalize"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ecs_tag_normalize">[docs]</a><span class="k">def</span> <span class="nf">ecs_tag_normalize</span><span class="p">(</span><span class="n">resources</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;normalize tag format on ecs resources to match common aws format.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s1">&#39;tags&#39;</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
+            <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Tags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;Key&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;key&#39;</span><span class="p">],</span> <span class="s1">&#39;Value&#39;</span><span class="p">:</span> <span class="n">t</span><span class="p">[</span><span class="s1">&#39;value&#39;</span><span class="p">]}</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;tags&#39;</span><span class="p">]]</span>
+            <span class="n">r</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;tags&#39;</span><span class="p">)</span></div>
+
+
+<span class="n">NEW_ARN_STYLE</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;container-instance&#39;</span><span class="p">,</span> <span class="s1">&#39;service&#39;</span><span class="p">,</span> <span class="s1">&#39;task&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ecs_taggable"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ecs_taggable">[docs]</a><span class="k">def</span> <span class="nf">ecs_taggable</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">r</span><span class="p">):</span>
+    <span class="c1"># Tag support requires new arn format</span>
+    <span class="c1"># https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-using-tags.html</span>
+    <span class="c1">#</span>
+    <span class="c1"># New arn format details</span>
+    <span class="c1"># https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-resource-ids.html</span>
+    <span class="c1">#</span>
+    <span class="n">path_parts</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">id</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">path_parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NEW_ARN_STYLE</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">path_parts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span></div>
+
+
 <div class="viewcode-block" id="ECSCluster"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ECSCluster">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;ecs&#39;</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">ECSCluster</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">QueryResourceManager</span><span class="p">):</span>
 
@@ -219,11 +243,16 @@
         <span class="n">service</span> <span class="o">=</span> <span class="s1">&#39;ecs&#39;</span>
         <span class="n">enum_spec</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;list_clusters&#39;</span><span class="p">,</span> <span class="s1">&#39;clusterArns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="n">batch_detail_spec</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="s1">&#39;describe_clusters&#39;</span><span class="p">,</span> <span class="s1">&#39;clusters&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;clusters&#39;</span><span class="p">)</span>
+            <span class="s1">&#39;describe_clusters&#39;</span><span class="p">,</span> <span class="s1">&#39;clusters&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s1">&#39;clusters&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;include&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;TAGS&#39;</span><span class="p">]})</span>
         <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;clusterName&quot;</span>
         <span class="nb">id</span> <span class="o">=</span> <span class="s2">&quot;clusterArn&quot;</span>
         <span class="n">dimension</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div></div>
+        <span class="n">filter_name</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="ECSCluster.augment"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ECSCluster.augment">[docs]</a>    <span class="k">def</span> <span class="nf">augment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">resources</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">ECSCluster</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">augment</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="n">ecs_tag_normalize</span><span class="p">(</span><span class="n">resources</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">resources</span></div></div>
 
 
 <div class="viewcode-block" id="ECSMetrics"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ECSMetrics">[docs]</a><span class="nd">@ECSCluster</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;metrics&#39;</span><span class="p">)</span>
@@ -286,7 +315,9 @@
             <span class="n">results</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span>
                 <span class="n">client</span><span class="o">.</span><span class="n">describe_services</span><span class="p">(</span>
                     <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">include</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;TAGS&#39;</span><span class="p">],</span>
                     <span class="n">services</span><span class="o">=</span><span class="n">service_set</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;services&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">ecs_tag_normalize</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -415,7 +446,9 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">retry</span><span class="p">(</span>
                     <span class="n">client</span><span class="o">.</span><span class="n">describe_tasks</span><span class="p">,</span>
                     <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                    <span class="n">include</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;TAGS&#39;</span><span class="p">],</span>
                     <span class="n">tasks</span><span class="o">=</span><span class="n">task_set</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;tasks&#39;</span><span class="p">,</span> <span class="p">[]))</span>
+        <span class="n">ecs_tag_normalize</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
 
 
@@ -571,8 +604,10 @@
 <div class="viewcode-block" id="ECSContainerInstanceDescribeSource.process_cluster_resources"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.ecs.ECSContainerInstanceDescribeSource.process_cluster_resources">[docs]</a>    <span class="k">def</span> <span class="nf">process_cluster_resources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">cluster_id</span><span class="p">,</span> <span class="n">container_instances</span><span class="p">):</span>
         <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">service_set</span> <span class="ow">in</span> <span class="n">chunks</span><span class="p">(</span><span class="n">container_instances</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
-            <span class="n">r</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_container_instances</span><span class="p">(</span><span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
-                    <span class="n">containerInstances</span><span class="o">=</span><span class="n">container_instances</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">,</span> <span class="p">[])</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_container_instances</span><span class="p">(</span>
+                <span class="n">cluster</span><span class="o">=</span><span class="n">cluster_id</span><span class="p">,</span>
+                <span class="n">include</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;TAGS&#39;</span><span class="p">],</span>
+                <span class="n">containerInstances</span><span class="o">=</span><span class="n">container_instances</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;containerInstances&#39;</span><span class="p">,</span> <span class="p">[])</span>
             <span class="c1"># Many Container Instance API calls require the cluster_id, adding as a</span>
             <span class="c1"># custodian specific key in the resource</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">r</span><span class="p">:</span>
