@@ -56,14 +56,16 @@ class ResizePlan(AzureBaseAction):
               resource: azure.appserviceplan
               actions:
                - type: resize-plan
-                 size: F1 # F1, D1, S1, S2, S3, P1, P2, P3
+                 size: F1
                  count: 1
     """
 
     schema = utils.type_schema(
         'resize-plan',
         **{
-            'size': {'type': 'string', 'enum': ['F1', 'D1', 'S1', 'S2', 'S3', 'P1', 'P2', 'P3']},
+            'size': {'type': 'string', 'enum':
+                    ['F1', 'B1', 'B2', 'B3', 'D1', 'S1', 'S2', 'S3', 'P1', 'P2',
+                     'P3', 'P1V2', 'P2V2', 'P3v2', 'PC2', 'PC3', 'PC4']},
             'count': {'type': 'integer'}
         }
     )
@@ -77,23 +79,34 @@ class ResizePlan(AzureBaseAction):
             if 'size' in self.data:
                 size = self.data.get('size')
                 model.sku = models.SkuDescription()
-                model.sku.tier = ResizePlan.lookup_tier(size)
-                model.sku.capacity = size[1]
+                model.sku.tier = ResizePlan.get_sku_name(size)
                 model.sku.name = size
-                model.sku.family = size[0]
-                model.sku.size = size
 
             if 'count' in self.data:
                 model.target_worker_count = self.data.get('count')
 
-            client.app_service_plans.update(plan['resourceGroup'], plan['name'], model)
+            try:
+                client.app_service_plans.update(plan['resourceGroup'], plan['name'], model)
+            except models.DefaultErrorResponseException as e:
+                self.log.error("Failed to resize %s.  Inner exception: %s" %
+                               (plan['name'], e.inner_exception))
+                raise
 
     @staticmethod
-    def lookup_tier(size):
-        tiers = {
-            'F': 'Free',
-            'S': 'Standard',
-            'D': 'Shared',
-            'P': 'Premium'
-        }
-        return tiers.get(size[0])
+    def get_sku_name(tier):
+        tier = tier.upper()
+        if tier == 'F1':
+            return 'FREE'
+        elif tier == 'D1':
+            return 'SHARED'
+        elif tier in ['B1', 'B2', 'B3']:
+            return 'BASIC'
+        elif tier in ['S1', 'S2', 'S3']:
+            return 'STANDARD'
+        elif tier in ['P1', 'P2', 'P3']:
+            return 'PREMIUM'
+        elif tier in ['P1V2', 'P2V2', 'P3V2']:
+            return 'PREMIUMV2'
+        elif tier in ['PC2', 'PC3', 'PC4']:
+            return 'PremiumContainer'
+        return None
