@@ -207,6 +207,7 @@
 <span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
 
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.exceptions</span> <span class="k">import</span> <span class="n">PolicyValidationError</span>
 <span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span><span class="p">,</span> <span class="n">MetricsFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.filters.iamaccess</span> <span class="k">import</span> <span class="n">CrossAccountAccessFilter</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ChildResourceManager</span>
@@ -511,6 +512,83 @@
             <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">results</span></div></div>
+
+
+<div class="viewcode-block" id="EncryptLogGroup"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.cw.EncryptLogGroup">[docs]</a><span class="nd">@LogGroup</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-encryption&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">EncryptLogGroup</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Encrypt/Decrypt a log group</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: encrypt-log-group</span>
+<span class="sd">            resource: log-group</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - kmsKeyId: absent</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-encryption</span>
+<span class="sd">                kms-key: alias/mylogkey</span>
+<span class="sd">                state: True</span>
+
+<span class="sd">          - name: decrypt-log-group</span>
+<span class="sd">            resource: log-group</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - kmsKeyId: kms:key:arn</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-encryption</span>
+<span class="sd">                state: False</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-encryption&#39;</span><span class="p">,</span>
+        <span class="o">**</span><span class="p">{</span><span class="s1">&#39;kms-key&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span>
+           <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;logs:AssociateKmsKey&#39;</span><span class="p">,</span> <span class="s1">&#39;logs:DisassociateKmsKey&#39;</span><span class="p">,</span> <span class="s1">&#39;kms:DescribeKey&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="EncryptLogGroup.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.cw.EncryptLogGroup.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Must specify either a KMS key ARN or Alias&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s1">&#39;alias/&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key</span> <span class="ow">and</span> <span class="s1">&#39;:key/&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">PolicyValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Invalid kms key format </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="EncryptLogGroup.resolve_key"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.cw.EncryptLogGroup.resolve_key">[docs]</a>    <span class="k">def</span> <span class="nf">resolve_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Qualified arn for key</span>
+        <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;arn:&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">&#39;:key/&#39;</span> <span class="ow">in</span> <span class="n">key</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">key</span>
+
+        <span class="c1"># Alias</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
+                <span class="s1">&#39;kms&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">describe_key</span><span class="p">(</span>
+                    <span class="n">KeyId</span><span class="o">=</span><span class="n">key</span><span class="p">)[</span><span class="s1">&#39;KeyMetadata&#39;</span><span class="p">][</span><span class="s1">&#39;Arn&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">key</span></div>
+
+<div class="viewcode-block" id="EncryptLogGroup.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.cw.EncryptLogGroup.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">)</span>
+
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve_key</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;kms-key&#39;</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">state</span><span class="p">:</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">associate_kms_key</span><span class="p">(</span>
+                        <span class="n">logGroupName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">],</span> <span class="n">kmsKeyId</span><span class="o">=</span><span class="n">key</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">disassociate_kms_key</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">])</span>
+            <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">ResourceNotFoundException</span><span class="p">:</span>
+                <span class="k">continue</span></div></div>
 </pre></div>
 
            </div>
