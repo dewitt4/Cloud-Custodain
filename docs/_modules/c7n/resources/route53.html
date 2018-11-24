@@ -204,10 +204,18 @@
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
 <span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">fnmatch</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">botocore.paginate</span> <span class="k">import</span> <span class="n">Paginator</span>
 
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span><span class="p">,</span> <span class="n">ChildResourceManager</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
-<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span>
+<span class="kn">from</span> <span class="nn">c7n.utils</span> <span class="k">import</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">get_retry</span><span class="p">,</span> <span class="n">generate_arn</span><span class="p">,</span> <span class="n">local_session</span><span class="p">,</span> <span class="n">type_schema</span>
+<span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">BaseAction</span>
+<span class="kn">from</span> <span class="nn">c7n.filters</span> <span class="k">import</span> <span class="n">Filter</span>
 
 <span class="kn">from</span> <span class="nn">c7n.resources.shield</span> <span class="k">import</span> <span class="n">IsShieldProtected</span><span class="p">,</span> <span class="n">SetShieldProtection</span>
 <span class="kn">from</span> <span class="nn">c7n.tags</span> <span class="k">import</span> <span class="n">RemoveTag</span><span class="p">,</span> <span class="n">Tag</span>
@@ -404,6 +412,221 @@
             <span class="n">client</span><span class="o">.</span><span class="n">delete_tags_for_domain</span><span class="p">(</span>
                 <span class="n">DomainName</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_key</span><span class="p">],</span>
                 <span class="n">TagsToDelete</span><span class="o">=</span><span class="n">keys</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="SetQueryLogging"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging">[docs]</a><span class="nd">@HostedZone</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;set-query-logging&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">SetQueryLogging</span><span class="p">(</span><span class="n">BaseAction</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Enables query logging on a hosted zone.</span>
+
+<span class="sd">    By default this enables a log group per route53 domain, alternatively</span>
+<span class="sd">    a log group name can be specified for a unified log across domains.</span>
+
+<span class="sd">    Note this only applicable to public route53 domains, and log groups</span>
+<span class="sd">    must be created in us-east-1 region.</span>
+
+<span class="sd">    This action can optionally setup the resource permissions needed for</span>
+<span class="sd">    route53 to log to cloud watch logs via `set-permissions: true`, else</span>
+<span class="sd">    the cloud watch logs resource policy would need to be set separately.</span>
+
+<span class="sd">    Its recommended to use a separate custodian policy on the log</span>
+<span class="sd">    groups to set the log retention period for the zone logs. See</span>
+<span class="sd">    `custodian schema aws.log-group.actions.set-retention`</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block: yaml</span>
+
+<span class="sd">        policies:</span>
+<span class="sd">          - name: enablednsquerylogging</span>
+<span class="sd">            resource: hostedzone</span>
+<span class="sd">            region: us-east-1</span>
+<span class="sd">            filters:</span>
+<span class="sd">              - type: query-logging-enabled</span>
+<span class="sd">                state: false</span>
+<span class="sd">            actions:</span>
+<span class="sd">              - type: set-query-logging</span>
+<span class="sd">                state: true</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s1">&#39;route53:GetQueryLoggingConfig&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;route53:CreateQueryLoggingConfig&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;route53:DeleteQueryLoggingConfig&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;logs:DescribeLogGroups&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;logs:CreateLogGroups&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;logs:GetResourcePolicy&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;logs:PutResourcePolicy&#39;</span><span class="p">)</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;set-query-logging&#39;</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span>
+            <span class="s1">&#39;set-permissions&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;log-group-prefix&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;/aws/route53&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;log-group&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span> <span class="s1">&#39;default&#39;</span><span class="p">:</span> <span class="s1">&#39;auto&#39;</span><span class="p">},</span>
+            <span class="s1">&#39;state&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">}})</span>
+
+    <span class="n">statement</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;Sid&quot;</span><span class="p">:</span> <span class="s2">&quot;Route53LogsToCloudWatchLogs&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Effect&quot;</span><span class="p">:</span> <span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Principal&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Service&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;route53.amazonaws.com&quot;</span><span class="p">]},</span>
+        <span class="s2">&quot;Action&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;logs:PutLogEvents&quot;</span><span class="p">,</span> <span class="s2">&quot;logs:CreateLogStream&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;Resource&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}</span>
+
+<div class="viewcode-block" id="SetQueryLogging.validate"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.validate">[docs]</a>    <span class="k">def</span> <span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="c1"># By forcing use of a filter we ensure both getting to right set of</span>
+            <span class="c1"># resources as well avoiding an extra api call here, as we&#39;ll reuse</span>
+            <span class="c1"># the annotation from the filter for logging config.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">filters</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span>
+                    <span class="n">f</span><span class="p">,</span> <span class="n">IsQueryLoggingEnabled</span><span class="p">)]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;set-query-logging when deleting requires &quot;</span>
+                    <span class="s2">&quot;use of query-logging-enabled filter in policy&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.get_permissions"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.get_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">get_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">perms</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;set-permissions&#39;</span><span class="p">):</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="s1">&#39;logs:GetResourcePolicy&#39;</span><span class="p">,</span> <span class="s1">&#39;logs:PutResourcePolicy&#39;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;route53:CreateQueryLoggingConfig&#39;</span><span class="p">)</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;logs:CreateLogGroups&#39;</span><span class="p">)</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;logs:DescribeLogGroups&#39;</span><span class="p">)</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;tag:GetResources&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">perms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;route53:DeleteQueryLoggingConfig&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">perms</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">region</span> <span class="o">!=</span> <span class="s1">&#39;us-east-1&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;set-query-logging should be only be performed region: us-east-1&quot;</span><span class="p">)</span>
+
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;route53&#39;</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">zone_log_names</span> <span class="o">=</span> <span class="p">{</span><span class="n">z</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_zone_log_name</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">state</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ensure_log_groups</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">zone_log_names</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">state</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">client</span><span class="o">.</span><span class="n">delete_query_logging_config</span><span class="p">(</span><span class="n">Id</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:log-config&#39;</span><span class="p">][</span><span class="s1">&#39;Id&#39;</span><span class="p">])</span>
+                <span class="k">except</span> <span class="n">client</span><span class="o">.</span><span class="n">exceptions</span><span class="o">.</span><span class="n">NoSuchQueryLoggingConfig</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                <span class="k">continue</span>
+            <span class="n">log_arn</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:logs:us-east-1:</span><span class="si">{}</span><span class="s2">:log-group:</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="n">zone_log_names</span><span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]])</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">create_query_logging_config</span><span class="p">(</span>
+                <span class="n">HostedZoneId</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">],</span>
+                <span class="n">CloudWatchLogsLogGroupArn</span><span class="o">=</span><span class="n">log_arn</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.get_zone_log_name"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.get_zone_log_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_zone_log_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">zone</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;log-group&#39;</span><span class="p">,</span> <span class="s1">&#39;auto&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;auto&#39;</span><span class="p">:</span>
+            <span class="n">log_group_name</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;log-group-prefix&#39;</span><span class="p">,</span> <span class="s1">&#39;/aws/route53&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">),</span>
+                <span class="n">zone</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">][:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">log_group_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;log-group&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">log_group_name</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.ensure_log_groups"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.ensure_log_groups">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_log_groups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_names</span><span class="p">):</span>
+        <span class="n">log_manager</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">get_resource_manager</span><span class="p">(</span><span class="s1">&#39;log-group&#39;</span><span class="p">)</span>
+        <span class="n">log_manager</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">region</span><span class="o">=</span><span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">group_names</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="n">log_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">group_names</span><span class="p">),</span> <span class="n">augment</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+                <span class="n">groups</span> <span class="o">=</span> <span class="p">[{</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">:</span> <span class="n">g</span><span class="p">}</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">group_names</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">common_prefix</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">commonprefix</span><span class="p">(</span><span class="n">group_names</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">common_prefix</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="s1">&#39;/&#39;</span><span class="p">):</span>
+                <span class="n">groups</span> <span class="o">=</span> <span class="n">log_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">(</span>
+                    <span class="p">[</span><span class="n">common_prefix</span><span class="p">],</span> <span class="n">augment</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">groups</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="p">[</span>
+                    <span class="n">log_manager</span><span class="o">.</span><span class="n">get_resources</span><span class="p">([</span><span class="n">g</span><span class="p">])</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">group_names</span><span class="p">]))</span>
+
+        <span class="n">missing</span> <span class="o">=</span> <span class="n">group_names</span><span class="o">.</span><span class="n">difference</span><span class="p">({</span><span class="n">g</span><span class="p">[</span><span class="s1">&#39;logGroupName&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">})</span>
+
+        <span class="c1"># Logs groups must be created in us-east-1 for route53.</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;logs&#39;</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">&#39;us-east-1&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">missing</span><span class="p">:</span>
+            <span class="n">client</span><span class="o">.</span><span class="n">create_log_group</span><span class="p">(</span><span class="n">logGroupName</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;set-permissions&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ensure_route53_permissions</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">group_names</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.ensure_route53_permissions"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.ensure_route53_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">ensure_route53_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">group_names</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">check_route53_permissions</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">group_names</span><span class="p">):</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;log-group&#39;</span><span class="p">,</span> <span class="s1">&#39;auto&#39;</span><span class="p">)</span> <span class="o">!=</span> <span class="s1">&#39;auto&#39;</span><span class="p">:</span>
+            <span class="n">p_resource</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:logs:us-east-1:</span><span class="si">{}</span><span class="s2">:log-group:</span><span class="si">{}</span><span class="s2">:*&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;log-group&#39;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">p_resource</span> <span class="o">=</span> <span class="s2">&quot;arn:aws:logs:us-east-1:</span><span class="si">{}</span><span class="s2">:log-group:</span><span class="si">{}</span><span class="s2">/*&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">account_id</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;log-group-prefix&#39;</span><span class="p">,</span> <span class="s1">&#39;/aws/route53&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">))</span>
+
+        <span class="n">statement</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">statement</span><span class="p">)</span>
+        <span class="n">statement</span><span class="p">[</span><span class="s1">&#39;Resource&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_resource</span>
+
+        <span class="n">client</span><span class="o">.</span><span class="n">put_resource_policy</span><span class="p">(</span>
+            <span class="n">policyName</span><span class="o">=</span><span class="s1">&#39;Route53LogWrites&#39;</span><span class="p">,</span>
+            <span class="n">policyDocument</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;Version&quot;</span><span class="p">:</span> <span class="s2">&quot;2012-10-17&quot;</span><span class="p">,</span> <span class="s2">&quot;Statement&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">statement</span><span class="p">]}))</span></div>
+
+<div class="viewcode-block" id="SetQueryLogging.check_route53_permissions"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.SetQueryLogging.check_route53_permissions">[docs]</a>    <span class="k">def</span> <span class="nf">check_route53_permissions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="n">group_names</span><span class="p">):</span>
+        <span class="n">group_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">group_names</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">client</span><span class="o">.</span><span class="n">describe_resource_policies</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;resourcePolicies&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;policyDocument&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Statement&#39;</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;Effect&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Allow&#39;</span> <span class="ow">and</span>
+                        <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Principal&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Service&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="s2">&quot;route53.amazonaws.com&quot;</span><span class="p">):</span>
+                    <span class="n">group_names</span><span class="o">.</span><span class="n">difference_update</span><span class="p">(</span>
+                        <span class="n">fnmatch</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">group_names</span><span class="p">,</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;Resource&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">group_names</span><span class="p">:</span>
+                        <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="nb">bool</span><span class="p">(</span><span class="n">group_names</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="get_logging_config_paginator"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.get_logging_config_paginator">[docs]</a><span class="k">def</span> <span class="nf">get_logging_config_paginator</span><span class="p">(</span><span class="n">client</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">Paginator</span><span class="p">(</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">list_query_logging_configs</span><span class="p">,</span>
+        <span class="p">{</span><span class="s1">&#39;input_token&#39;</span><span class="p">:</span> <span class="s1">&#39;NextToken&#39;</span><span class="p">,</span> <span class="s1">&#39;output_token&#39;</span><span class="p">:</span> <span class="s1">&#39;NextToken&#39;</span><span class="p">,</span>
+         <span class="s1">&#39;result_key&#39;</span><span class="p">:</span> <span class="s1">&#39;QueryLoggingConfigs&#39;</span><span class="p">},</span>
+        <span class="n">client</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">service_model</span><span class="o">.</span><span class="n">operation_model</span><span class="p">(</span><span class="s1">&#39;ListQueryLoggingConfigs&#39;</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="IsQueryLoggingEnabled"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.IsQueryLoggingEnabled">[docs]</a><span class="nd">@HostedZone</span><span class="o">.</span><span class="n">filter_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;query-logging-enabled&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">IsQueryLoggingEnabled</span><span class="p">(</span><span class="n">Filter</span><span class="p">):</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;route53:GetQueryLoggingConfig&#39;</span><span class="p">,</span> <span class="s1">&#39;route53:GetHostedZone&#39;</span><span class="p">)</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span><span class="s1">&#39;query-logging-enabled&#39;</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;boolean&#39;</span><span class="p">})</span>
+
+<div class="viewcode-block" id="IsQueryLoggingEnabled.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.route53.IsQueryLoggingEnabled.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">,</span> <span class="n">event</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;route53&#39;</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;state&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">enabled_zones</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">c</span><span class="p">[</span><span class="s1">&#39;HostedZoneId&#39;</span><span class="p">]:</span> <span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span>
+            <span class="n">get_logging_config_paginator</span><span class="p">(</span>
+                <span class="n">client</span><span class="p">)</span><span class="o">.</span><span class="n">paginate</span><span class="p">()</span><span class="o">.</span><span class="n">build_full_result</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                    <span class="s1">&#39;QueryLoggingConfigs&#39;</span><span class="p">,</span> <span class="p">())}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="n">zid</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="c1"># query logging is only supported for Public Hosted Zones.</span>
+            <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Config&#39;</span><span class="p">][</span><span class="s1">&#39;PrivateZone&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">logging</span> <span class="o">=</span> <span class="n">zid</span> <span class="ow">in</span> <span class="n">enabled_zones</span>
+            <span class="k">if</span> <span class="n">logging</span> <span class="ow">and</span> <span class="n">state</span><span class="p">:</span>
+                <span class="n">r</span><span class="p">[</span><span class="s1">&#39;c7n:log-config&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">enabled_zones</span><span class="p">[</span><span class="n">zid</span><span class="p">]</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">logging</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">state</span><span class="p">:</span>
+                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">results</span></div></div>
 </pre></div>
 
            </div>
