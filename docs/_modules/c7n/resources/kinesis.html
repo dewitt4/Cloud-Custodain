@@ -203,6 +203,8 @@
 <span class="c1"># limitations under the License.</span>
 <span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">absolute_import</span><span class="p">,</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span><span class="p">,</span> <span class="n">unicode_literals</span>
 
+<span class="kn">import</span> <span class="nn">jmespath</span>
+
 <span class="kn">from</span> <span class="nn">c7n.actions</span> <span class="k">import</span> <span class="n">Action</span>
 <span class="kn">from</span> <span class="nn">c7n.manager</span> <span class="k">import</span> <span class="n">resources</span>
 <span class="kn">from</span> <span class="nn">c7n.query</span> <span class="k">import</span> <span class="n">QueryResourceManager</span>
@@ -315,6 +317,90 @@
                 <span class="k">continue</span>
             <span class="n">client</span><span class="o">.</span><span class="n">delete_delivery_stream</span><span class="p">(</span>
                 <span class="n">DeliveryStreamName</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s1">&#39;DeliveryStreamName&#39;</span><span class="p">])</span></div></div>
+
+
+<div class="viewcode-block" id="FirehoseEncryptS3Destination"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.kinesis.FirehoseEncryptS3Destination">[docs]</a><span class="nd">@DeliveryStream</span><span class="o">.</span><span class="n">action_registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;encrypt-s3-destination&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">FirehoseEncryptS3Destination</span><span class="p">(</span><span class="n">Action</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Action to set encryption key a Firehose S3 destination</span>
+
+<span class="sd">    :example:</span>
+
+<span class="sd">    .. code-block:: yaml</span>
+
+<span class="sd">            policies:</span>
+<span class="sd">              - name: encrypt-s3-destination</span>
+<span class="sd">                resource: firehose</span>
+<span class="sd">                filters:</span>
+<span class="sd">                  - KmsMasterKeyId: absent</span>
+<span class="sd">                actions:</span>
+<span class="sd">                  - type: encrypt-s3-destination</span>
+<span class="sd">                    key_arn: &lt;arn of KMS key/alias&gt;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">type_schema</span><span class="p">(</span>
+        <span class="s1">&#39;encrypt-s3-destination&#39;</span><span class="p">,</span>
+        <span class="n">key_arn</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">},</span> <span class="n">required</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;key_arn&#39;</span><span class="p">,))</span>
+
+    <span class="n">permissions</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;firehose:UpdateDestination&quot;</span><span class="p">,)</span>
+
+    <span class="n">DEST_MD</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;SplunkDestinationDescription&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="s1">&#39;SplunkDestinationUpdate&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clear&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;S3BackupMode&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;encrypt_path&#39;</span><span class="p">:</span> <span class="s1">&#39;S3DestinationDescription.EncryptionConfiguration&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;remap&#39;</span><span class="p">:</span> <span class="p">[(</span><span class="s1">&#39;S3DestinationDescription&#39;</span><span class="p">,</span> <span class="s1">&#39;S3Update&#39;</span><span class="p">)]</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;ElasticsearchDestinationDescription&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="s1">&#39;ElasticsearchDestinationUpdate&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clear&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;S3BackupMode&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;encrypt_path&#39;</span><span class="p">:</span> <span class="s1">&#39;S3DestinationDescription.EncryptionConfiguration&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;remap&#39;</span><span class="p">:</span> <span class="p">[(</span><span class="s1">&#39;S3DestinationDescription&#39;</span><span class="p">,</span> <span class="s1">&#39;S3Update&#39;</span><span class="p">)],</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;ExtendedS3DestinationDescription&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="s1">&#39;ExtendedS3DestinationUpdate&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clear&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;S3BackupMode&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;encrypt_path&#39;</span><span class="p">:</span> <span class="s1">&#39;EncryptionConfiguration&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;remap&#39;</span><span class="p">:</span> <span class="p">[]</span>
+        <span class="p">},</span>
+        <span class="s1">&#39;RedshiftDestinationDescription&#39;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s1">&#39;update&#39;</span><span class="p">:</span> <span class="s1">&#39;RedshiftDestinationUpdate&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;clear&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;S3BackupMode&#39;</span><span class="p">,</span> <span class="s2">&quot;ClusterJDBCURL&quot;</span><span class="p">,</span> <span class="s2">&quot;CopyCommand&quot;</span><span class="p">,</span> <span class="s2">&quot;Username&quot;</span><span class="p">],</span>
+            <span class="s1">&#39;encrypt_path&#39;</span><span class="p">:</span> <span class="s1">&#39;S3DestinationDescription.EncryptionConfiguration&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;remap&#39;</span><span class="p">:</span> <span class="p">[(</span><span class="s1">&#39;S3DestinationDescription&#39;</span><span class="p">,</span> <span class="s1">&#39;S3Update&#39;</span><span class="p">)]</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="FirehoseEncryptS3Destination.process"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.kinesis.FirehoseEncryptS3Destination.process">[docs]</a>    <span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resources</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">manager</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">&#39;firehose&#39;</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;key_arn&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">resources</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;DeliveryStreamStatus&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;ACTIVE&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">version</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;VersionId&#39;</span><span class="p">]</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;DeliveryStreamName&#39;</span><span class="p">]</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s1">&#39;Destinations&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">destination_id</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DestinationId&#39;</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">dmetadata</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">DEST_MD</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">dtype</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">d</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">dinfo</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="n">dtype</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">dmetadata</span><span class="p">[</span><span class="s1">&#39;clear&#39;</span><span class="p">]:</span>
+                    <span class="n">dinfo</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">dmetadata</span><span class="p">[</span><span class="s1">&#39;encrypt_path&#39;</span><span class="p">]:</span>
+                    <span class="n">encrypt_info</span> <span class="o">=</span> <span class="n">jmespath</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">dmetadata</span><span class="p">[</span><span class="s1">&#39;encrypt_path&#39;</span><span class="p">],</span> <span class="n">dinfo</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">encrypt_info</span> <span class="o">=</span> <span class="n">dinfo</span>
+                <span class="n">encrypt_info</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;NoEncryptionConfig&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="n">encrypt_info</span><span class="p">[</span><span class="s1">&#39;KMSEncryptionConfig&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;AWSKMSKeyARN&#39;</span><span class="p">:</span> <span class="n">key</span><span class="p">}</span>
+
+                <span class="k">for</span> <span class="n">old_k</span><span class="p">,</span> <span class="n">new_k</span> <span class="ow">in</span> <span class="n">dmetadata</span><span class="p">[</span><span class="s1">&#39;remap&#39;</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">old_k</span> <span class="ow">in</span> <span class="n">dinfo</span><span class="p">:</span>
+                        <span class="n">dinfo</span><span class="p">[</span><span class="n">new_k</span><span class="p">]</span> <span class="o">=</span> <span class="n">dinfo</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">old_k</span><span class="p">)</span>
+                <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">DeliveryStreamName</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                              <span class="n">DestinationId</span><span class="o">=</span><span class="n">destination_id</span><span class="p">,</span>
+                              <span class="n">CurrentDeliveryStreamVersionId</span><span class="o">=</span><span class="n">version</span><span class="p">)</span>
+                <span class="n">params</span><span class="p">[</span><span class="n">dmetadata</span><span class="p">[</span><span class="s1">&#39;update&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">dinfo</span>
+                <span class="n">client</span><span class="o">.</span><span class="n">update_destination</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span></div></div>
 
 
 <div class="viewcode-block" id="AnalyticsApp"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.kinesis.AnalyticsApp">[docs]</a><span class="nd">@resources</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;kinesis-analytics&#39;</span><span class="p">)</span>
