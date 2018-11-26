@@ -487,6 +487,12 @@
     <span class="k">def</span> <span class="nf">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exc_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exc_traceback</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">,</span> <span class="n">credentials</span><span class="o">.</span><span class="n">SessionFactory</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="o">.</span><span class="n">set_subscribers</span><span class="p">(())</span>
+
+        <span class="c1"># With cached sessions, we need to unregister any events subscribers</span>
+        <span class="c1"># on extant sessions to allow for the next registration.</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">local_session</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">session_factory</span><span class="p">)</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span>
+            <span class="s1">&#39;after-call.*.*&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_record</span><span class="p">,</span> <span class="n">unique_id</span><span class="o">=</span><span class="s1">&#39;c7n-api-stats&#39;</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">put_metric</span><span class="p">(</span>
             <span class="s2">&quot;ApiCalls&quot;</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">api_calls</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="s2">&quot;Count&quot;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pop_snapshot</span><span class="p">()</span>
@@ -497,8 +503,7 @@
 
     <span class="k">def</span> <span class="nf">_record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">http_response</span><span class="p">,</span> <span class="n">parsed</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">api_calls</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">.</span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span>
-            <span class="n">model</span><span class="o">.</span><span class="n">service_model</span><span class="o">.</span><span class="n">endpoint_prefix</span><span class="p">,</span>
-            <span class="n">model</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span></div>
+            <span class="n">model</span><span class="o">.</span><span class="n">service_model</span><span class="o">.</span><span class="n">endpoint_prefix</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">name</span><span class="p">)]</span> <span class="o">+=</span> <span class="mi">1</span></div>
 
 
 <div class="viewcode-block" id="S3Output"><a class="viewcode-back" href="../../../generated/aws/c7n.resources.html#c7n.resources.aws.S3Output">[docs]</a><span class="nd">@blob_outputs</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;s3&#39;</span><span class="p">)</span>
