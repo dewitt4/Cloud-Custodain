@@ -520,6 +520,56 @@ class PeriodicMode(LambdaMode, PullMode):
         return PullMode.run(self)
 
 
+@execution.register('phd')
+class PHDMode(LambdaMode):
+    """Personal Health Dashboard event based policy execution."""
+
+    schema = utils.type_schema(
+        'phd',
+        required=['events'],
+        events={'type': 'array', 'items': {'type': 'string'}},
+        categories={'type': 'array', 'items': {
+            'enum': ['issue', 'accountNotification', 'scheduledChange']}},
+        statuses={'type': 'array', 'items': {
+            'enum': ['open', 'upcoming', 'closed']}})
+
+    def validate(self):
+        super(PHDMode, self).validate()
+        if self.policy.resource_type == 'account':
+            return
+        if 'health-event' not in self.policy.resource_manager.filter_registry:
+            raise PolicyValidationError(
+                "policy:%s phd event mode not supported for resource: %s" % (
+                    self.policy.name, self.policy.resource_type))
+
+    @staticmethod
+    def process_event_arns(client, event_arns):
+        entities = []
+        paginator = client.get_paginator('describe_affected_entities')
+        for event_set in utils.chunks(event_arns, 10):
+            entities.extend(list(itertools.chain(
+                            *[p['entities'] for p in paginator.paginate(
+                                filter={'eventArns': event_arns})])))
+        return entities
+
+    def resolve_resources(self, event):
+        session = utils.local_session(self.policy.resource_manager.session_factory)
+        health = session.client('health')
+        he_arn = event['detail']['eventArn']
+        resource_arns = self.process_event_arns(health, [he_arn])
+
+        m = self.policy.resource_manager.get_model()
+        if 'arn' in m.id.lower():
+            resource_ids = [r['entityValue'].rsplit('/', 1)[-1] for r in resource_arns]
+        else:
+            resource_ids = [r['entityValue'] for r in resource_arns]
+
+        resources = self.policy.resource_manager.get_resources(resource_ids)
+        for r in resources:
+            r.setdefault('c7n:HealthEvent', []).append(he_arn)
+        return resources
+
+
 @execution.register('cloudtrail')
 class CloudTrailMode(LambdaMode):
     """A lambda policy using cloudwatch events rules on cloudtrail api logs."""

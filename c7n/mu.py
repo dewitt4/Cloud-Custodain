@@ -986,7 +986,6 @@ class CloudWatchEventSource(object):
         if event_type == 'cloudtrail':
             payload['detail-type'] = ['AWS API Call via CloudTrail']
             self.resolve_cloudtrail_payload(payload)
-
         if event_type == 'cloudtrail':
             if 'signin.amazonaws.com' in payload['detail']['eventSource']:
                 payload['detail-type'] = ['AWS Console Sign In via CloudTrail']
@@ -1008,6 +1007,12 @@ class CloudWatchEventSource(object):
             for e in self.data.get('events', []):
                 events.append(self.ASG_EVENT_MAPPING.get(e, e))
             payload['detail-type'] = events
+        elif event_type == 'phd':
+            payload['source'] = ['aws.health']
+            payload['detail'] = {
+                'eventTypeCode': list(self.data['events'])}
+            if self.data.get('categories', []):
+                payload['detail']['eventTypeCategory'] = self.data['categories']
         elif event_type == 'periodic':
             pass
         else:
