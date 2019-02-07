@@ -496,7 +496,7 @@ def _eligible_start_stop(db, state="available"):
 class Stop(BaseAction):
     """Stop an rds instance.
 
-    https://goo.gl/N3nw8k
+    https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html
     """
 
     schema = type_schema('stop')
@@ -518,9 +518,7 @@ class Stop(BaseAction):
 
 @actions.register('start')
 class Start(BaseAction):
-    """Stop an rds instance.
-
-    https://goo.gl/N3nw8k
+    """Start an rds instance.
     """
 
     schema = type_schema('start')

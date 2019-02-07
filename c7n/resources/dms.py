@@ -156,7 +156,8 @@ class ModifyReplicationInstance(BaseAction):
                 AutoMinorVersionUpgrade: True
                 PreferredMaintenanceWindow: mon:23:00-mon:23:59
 
-    AWS ModifyReplicationInstance Documentation: https://goo.gl/ePye9N
+    AWS ModifyReplicationInstance Documentation:
+      https://docs.aws.amazon.com/dms/latest/APIReference/API_ModifyReplicationInstance.html
     """
     schema = {
         'type': 'object',
@@ -297,7 +298,8 @@ class ModifyDmsEndpoint(BaseAction):
                 - type: modify-endpoint
                   SslMode: require
 
-    AWS ModifyEndpoint Documentation: https://goo.gl/eDFfuf
+    AWS ModifyEndpoint Documentation
+    https://docs.aws.amazon.com/dms/latest/APIReference/API_ModifyEndpoint.html
     """
     schema = {
         'type': 'object',
