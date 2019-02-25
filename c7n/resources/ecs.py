@@ -247,6 +247,88 @@ class ServiceTaskDefinitionFilter(RelatedTaskDefinitionFilter):
     """
 
 
+@Service.action_registry.register('modify')
+class UpdateService(BaseAction):
+    """Action to update service
+
+    :example:
+
+    .. code-block:: yaml
+
+            policies:
+              - name: no-public-ips-services
+                resource: ecs-service
+                filters:
+                  - 'networkConfiguration.awsvpcConfiguration.assignPublicIp': 'ENABLED'
+                actions:
+                  - type: modify
+                    update:
+                      networkConfiguration:
+                        awsvpcConfiguration:
+                          assignPublicIp: DISABLED
+    """
+
+    schema = type_schema('modify',
+        update={
+            'desiredCount': {'type': 'integer'},
+            'taskDefinition': {'type': 'string'},
+            'deploymentConfiguration': {
+                'type': 'object',
+                'properties': {
+                    'maximumPercent': {'type': 'integer'},
+                    'minimumHealthyPercent': {'type': 'integer'},
+                }
+            },
+            'networkConfiguration': {
+                'type': 'object',
+                'properties': {
+                    'awsvpcConfiguration': {
+                        'type': 'object',
+                        'properties': {
+                            'subnets': {
+                                'type': 'array',
+                                'items': {
+                                    'type': 'string',
+                                }
+                            },
+                            'securityGroups': {
+                                'items': {
+                                    'type': 'string',
+                                }
+                            },
+                            'assignPublicIp': {
+                                'type': 'string',
+                                'enum': ['ENABLED', 'DISABLED'],
+                            }
+                        }
+                    }
+                }
+            },
+            'platformVersion': {'type': 'string'},
+            'forceNewDeployment': {'type': 'boolean', 'default': False},
+            'healthCheckGracePeriodSeconds': {'type': 'integer'},
+        }
+    )
+
+    permissions = ('ecs:UpdateService',)
+
+    def process(self, resources):
+        client = local_session(self.manager.session_factory).client('ecs')
+        for r in resources:
+            api_call_param = {}
+            requested_change_param = self.data.get('update')
+            for update_prop, requested_val in requested_change_param.items():
+                if r.get(update_prop) != requested_val:
+                    api_call_param[update_prop] = requested_val
+
+            if not api_call_param:
+                continue
+            api_call_param['service'] = r['serviceName']
+            api_call_param['cluster'] = r['clusterArn']
+
+            client.update_service(**api_call_param)
+
+
 @Service.action_registry.register('delete')
 class DeleteService(BaseAction):
     """Delete service(s)."""
