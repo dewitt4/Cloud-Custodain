@@ -1818,6 +1818,7 @@ class LaunchTemplate(query.QueryResourceManager):
             'describe_launch_templates', 'LaunchTemplates', None)
         filter_name = 'LaunchTemplateIds'
         filter_type = 'list'
+        type = "launch-template"
 
     def augment(self, resources):
         client = utils.local_session(
@@ -1898,3 +1899,4 @@ class ReservedInstance(query.QueryResourceManager):
         filter_name = 'ReservedInstancesIds'
         filter_type = 'list'
         dimension = None
+        type = "reserved-instances"
