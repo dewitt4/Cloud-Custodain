@@ -65,7 +65,7 @@ class DynamodbTest(BaseTest):
         # verify they are equivalent but account for some fundamental
         # deltas.  size and count aren't in config, datetimes we
         # normalize but are still tz delta on recording.
-        for k in ('ItemCount', 'CreationDateTime', 'TableSizeBytes', 'BillingModeSummary'):
+        for k in ('ItemCount', 'CreationDateTime', 'TableSizeBytes', 'BillingModeSummary', 'Tags'):
             describe_table.pop(k, None)
             config_table.pop(k, None)
         self.assertEqual(describe_table, config_table)
