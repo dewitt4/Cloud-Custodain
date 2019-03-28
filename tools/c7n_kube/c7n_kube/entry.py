@@ -14,6 +14,8 @@
 
 import logging
 
+import c7n_kube.actions.shared # noqa
+
 from c7n_kube.resources.core import (
     configmap,
     namespace,

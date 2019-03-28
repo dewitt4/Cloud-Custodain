@@ -11,18 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-from c7n_kube.query import QueryResourceManager, TypeInfo
-from c7n_kube.provider import resources
+
+from c7n_kube.actions.core import DeleteResource
+from c7n_kube.actions.labels import LabelAction
+from c7n_kube.provider import resources as kube_resources
+
+SHARED_ACTIONS = (DeleteResource, LabelAction)
 
 
-@resources.register('node')
-class Node(QueryResourceManager):
-
-    class resource_type(TypeInfo):
-        group = 'Core'
-        version = 'V1'
-        namespaced = False
-        patch = 'patch_node'
-        delete = 'delete_node'
-        enum_spec = ('list_node', 'items', None)
+for action in SHARED_ACTIONS:
+    kube_resources.subscribe(kube_resources.EVENT_REGISTER, action.register_resources)
