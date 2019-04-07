@@ -817,6 +817,48 @@ class SetPolicy(BaseAction):
                     pass
 
 
+@Role.action_registry.register('delete')
+class RoleDelete(BaseAction):
+    """Delete an IAM Role.
+
+    For example, if you want to automatically delete an unused IAM role.
+
+    :example:
+
+      .. code-block:: yaml
+
+        - name: iam-delete-unused-role
+          resource: iam-role
+          filters:
+            - type: usage
+              match-operator: all
+              LastAuthenticated: null
+          actions:
+            - delete
+
+    """
+    schema = type_schema('delete')
+    permissions = ('iam:DeleteRole',)
+
+    def process(self, resources):
+        client = local_session(self.manager.session_factory).client('iam')
+        error = None
+        for r in resources:
+            try:
+                client.delete_role(RoleName=r['RoleName'])
+            except client.exceptions.DeleteConflictException as e:
+                self.log.warning(
+                    "Role:%s cannot be deleted, must remove role from instance profile first"
+                    % r['Arn'])
+                error = e
+            except client.exceptions.NoSuchEntityException:
+                continue
+            except client.exceptions.UnmodifiableEntityException:
+                continue
+        if error:
+            raise error
+
+
 ######################
 #    IAM Policies    #
 ######################
