@@ -106,3 +106,111 @@ class LoadBalancingSslPolicy(QueryResourceManager):
             return client.execute_command('get', {
                 'project': resource_info['project_id'],
                 'sslPolicy': resource_info['name']})
+
+
+@resources.register('loadbalancing-ssl-certificate')
+class LoadBalancingSslCertificate(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'sslCertificates'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'sslCertificate': resource_info['name']})
+
+
+@resources.register('loadbalancing-target-https-proxy')
+class LoadBalancingTargetHttpsProxy(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'targetHttpsProxies'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'targetHttpsProxy': resource_info['name']})
+
+
+@resources.register('loadbalancing-backend-bucket')
+class LoadBalancingBackendBucket(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'backendBuckets'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'backendBucket': resource_info['name']})
+
+
+@resources.register('loadbalancing-https-health-check')
+class LoadBalancingHttpsHealthCheck(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'httpsHealthChecks'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'httpsHealthCheck': resource_info['name']})
+
+
+@resources.register('loadbalancing-http-health-check')
+class LoadBalancingHttpHealthCheck(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'httpHealthChecks'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'httpHealthCheck': resource_info['name']})
+
+
+@resources.register('loadbalancing-health-check')
+class LoadBalancingHealthCheck(QueryResourceManager):
+
+    class resource_type(TypeInfo):
+        service = 'compute'
+        version = 'v1'
+        component = 'healthChecks'
+        enum_spec = ('list', 'items[]', None)
+        scope = 'project'
+        id = 'name'
+
+        @staticmethod
+        def get(client, resource_info):
+            return client.execute_command('get', {
+                'project': resource_info['project_id'],
+                'healthCheck': resource_info['name']})
