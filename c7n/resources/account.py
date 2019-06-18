@@ -360,7 +360,7 @@ class IAMSummary(ValueFilter):
               value_type: swap
     """
     schema = type_schema('iam-summary', rinherit=ValueFilter.schema)
-
+    schema_alias = False
     permissions = ('iam:GetAccountSummary',)
 
     def process(self, resources, event=None):
@@ -400,6 +400,7 @@ class AccountPasswordPolicy(ValueFilter):
                     value: true
     """
     schema = type_schema('password-policy', rinherit=ValueFilter.schema)
+    schema_alias = False
     permissions = ('iam:GetAccountPasswordPolicy',)
 
     def process(self, resources, event=None):
@@ -599,7 +600,7 @@ class RequestLimitIncrease(BaseAction):
 
     schema = {
         'type': 'object',
-        'notify': {'type': 'array'},
+        'additionalProperties': False,
         'properties': {
             'type': {'enum': ['request-limit-increase']},
             'percent-increase': {'type': 'number', 'minimum': 1},
@@ -607,6 +608,7 @@ class RequestLimitIncrease(BaseAction):
             'minimum-increase': {'type': 'number', 'minimum': 1},
             'subject': {'type': 'string'},
             'message': {'type': 'string'},
+            'notify': {'type': 'array', 'items': {'type': 'string'}},
             'severity': {'type': 'string', 'enum': ['urgent', 'high', 'normal', 'low']}
         },
         'oneOf': [
@@ -1180,6 +1182,7 @@ class S3PublicBlock(ValueFilter):
     annotation_key = 'c7n:s3-public-block'
     annotate = False  # no annotation from value filter
     schema = type_schema('s3-public-block', rinherit=ValueFilter.schema)
+    schema_alias = False
     permissions = ('s3:GetAccountPublicAccessBlock',)
 
     def process(self, resources, event=None):
