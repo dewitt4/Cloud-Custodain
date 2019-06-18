@@ -52,11 +52,10 @@ actions = ActionRegistry('ec2.actions')
 @resources.register('ec2')
 class EC2(query.QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(query.TypeInfo):
         service = 'ec2'
-        type = 'instance'
+        arn_type = 'instance'
         enum_spec = ('describe_instances', 'Reservations[].Instances[]', None)
-        detail_spec = None
         id = 'InstanceId'
         filter_name = 'InstanceIds'
         filter_type = 'list'
@@ -64,7 +63,6 @@ class EC2(query.QueryResourceManager):
         date = 'LaunchTime'
         dimension = 'InstanceId'
         config_type = "AWS::EC2::Instance"
-        shape = "Instance"
 
         default_report_fields = (
             'CustodianDate',
@@ -1813,17 +1811,16 @@ class InstanceAttribute(ValueFilter):
 @resources.register('launch-template-version')
 class LaunchTemplate(query.QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(query.TypeInfo):
         id = 'LaunchTemplateId'
         name = 'LaunchTemplateName'
         service = 'ec2'
         date = 'CreateTime'
-        dimension = None
         enum_spec = (
             'describe_launch_templates', 'LaunchTemplates', None)
         filter_name = 'LaunchTemplateIds'
         filter_type = 'list'
-        type = "launch-template"
+        arn_type = "launch-template"
 
     def augment(self, resources):
         client = utils.local_session(
@@ -1895,7 +1892,7 @@ class LaunchTemplate(query.QueryResourceManager):
 @resources.register('ec2-reserved')
 class ReservedInstance(query.QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(query.TypeInfo):
         service = 'ec2'
         name = id = 'ReservedInstancesId'
         date = 'Start'
@@ -1903,5 +1900,4 @@ class ReservedInstance(query.QueryResourceManager):
             'describe_reserved_instances', 'ReservedInstances', None)
         filter_name = 'ReservedInstancesIds'
         filter_type = 'list'
-        dimension = None
-        type = "reserved-instances"
+        arn_type = "reserved-instances"

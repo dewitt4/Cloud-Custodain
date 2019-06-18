@@ -38,7 +38,7 @@ from c7n.filters import ValueFilter, Filter
 from c7n.filters.multiattr import MultiAttrFilter
 from c7n.filters.iamaccess import CrossAccountAccessFilter
 from c7n.manager import resources
-from c7n.query import QueryResourceManager, DescribeSource
+from c7n.query import QueryResourceManager, DescribeSource, TypeInfo
 from c7n.resolver import ValuesFrom
 from c7n.tags import TagActionFilter, TagDelayedAction, Tag, RemoveTag
 from c7n.utils import local_session, type_schema, chunks, filter_empty, QueryParser
@@ -48,15 +48,13 @@ from c7n.resources.aws import Arn
 
 @resources.register('iam-group')
 class Group(QueryResourceManager):
-    class resource_type(object):
+
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'group'
+        arn_type = 'group'
         enum_spec = ('list_groups', 'Groups', None)
-        detail_spec = None
-        filter_name = None
         id = name = 'GroupName'
         date = 'CreateDate'
-        dimension = None
         config_type = "AWS::IAM::Group"
         # Denotes this resource type exists across regions
         global_resource = True
@@ -80,15 +78,13 @@ class Group(QueryResourceManager):
 @resources.register('iam-role')
 class Role(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'role'
+        arn_type = 'role'
         enum_spec = ('list_roles', 'Roles', None)
         detail_spec = ('get_role', 'RoleName', 'RoleName', 'Role')
-        filter_name = None
         id = name = 'RoleName'
         date = 'CreateDate'
-        dimension = None
         config_type = "AWS::IAM::Role"
         # Denotes this resource type exists across regions
         global_resource = True
@@ -128,15 +124,13 @@ class RoleRemoveTag(RemoveTag):
 @resources.register('iam-user')
 class User(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'user'
+        arn_type = 'user'
         detail_spec = ('get_user', 'UserName', 'UserName', 'User')
         enum_spec = ('list_users', 'Users', None)
-        filter_name = None
         id = name = 'UserName'
         date = 'CreateDate'
-        dimension = None
         config_type = "AWS::IAM::User"
         # Denotes this resource type exists across regions
         global_resource = True
@@ -199,16 +193,14 @@ User.filter_registry.register('marked-for-op', TagActionFilter)
 @resources.register('iam-policy')
 class Policy(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'policy'
+        arn_type = 'policy'
         enum_spec = ('list_policies', 'Policies', None)
         id = 'PolicyId'
         name = 'PolicyName'
         date = 'CreateDate'
-        dimension = None
         config_type = "AWS::IAM::Policy"
-        filter_name = None
         # Denotes this resource type exists across regions
         global_resource = True
         arn = 'Arn'
@@ -256,15 +248,13 @@ class PolicyQueryParser(QueryParser):
 @resources.register('iam-profile')
 class InstanceProfile(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'instance-profile'
+        arn_type = 'instance-profile'
         enum_spec = ('list_instance_profiles', 'InstanceProfiles', None)
         id = 'InstanceProfileId'
-        filter_name = None
         name = 'InstanceProfileId'
         date = 'CreateDate'
-        dimension = None
         # Denotes this resource type exists across regions
         global_resource = True
         arn = 'Arn'
@@ -273,17 +263,15 @@ class InstanceProfile(QueryResourceManager):
 @resources.register('iam-certificate')
 class ServerCertificate(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'iam'
-        type = 'server-certificate'
+        arn_type = 'server-certificate'
         enum_spec = ('list_server_certificates',
                      'ServerCertificateMetadataList',
                      None)
         id = 'ServerCertificateId'
-        filter_name = None
         name = 'ServerCertificateName'
         date = 'Expiration'
-        dimension = None
         # Denotes this resource type exists across regions
         global_resource = True
 

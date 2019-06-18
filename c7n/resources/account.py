@@ -62,6 +62,7 @@ class Account(ResourceManager):
         id = 'account_id'
         name = 'account_name'
         filter_name = None
+        global_resource = True
         # fake this for doc gen
         service = "account"
 

@@ -33,7 +33,7 @@ from c7n.filters.health import HealthEventFilter
 
 from c7n.manager import resources
 from c7n.resources.kms import ResourceKmsKeyAlias
-from c7n.query import QueryResourceManager
+from c7n.query import QueryResourceManager, TypeInfo
 from c7n.tags import Tag
 from c7n.utils import (
     camelResource,
@@ -52,18 +52,16 @@ log = logging.getLogger('custodian.ebs')
 @resources.register('ebs-snapshot')
 class Snapshot(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'ec2'
-        type = 'snapshot'
+        arn_type = 'snapshot'
         enum_spec = (
             'describe_snapshots', 'Snapshots', None)
-        detail_spec = None
         id = 'SnapshotId'
         filter_name = 'SnapshotIds'
         filter_type = 'list'
         name = 'SnapshotId'
         date = 'StartTime'
-        dimension = None
 
         default_report_fields = (
             'SnapshotId',
@@ -516,9 +514,9 @@ class CopySnapshot(BaseAction):
 @resources.register('ebs')
 class EBS(QueryResourceManager):
 
-    class resource_type(object):
+    class resource_type(TypeInfo):
         service = 'ec2'
-        type = 'volume'
+        arn_type = 'volume'
         enum_spec = ('describe_volumes', 'Volumes', None)
         name = id = 'VolumeId'
         filter_name = 'VolumeIds'
