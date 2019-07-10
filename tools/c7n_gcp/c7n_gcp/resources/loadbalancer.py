@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
+from c7n.utils import type_schema, local_session
+from c7n_gcp.actions import MethodAction
 from c7n_gcp.provider import resources
 from c7n_gcp.query import QueryResourceManager, TypeInfo
 
@@ -168,6 +168,36 @@ class LoadBalancingBackendBucket(QueryResourceManager):
             return client.execute_command('get', {
                 'project': resource_info['project_id'],
                 'backendBucket': resource_info['name']})
+
+
+@LoadBalancingBackendBucket.action_registry.register('delete')
+class LoadBalancingBackendBucketDelete(MethodAction):
+    """The action is used for Load Balancing Backend Buckets delete.
+    GCP action is https://cloud.google.com/compute/docs/reference/rest/v1/backendBuckets/delete.
+
+    Example:
+
+    .. code-block:: yaml
+
+        policies:
+          - name: gcp-loadbalancer-backend-buckets-delete
+            resource: gcp.loadbalancer-backend-bucket
+            filters:
+              - type: value
+                key: bucketName
+                op: eq
+                value: custodian-bucket-0
+            actions:
+              - type: delete
+    """
+    schema = type_schema('delete')
+    method_spec = {'op': 'delete'}
+
+    def get_resource_params(self, model, resource):
+        project = local_session(self.manager.source.query.session_factory).get_default_project()
+        return {
+            'project': project,
+            'backendBucket': resource['name']}
 
 
 @resources.register('loadbalancer-https-health-check')

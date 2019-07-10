@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from time import sleep
 
 from gcp_common import BaseTest
 
@@ -238,6 +239,39 @@ class LoadBalancingBackendBucketTest(BaseTest):
              'name': 'newbucket'})
         self.assertEqual(instance['kind'], 'compute#backendBucket')
         self.assertEqual(instance['name'], 'newbucket')
+
+    def test_loadbalancer_backend_bucket_delete(self):
+        project_id = 'custodian-test-project-0'
+        session_factory = self.replay_flight_data('lb-backend-buckets-delete',
+                                                  project_id=project_id)
+        base_policy = {'name': 'lb-addresses-delete',
+                       'resource': 'gcp.loadbalancer-backend-bucket'}
+
+        policy = self.load_policy(
+            dict(base_policy,
+                 filters=[{'type': 'value',
+                           'key': 'bucketName',
+                           'op': 'eq',
+                           'value': 'custodian-bucket-0'}],
+                 actions=[{'type': 'delete'}]),
+            session_factory=session_factory)
+        resources = policy.run()
+        self.assertEqual(2, len(resources))
+        self.assertEqual('custodian-bucket-0', resources[0]['bucketName'])
+        self.assertEqual('custodian-bucket-0', resources[1]['bucketName'])
+        self.assertEqual('custodian-backend-bucket-1', resources[0]['name'])
+        self.assertEqual('custodian-backend-bucket-3', resources[1]['name'])
+
+        if self.recording:
+            sleep(5)
+
+        client = policy.resource_manager.get_client()
+        result = client.execute_query(
+            'list', {'project': project_id})
+        items = result['items']
+        self.assertEqual(1, len(items))
+        self.assertIsNot('custodian-bucket-0', items[0]['bucketName'])
+        self.assertEqual('custodian-backend-bucket-2', items[0]['name'])
 
 
 class LoadBalancingHttpsHealthCheckTest(BaseTest):
