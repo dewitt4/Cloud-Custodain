@@ -25,7 +25,7 @@ from c7n_azure.utils import ResourceIdParser
 
 try:
     import azure.functions as func
-    from azure.functions_worker.bindings.queue import QueueMessage
+    from azure.functions.queue import QueueMessage
 except ImportError:
     pass
 
