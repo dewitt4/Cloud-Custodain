@@ -21,6 +21,7 @@ EVENT_GRID_SERVICE_ADMIN_JMES_PATH = \
     'data.claims."http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"'
 EVENT_GRID_PRINCIPAL_TYPE_JMES_PATH = 'data.authorization.evidence.principalType'
 EVENT_GRID_PRINCIPAL_ROLE_JMES_PATH = 'data.authorization.evidence.role'
+EVENT_GRID_EVENT_TIME_PATH = 'eventTime'
 
 """
 Environment Variables
