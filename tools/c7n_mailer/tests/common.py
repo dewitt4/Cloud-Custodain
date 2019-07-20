@@ -47,6 +47,7 @@ MAILER_CONFIG = {
     'contact_tags': ['OwnerEmail', 'SupportEmail'],
     'queue_url': 'https://sqs.us-east-1.amazonaws.com/xxxx/cloudcustodian-mailer',
     'region': 'us-east-1',
+    'ses_region': 'us-east-1',
     'ldap_uri': 'ldap.initech.com',
     'smtp_server': 'smtp.inittech.com',
     'cache_engine': 'sqlite',
