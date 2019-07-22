@@ -31,13 +31,20 @@ except ImportError:
     pass
 
 
+def cache_path():
+    return os.path.join(os.path.dirname(__file__), 'cache')
+
+
 def build_function_package(config, function_name):
     schedule = config.get('function_schedule', '0 */10 * * * *')
+
+    cache_override_path = cache_path()
 
     # Build package
     package = FunctionPackage(
         function_name,
-        os.path.join(os.path.dirname(__file__), 'function.py'))
+        os.path.join(os.path.dirname(__file__), 'function.py'),
+        cache_override_path=cache_override_path)
 
     package.build(None,
                   modules=['c7n', 'c7n-azure', 'c7n-mailer', 'applicationinsights'],
