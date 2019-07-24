@@ -40,7 +40,7 @@ class AzurePythonPackageArchive(PythonPackageArchive):
     def create_zinfo(self, file):
         """
         In Dedicated App Service Plans - Functions are updated via KuduSync
-        The KuduSync uses the modified time and file size to determine if a file has changed
+        KuduSync uses the modified time and file size to determine if a file has changed
         """
         info = super(AzurePythonPackageArchive, self).create_zinfo(file)
         info.date_time = self.package_time[0:6]
@@ -147,7 +147,9 @@ class FunctionPackage(object):
 
         self.pkg = AzurePythonPackageArchive(cache_file=cache_zip_file)
 
-        self.pkg.add_modules(None, [m.replace('-', '_') for m in modules])
+        exclude = os.path.normpath('/cache/') + os.path.sep
+        self.pkg.add_modules(lambda f: (exclude in f),
+                             [m.replace('-', '_') for m in modules])
 
         # add config and policy
         self._add_functions_required_files(policy, queue_name)
