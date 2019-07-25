@@ -1,0 +1,244 @@
+GCP Common Actions
+==================
+
+Actions
+
+
+   - :ref:`notify <GCP.common.actions.notify>`
+
+
+   - :ref:`post-finding <GCP.common.actions.post-finding>`
+
+
+   - :ref:`webhook <GCP.common.actions.webhook>`
+
+
+
+
+.. _GCP.common.actions.notify:
+
+notify
+++++++
+
+:example:
+
+.. code-block:: yaml
+
+      policies:
+        - name: bad-instance-get
+          resource: gcp.instance
+          filters:
+           - Name: bad-instance
+          actions:
+           - type: notify
+             to:
+              - email@address
+             # which template for the email should we use
+             template: policy-template
+             transport:
+               type: pubsub
+               topic: projects/yourproject/topics/yourtopic
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    addtionalProperties: false
+    anyOf:
+    - required:
+      - type
+      - transport
+      - to
+    - required:
+      - type
+      - transport
+      - to_from
+    properties:
+      cc:
+        items:
+          type: string
+        type: array
+      cc_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      cc_manager:
+        type: boolean
+      from:
+        type: string
+      owner_absent_contact:
+        items:
+          type: string
+        type: array
+      subject:
+        type: string
+      template:
+        type: string
+      to:
+        items:
+          type: string
+        type: array
+      to_from: *id001
+      transport:
+        oneOf:
+        - properties:
+            topic:
+              type: string
+            type:
+              enum:
+              - pubsub
+          required:
+          - type
+          - topic
+          type: object
+      type:
+        enum:
+        - notify
+
+
+
+.. _GCP.common.actions.post-finding:
+
+post-finding
+++++++++++++
+
+Post finding for matched resources to Cloud Security Command Center.
+
+
+:Example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: gcp-instances-with-label
+       resource: gcp.instance
+       filters:
+         - "tag:name": "bad-instance"
+       actions:
+         - type: post-finding
+           org-domain: example.io
+           category: MEDIUM_INTERNET_SECURITY
+
+The source for custodian can either be specified inline to the policy, or
+custodian can generate one at runtime if it doesn't exist given a org-domain
+or org-id.
+
+Finding updates are not currently supported, due to upstream api issues.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      category:
+        type: string
+      org-domain:
+        type: string
+      org-id:
+        type: integer
+      source:
+        description: qualified name of source to post to CSCC as
+        type: string
+      type:
+        enum:
+        - post-finding
+    required:
+    - type
+
+
+
+.. _GCP.common.actions.webhook:
+
+webhook
++++++++
+
+Calls a webhook with optional parameters and body
+populated from JMESPath queries.
+
+ .. code-block:: yaml
+
+   policies:
+     - name: call-webhook
+       resource: ec2
+       description: |
+         Call webhook with list of resource groups
+       actions:
+        - type: webhook
+          url: http://foo.com
+          query-params:
+             resource_name: resource.name
+             policy_name: policy.name
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch:
+        type: boolean
+      batch-size:
+        type: number
+      body:
+        type: string
+      headers:
+        additionalProperties:
+          description: header values
+          type: string
+        type: object
+      method:
+        enum:
+        - PUT
+        - POST
+        - GET
+        - PATCH
+        - DELETE
+        type: string
+      query-params:
+        additionalProperties:
+          description: query string values
+          type: string
+        type: object
+      type:
+        enum:
+        - webhook
+      url:
+        type: string
+    required:
+    - url
+    - type
+
+
+
+

@@ -1,0 +1,698 @@
+.. _aws.security-group:
+
+aws.security-group
+==================
+
+
+
+Filters
+-------
+
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`default-vpc <aws.security-group.filters.default-vpc>`
+
+  - :ref:`diff <aws.security-group.filters.diff>`
+
+  - :ref:`egress <aws.security-group.filters.egress>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`ingress <aws.security-group.filters.ingress>`
+
+  - :ref:`json-diff <aws.security-group.filters.json-diff>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`stale <aws.security-group.filters.stale>`
+
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`unused <aws.security-group.filters.unused>`
+
+  - :ref:`used <aws.security-group.filters.used>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.security-group.filters.default-vpc:
+
+default-vpc
++++++++++++
+Filter that returns any security group that exists within the default vpc
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: security-group-default-vpc
+            resource: security-group
+            filters:
+              - default-vpc
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - default-vpc
+    required:
+    - type
+
+
+.. _aws.security-group.filters.diff:
+
+diff
+++++
+Compute the diff from the current resource to a previous version.
+
+A resource matches the filter if a diff exists between the current
+resource and the selected revision.
+
+Utilizes config as a resource revision database.
+
+Revisions can be selected by date, against the previous version, and
+against a locked version (requires use of is-locked filter).
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      selector:
+        enum:
+        - previous
+        - date
+        - locked
+      selector_value:
+        type: string
+      type:
+        enum:
+        - diff
+    required:
+    - type
+
+
+.. _aws.security-group.filters.egress:
+
+egress
+++++++
+Filter for verifying security group ingress and egress permissions
+
+All attributes of a security group permission are available as
+value filters.
+
+If multiple attributes are specified the permission must satisfy
+all of them. Note that within an attribute match against a list value
+of a permission we default to or.
+
+If a group has any permissions that match all conditions, then it
+matches the filter.
+
+Permissions that match on the group are annotated onto the group and
+can subsequently be used by the remove-permission action.
+
+We have specialized handling for matching `Ports` in ingress/egress
+permission From/To range. The following example matches on ingress
+rules which allow for a range that includes all of the given ports.
+
+.. code-block:: yaml
+
+  - type: ingress
+    Ports: [22, 443, 80]
+
+As well for verifying that a rule only allows for a specific set of ports
+as in the following example. The delta between this and the previous
+example is that if the permission allows for any ports not specified here,
+then the rule will match. ie. OnlyPorts is a negative assertion match,
+it matches when a permission includes ports outside of the specified set.
+
+.. code-block:: yaml
+
+  - type: ingress
+    OnlyPorts: [22]
+
+For simplifying ipranges handling which is specified as a list on a rule
+we provide a `Cidr` key which can be used as a value type filter evaluated
+against each of the rules. If any iprange cidr match then the permission
+matches.
+
+.. code-block:: yaml
+
+  - type: ingress
+    IpProtocol: -1
+    FromPort: 445
+
+We also have specialized handling for matching self-references in
+ingress/egress permissions. The following example matches on ingress
+rules which allow traffic its own same security group.
+
+.. code-block:: yaml
+
+  - type: ingress
+    SelfReference: True
+
+As well for assertions that a ingress/egress permission only matches
+a given set of ports, *note* OnlyPorts is an inverse match.
+
+.. code-block:: yaml
+
+  - type: egress
+    OnlyPorts: [22, 443, 80]
+
+  - type: egress
+    Cidr:
+      value_type: cidr
+      op: in
+      value: x.y.z
+
+`Cidr` can match ipv4 rules and `CidrV6` can match ipv6 rules.  In
+this example we are blocking global inbound connections to SSH or
+RDP.
+
+.. code-block:: yaml
+
+  - type: ingress
+    Ports: [22, 3389]
+    Cidr:
+      value:
+        - "0.0.0.0/0"
+        - "::/0"
+      op: in
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      Cidr: {}
+      CidrV6: {}
+      Description: {}
+      FromPort:
+        type: integer
+      IpProtocol:
+        enum:
+        - -1
+        - tcp
+        - udp
+        - icmp
+        - icmpv6
+      IpRanges: {}
+      OnlyPorts:
+        items:
+          type: integer
+        type: array
+      PrefixListIds: {}
+      SelfReference:
+        type: boolean
+      ToPort:
+        type: integer
+      UserIdGroupPairs: {}
+      match-operator:
+        enum:
+        - or
+        - and
+        type: string
+      type:
+        enum:
+        - egress
+    required:
+    - type
+
+
+.. _aws.security-group.filters.ingress:
+
+ingress
++++++++
+Filter for verifying security group ingress and egress permissions
+
+All attributes of a security group permission are available as
+value filters.
+
+If multiple attributes are specified the permission must satisfy
+all of them. Note that within an attribute match against a list value
+of a permission we default to or.
+
+If a group has any permissions that match all conditions, then it
+matches the filter.
+
+Permissions that match on the group are annotated onto the group and
+can subsequently be used by the remove-permission action.
+
+We have specialized handling for matching `Ports` in ingress/egress
+permission From/To range. The following example matches on ingress
+rules which allow for a range that includes all of the given ports.
+
+.. code-block:: yaml
+
+  - type: ingress
+    Ports: [22, 443, 80]
+
+As well for verifying that a rule only allows for a specific set of ports
+as in the following example. The delta between this and the previous
+example is that if the permission allows for any ports not specified here,
+then the rule will match. ie. OnlyPorts is a negative assertion match,
+it matches when a permission includes ports outside of the specified set.
+
+.. code-block:: yaml
+
+  - type: ingress
+    OnlyPorts: [22]
+
+For simplifying ipranges handling which is specified as a list on a rule
+we provide a `Cidr` key which can be used as a value type filter evaluated
+against each of the rules. If any iprange cidr match then the permission
+matches.
+
+.. code-block:: yaml
+
+  - type: ingress
+    IpProtocol: -1
+    FromPort: 445
+
+We also have specialized handling for matching self-references in
+ingress/egress permissions. The following example matches on ingress
+rules which allow traffic its own same security group.
+
+.. code-block:: yaml
+
+  - type: ingress
+    SelfReference: True
+
+As well for assertions that a ingress/egress permission only matches
+a given set of ports, *note* OnlyPorts is an inverse match.
+
+.. code-block:: yaml
+
+  - type: egress
+    OnlyPorts: [22, 443, 80]
+
+  - type: egress
+    Cidr:
+      value_type: cidr
+      op: in
+      value: x.y.z
+
+`Cidr` can match ipv4 rules and `CidrV6` can match ipv6 rules.  In
+this example we are blocking global inbound connections to SSH or
+RDP.
+
+.. code-block:: yaml
+
+  - type: ingress
+    Ports: [22, 3389]
+    Cidr:
+      value:
+        - "0.0.0.0/0"
+        - "::/0"
+      op: in
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      Cidr: {}
+      CidrV6: {}
+      Description: {}
+      FromPort:
+        type: integer
+      IpProtocol:
+        enum:
+        - -1
+        - tcp
+        - udp
+        - icmp
+        - icmpv6
+      IpRanges: {}
+      OnlyPorts:
+        items:
+          type: integer
+        type: array
+      Ports:
+        items:
+          type: integer
+        type: array
+      PrefixListIds: {}
+      SelfReference:
+        type: boolean
+      ToPort:
+        type: integer
+      UserIdGroupPairs: {}
+      match-operator:
+        enum:
+        - or
+        - and
+        type: string
+      type:
+        enum:
+        - ingress
+    required:
+    - type
+
+
+.. _aws.security-group.filters.json-diff:
+
+json-diff
++++++++++
+Compute the diff from the current resource to a previous version.
+
+A resource matches the filter if a diff exists between the current
+resource and the selected revision.
+
+Utilizes config as a resource revision database.
+
+Revisions can be selected by date, against the previous version, and
+against a locked version (requires use of is-locked filter).
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      selector:
+        enum:
+        - previous
+        - date
+        - locked
+      selector_value:
+        type: string
+      type:
+        enum:
+        - json-diff
+    required:
+    - type
+
+
+.. _aws.security-group.filters.stale:
+
+stale
++++++
+Filter to find security groups that contain stale references
+to other groups that are either no longer present or traverse
+a broken vpc peering connection. Note this applies to VPC
+Security groups only and will implicitly filter security groups.
+
+AWS Docs:
+  https://docs.aws.amazon.com/vpc/latest/peering/vpc-peering-security-groups.html
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: stale-security-groups
+            resource: security-group
+            filters:
+              - stale
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - stale
+    required:
+    - type
+
+
+.. _aws.security-group.filters.unused:
+
+unused
+++++++
+Filter to just vpc security groups that are not used.
+
+We scan all extant enis in the vpc to get a baseline set of groups
+in use. Then augment with those referenced by launch configs, and
+lambdas as they may not have extant resources in the vpc at a
+given moment. We also find any security group with references from
+other security group either within the vpc or across peered
+connections.
+
+Note this filter does not support classic security groups atm.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: security-groups-unused
+            resource: security-group
+            filters:
+              - unused
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - unused
+    required:
+    - type
+
+
+.. _aws.security-group.filters.used:
+
+used
+++++
+Filter to security groups that are used.
+
+This operates as a complement to the unused filter for multi-step
+workflows.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: security-groups-in-use
+            resource: security-group
+            filters:
+              - used
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - used
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`copy-related-tag <aws.common.actions.copy-related-tag>`
+  
+  - :ref:`delete <aws.security-group.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`normalize-tag <aws.common.actions.normalize-tag>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`patch <aws.security-group.actions.patch>`
+
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-permissions <aws.security-group.actions.remove-permissions>`
+
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`rename-tag <aws.common.actions.rename-tag>`
+  
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`tag-trim <aws.common.actions.tag-trim>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.security-group.actions.delete:
+
+delete
+++++++
+Action to delete security group(s)
+
+It is recommended to apply a filter to the delete policy to avoid the
+deletion of all security groups returned.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: security-groups-unused-delete
+            resource: security-group
+            filters:
+              - type: unused
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.security-group.actions.patch:
+
+patch
++++++
+Modify a resource via application of a reverse delta.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - patch
+    required:
+    - type
+
+
+.. _aws.security-group.actions.remove-permissions:
+
+remove-permissions
+++++++++++++++++++
+Action to remove ingress/egress rule(s) from a security group
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: security-group-revoke-8080
+            resource: security-group
+            filters:
+              - type: ingress
+                IpProtocol: tcp
+                Ports: [8080]
+            actions:
+              - type: remove-permissions
+                ingress: matched
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      egress:
+        enum:
+        - matched
+        - all
+        type: string
+      ingress:
+        enum:
+        - matched
+        - all
+        type: string
+      type:
+        enum:
+        - remove-permissions
+    required:
+    - type
+

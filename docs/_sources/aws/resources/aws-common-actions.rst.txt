@@ -1,0 +1,1268 @@
+AWS Common Actions
+==================
+
+Actions
+
+
+   - :ref:`auto-tag-user <AWS.common.actions.auto-tag-user>`
+
+
+   - :ref:`copy-related-tag <AWS.common.actions.copy-related-tag>`
+
+
+   - :ref:`invoke-lambda <AWS.common.actions.invoke-lambda>`
+
+
+   - :ref:`invoke-sfn <AWS.common.actions.invoke-sfn>`
+
+
+   - :ref:`mark-for-op <AWS.common.actions.mark-for-op>`
+
+
+   - :ref:`modify-policy <AWS.common.actions.modify-policy>`
+
+
+   - :ref:`modify-security-groups <AWS.common.actions.modify-security-groups>`
+
+
+   - :ref:`normalize-tag <AWS.common.actions.normalize-tag>`
+
+
+   - :ref:`notify <AWS.common.actions.notify>`
+
+
+   - :ref:`post-finding <AWS.common.actions.post-finding>`
+
+
+   - :ref:`put-metric <AWS.common.actions.put-metric>`
+
+
+   - :ref:`remove-tag <AWS.common.actions.remove-tag>`
+
+
+   - :ref:`rename-tag <AWS.common.actions.rename-tag>`
+
+
+   - :ref:`tag <AWS.common.actions.tag>`
+
+
+   - :ref:`tag-trim <AWS.common.actions.tag-trim>`
+
+
+   - :ref:`webhook <AWS.common.actions.webhook>`
+
+
+
+
+.. _AWS.common.actions.auto-tag-user:
+
+auto-tag-user
++++++++++++++
+
+Tag a resource with the user who created/modified it.
+
+.. code-block:: yaml
+
+  policies:
+    - name: ec2-auto-tag-ownercontact
+      resource: ec2
+      description: |
+        Triggered when a new EC2 Instance is launched. Checks to see if
+        it's missing the OwnerContact tag. If missing it gets created
+        with the value of the ID of whomever called the RunInstances API
+      mode:
+        type: cloudtrail
+        role: arn:aws:iam::123456789000:role/custodian-auto-tagger
+        events:
+          - RunInstances
+      filters:
+       - tag:OwnerContact: absent
+      actions:
+       - type: auto-tag-user
+         tag: OwnerContact
+
+There's a number of caveats to usage. Resources which don't
+include tagging as part of their api may have some delay before
+automation kicks in to create a tag. Real world delay may be several
+minutes, with worst case into hours[0]. This creates a race condition
+between auto tagging and automation.
+
+In practice this window is on the order of a fraction of a second, as
+we fetch the resource and evaluate the presence of the tag before
+attempting to tag it.
+
+References
+
+ CloudTrail User
+ https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-event-reference-user-identity.html
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      principal_id_tag:
+        type: string
+      tag:
+        type: string
+      type:
+        enum:
+        - auto-tag-user
+      update:
+        type: boolean
+      user-type:
+        items:
+          enum:
+          - IAMUser
+          - AssumedRole
+          - FederatedUser
+          type: string
+        type: array
+    required:
+    - tag
+    - type
+
+
+
+.. _AWS.common.actions.copy-related-tag:
+
+copy-related-tag
+++++++++++++++++
+
+Copy a related resource tag to its associated resource
+
+In some scenarios, resource tags from a related resource should be applied
+to its child resource. For example, EBS Volume tags propogating to their
+snapshots. To use this action, specify the resource type that contains the
+tags that are to be copied, which can be found by using the
+`custodian schema` command.
+
+Then, specify the key on the resource that references the related resource.
+In the case of ebs-snapshot, the VolumeId attribute would be the key that
+identifies the related resource, ebs.
+
+Finally, specify a list of tag keys to copy from the related resource onto
+the original resource. The special character "*" can be used to signify that
+all tags from the related resource should be copied to the original resource.
+
+To raise an error when related resources cannot be found, use the
+`skip_missing` option. By default, this is set to True.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+            - name: copy-tags-from-ebs-volume-to-snapshot
+              resource: ebs-snapshot
+              actions:
+                - type: copy-related-tag
+                  resource: ebs
+                  skip_missing: True
+                  key: VolumeId
+                  tags: '*'
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      resource:
+        type: string
+      skip_missing:
+        type: boolean
+      tags:
+        oneOf:
+        - enum:
+          - '*'
+        - type: array
+      type:
+        enum:
+        - copy-related-tag
+    required:
+    - tags
+    - key
+    - resource
+    - type
+
+
+
+.. _AWS.common.actions.invoke-lambda:
+
+invoke-lambda
++++++++++++++
+
+Invoke an arbitrary lambda
+
+serialized invocation parameters
+
+ - resources / collection of resources
+ - policy / policy that is invoke the lambda
+ - action / action that is invoking the lambda
+ - event / cloud trail event if any
+ - version / version of custodian invoking the lambda
+
+We automatically batch into sets of 250 for invocation,
+We try to utilize async invocation by default, this imposes
+some greater size limits of 128kb which means we batch
+invoke.
+
+Example::
+
+ - type: invoke-lambda
+   function: my-function
+
+Note if your synchronously invoking the lambda, you may also need
+to configure the timeout, to avoid multiple invokes. The default
+is 90s, if the lambda doesn't respond within that time the boto
+sdk will invoke the lambda again with the same
+arguments. Alternatively use async: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      async:
+        type: boolean
+      batch_size:
+        type: integer
+      function:
+        type: string
+      qualifier:
+        type: string
+      timeout:
+        type: integer
+      type:
+        enum:
+        - invoke-lambda
+      vars:
+        type: object
+    required:
+    - type
+    - function
+
+
+
+.. _AWS.common.actions.invoke-sfn:
+
+invoke-sfn
+++++++++++
+
+Invoke step function on resources.
+
+By default this will invoke a step function for each resource
+providing both the `policy` and `resource` as input.
+
+That behavior can be configured setting policy and bulk
+boolean flags on the action.
+
+If bulk action parameter is set to true, then the step
+function will be invoked in bulk, with a set of resource arns
+under the `resources` key.
+
+The size of the batch can be configured via the batch-size
+parameter. Note step function state (input, execution, etc)must
+fit within 32k, we default to batch size 250.
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: invoke-step-function
+       resource: s3
+       filters:
+         - is-log-target
+         - "tag:IngestSetup": absent
+       actions:
+         - type: invoke-sfn
+           # This will cause the workflow to be invoked
+           # with many resources arns in a single execution.
+           # Note this is *not* the default.
+           bulk: true
+           batch-size: 10
+           state-machine: LogIngestSetup
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch-size:
+        type: integer
+      bulk:
+        type: boolean
+      policy:
+        type: boolean
+      state-machine:
+        type: string
+      type:
+        enum:
+        - invoke-sfn
+    required:
+    - state-machine
+    - type
+
+
+
+.. _AWS.common.actions.mark-for-op:
+
+mark-for-op
++++++++++++
+
+Tag resources for future action.
+
+:example:
+
+    .. code-block :: yaml
+
+        policies:
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        exclusiveMinimum: false
+        minimum: 0
+        type: integer
+      hours:
+        exclusiveMinimum: false
+        minimum: 0
+        type: integer
+      msg:
+        type: string
+      op:
+        type: string
+      tag:
+        type: string
+      type:
+        enum:
+        - mark-for-op
+      tz:
+        type: string
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.modify-policy:
+
+modify-policy
++++++++++++++
+
+Action to modify resource IAM policy statements.
+
+Applies to all resources with embedded IAM Policies.
+
+:example:
+
+.. code-block:: yaml
+
+       policies:
+          - name: sns-cross-account
+            resource: sns
+            filters:
+              - type: cross-account
+            actions:
+              - type: modify-policy
+                add-statements: [{
+                    "Sid": "ReplaceWithMe",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": ["SNS:GetTopicAttributes"],
+                    "Resource": topic_arn,
+                        }]
+                remove-statements: '*'
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      add-statements:
+        items:
+          additionalProperties: false
+          oneOf:
+          - required:
+            - Principal
+            - Action
+            - Resource
+          - required:
+            - NotPrincipal
+            - Action
+            - Resource
+          - required:
+            - Principal
+            - NotAction
+            - Resource
+          - required:
+            - NotPrincipal
+            - NotAction
+            - Resource
+          - required:
+            - Principal
+            - Action
+            - NotResource
+          - required:
+            - NotPrincipal
+            - Action
+            - NotResource
+          - required:
+            - Principal
+            - NotAction
+            - NotResource
+          - required:
+            - NotPrincipal
+            - NotAction
+            - NotResource
+          properties:
+            Action:
+              anyOf:
+              - type: string
+              - type: array
+            Condition:
+              type: object
+            Effect:
+              enum:
+              - Allow
+              - Deny
+              type: string
+            NotAction:
+              anyOf:
+              - type: string
+              - type: array
+            NotPrincipal:
+              anyOf:
+              - type: object
+              - type: array
+            NotResource:
+              anyOf:
+              - type: string
+              - type: array
+            Principal:
+              anyOf:
+              - type: string
+              - type: object
+              - type: array
+            Resource:
+              anyOf:
+              - type: string
+              - type: array
+            Sid:
+              type: string
+          required:
+          - Sid
+          - Effect
+          type: object
+        type: array
+      remove-statements:
+        oneOf:
+        - enum:
+          - matched
+          - '*'
+        - items:
+            type: string
+          type: array
+        type:
+        - array
+        - string
+      type:
+        enum:
+        - modify-policy
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.modify-security-groups:
+
+modify-security-groups
+++++++++++++++++++++++
+
+Remove security groups from an interface.
+
+Can target either physical groups as a list of group ids or
+symbolic groups like 'matched' or 'all'. 'matched' uses
+the annotations of the 'group' interface filter.
+
+Note an interface always gets at least one security group, so
+we also allow specification of an isolation/quarantine group
+that can be specified if there would otherwise be no groups.
+
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: network-interface-remove-group
+            resource: eni
+            filters:
+              - type: security-group
+                match-resource: true
+                key: FromPort
+                value: 22
+            actions:
+              - type: modify-security-groups
+                isolation-group: sg-01ab23c4
+                add: []
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    anyOf:
+    - required:
+      - isolation-group
+      - remove
+      - type
+    - required:
+      - add
+      - remove
+      - type
+    - required:
+      - add
+      - type
+    properties:
+      add:
+        oneOf:
+        - type: string
+        - items:
+            type: string
+          type: array
+      isolation-group:
+        oneOf:
+        - type: string
+        - items:
+            type: string
+          type: array
+      remove:
+        oneOf:
+        - items:
+            type: string
+          type: array
+        - enum:
+          - matched
+          - network-location
+          - all
+          - type: string
+      type:
+        enum:
+        - modify-security-groups
+
+
+
+.. _AWS.common.actions.normalize-tag:
+
+normalize-tag
++++++++++++++
+
+Transform the value of a tag.
+
+Set the tag value to uppercase, title, lowercase, or strip text
+from a tag key.
+
+.. code-block :: yaml
+
+    policies:
+      - name: ec2-service-transform-lower
+        resource: ec2
+        comment: |
+          ec2-service-tag-value-to-lower
+        query:
+          - instance-state-name: running
+        filters:
+          - "tag:testing8882": present
+        actions:
+          - type: normalize-tag
+            key: lower_key
+            action: lower
+
+      - name: ec2-service-strip
+        resource: ec2
+        comment: |
+          ec2-service-tag-strip-blah
+        query:
+          - instance-state-name: running
+        filters:
+          - "tag:testing8882": present
+        actions:
+          - type: normalize-tag
+            key: strip_key
+            action: strip
+            value: blah
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      action:
+        items:
+          enum:
+          - upper
+          - lower
+          - titlestrip
+          - replace
+        type: string
+      key:
+        type: string
+      type:
+        enum:
+        - normalize-tag
+      value:
+        type: string
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.notify:
+
+notify
+++++++
+
+Flexible notifications require quite a bit of implementation support
+on pluggable transports, templates, address resolution, variable
+extraction, batch periods, etc.
+
+For expedience and flexibility then, we instead send the data to
+an sqs queue, for processing. ie. actual communications can be enabled
+with the c7n-mailer tool, found under tools/c7n_mailer.
+
+Attaching additional string message attributes are supported on the SNS
+transport, with the exception of the ``mtype`` attribute, which is a
+reserved attribute used by Cloud Custodian.
+
+:example:
+
+.. code-block:: yaml
+
+          policies:
+            - name: ec2-bad-instance-kill
+              resource: ec2
+              filters:
+               - Name: bad-instance
+              actions:
+               - terminate
+               - type: notify
+                 to:
+                  - event-user
+                  - resource-creator
+                  - email@address
+                 owner_absent_contact:
+                  - other_email@address
+                 # which template for the email should we use
+                 template: policy-template
+                 transport:
+                   type: sqs
+                   region: us-east-1
+                   queue: xyz
+            - name: ec2-notify-with-attributes
+              resource: ec2
+              filters:
+               - Name: bad-instance
+              actions:
+               - type: notify
+                 to:
+                  - event-user
+                  - resource-creator
+                  - email@address
+                 owner_absent_contact:
+                  - other_email@address
+                 # which template for the email should we use
+                 template: policy-template
+                 transport:
+                   type: sns
+                   region: us-east-1
+                   topic: your-notify-topic
+                   attributes:
+                      attribute_key: attribute_value
+                      attribute_key_2: attribute_value_2
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    anyOf:
+    - required:
+      - type
+      - transport
+      - to
+    - required:
+      - type
+      - transport
+      - to_from
+    properties:
+      assume_role:
+        type: boolean
+      cc:
+        items:
+          type: string
+        type: array
+      cc_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      cc_manager:
+        type: boolean
+      from:
+        type: string
+      owner_absent_contact:
+        items:
+          type: string
+        type: array
+      subject:
+        type: string
+      template:
+        type: string
+      to:
+        items:
+          type: string
+        type: array
+      to_from: *id001
+      transport:
+        oneOf:
+        - properties:
+            queue:
+              type: string
+            type:
+              enum:
+              - sqs
+          required:
+          - type
+          - queue
+          type: object
+        - properties:
+            attributes:
+              type: object
+            topic:
+              type: string
+            type:
+              enum:
+              - sns
+          required:
+          - type
+          - topic
+          type: object
+      type:
+        enum:
+        - notify
+
+
+
+.. _AWS.common.actions.post-finding:
+
+post-finding
+++++++++++++
+
+Report a finding to AWS Security Hub.
+
+Custodian acts as a finding provider, allowing users to craft
+policies that report to the AWS SecurityHub.
+
+For resources that are taggable, we will tag the resource with an identifier
+such that further findings generate updates.
+
+Example generate a finding for accounts that don't have shield enabled.
+
+:example:
+
+.. code-block:: yaml
+
+  policies:
+
+   - name: account-shield-enabled
+     resource: account
+     filters:
+       - shield-enabled
+     actions:
+       - type: post-finding
+         description: |
+            Shield should be enabled on account to allow for DDOS protection (1 time 3k USD Charge).
+         severity_normalized: 6
+         types:
+           - "Software and Configuration Checks/Industry and Regulatory Standards/NIST CSF Controls (USA)"
+         recommendation: "Enable shield"
+         recommendation_url: "https://www.example.com/policies/AntiDDoS.html"
+         confidence: 100
+         compliance_status: FAILED
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch_size:
+        maximum: 10
+        minimum: 1
+        type: integer
+      compliance_status:
+        enum:
+        - PASSED
+        - WARNING
+        - FAILED
+        - NOT_AVAILABLE
+        type: string
+      confidence:
+        max: 100
+        min: 0
+        type: number
+      criticality:
+        max: 100
+        min: 0
+        type: number
+      description:
+        type: string
+      fields:
+        type: object
+      recommendation:
+        type: string
+      recommendation_url:
+        type: string
+      region:
+        description: cross-region aggregation target
+        type: string
+      severity:
+        default: 0
+        type: number
+      severity_normalized:
+        default: 0
+        max: 100
+        min: 0
+        type: number
+      title:
+        type: string
+      type:
+        enum:
+        - post-finding
+      types:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - types
+    - type
+
+
+
+.. _AWS.common.actions.put-metric:
+
+put-metric
+++++++++++
+
+Action to put metrics based on an expression into CloudWatch metrics
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: track-attached-ebs
+            resource: ec2
+            comment: |
+              Put the count of the number of EBS attached disks to an instance
+            filters:
+              - Name: tracked-ec2-instance
+            actions:
+              - type: put-metric
+                key: Reservations[].Instances[].BlockDeviceMappings[].DeviceName
+                namespace: Usage Metrics
+                metric_name: Attached Disks
+                op: count
+                units: Count
+
+op and units are optional and will default to simple Counts.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      dimensions:
+        items:
+          type: object
+        type: array
+      key:
+        type: string
+      metric_name:
+        type: string
+      namespace:
+        type: string
+      op:
+        enum:
+        - count
+        - distinct_count
+        - sum
+        - average
+      type:
+        enum:
+        - put-metric
+      units:
+        enum:
+        - Seconds
+        - Microseconds
+        - Milliseconds
+        - Bytes
+        - Kilobytes
+        - Megabytes
+        - Gigabytes
+        - Terabytes
+        - Bits
+        - Kilobits
+        - Megabits
+        - Gigabits
+        - Terabits
+        - Bytes/Second
+        - Kilobytes/Second
+        - Megabytes/Second
+        - Gigabytes/Second
+        - Terabytes/Second
+        - Bits/Second
+        - Kilobits/Second
+        - Megabits/Second
+        - Gigabits/Second
+        - Terabits/Second
+        - Count/Second
+        - Percent
+        - Count
+        - None
+    required:
+    - type
+    - key
+    - namespace
+    - metric_name
+
+
+
+.. _AWS.common.actions.remove-tag:
+
+remove-tag
+++++++++++
+
+Removes the specified tags from the specified resources.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      tags:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - remove-tag
+        - unmark
+        - untag
+        - remove-tag
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.rename-tag:
+
+rename-tag
+++++++++++
+
+Create a new tag with identical value & remove old tag
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      new_key:
+        type: string
+      old_key:
+        type: string
+      type:
+        enum:
+        - rename-tag
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.tag:
+
+tag
++++
+
+Applies one or more tags to the specified resources.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      tag:
+        type: string
+      tags:
+        type: object
+      type:
+        enum:
+        - tag
+        - mark
+      value:
+        type: string
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.tag-trim:
+
+tag-trim
+++++++++
+
+Automatically remove tags from an ec2 resource.
+
+EC2 Resources have a limit of 50 tags, in order to make
+additional tags space on a set of resources, this action can
+be used to remove enough tags to make the desired amount of
+space while preserving a given set of tags.
+
+.. code-block :: yaml
+
+   policies:
+     - name: ec2-tag-trim
+       comment: |
+         Any instances with 48 or more tags get tags removed until
+         they match the target tag count, in this case 47 so we
+         that we free up a tag slot for another usage.
+       resource: ec2
+       filters:
+             # Filter down to resources which already have 8 tags
+             # as we need space for 3 more, this also ensures that
+             # metrics reporting is correct for the policy.
+           - type: value
+             key: "length(Tags)"
+             op: ge
+             value: 48
+       actions:
+          - type: tag-trim
+            space: 3
+            preserve:
+              - OwnerContact
+              - ASV
+              - CMDBEnvironment
+              - downtime
+              - custodian_status
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      preserve:
+        items:
+          type: string
+        type: array
+      space:
+        type: integer
+      type:
+        enum:
+        - tag-trim
+    required:
+    - type
+
+
+
+.. _AWS.common.actions.webhook:
+
+webhook
++++++++
+
+Calls a webhook with optional parameters and body
+populated from JMESPath queries.
+
+ .. code-block:: yaml
+
+   policies:
+     - name: call-webhook
+       resource: ec2
+       description: |
+         Call webhook with list of resource groups
+       actions:
+        - type: webhook
+          url: http://foo.com
+          query-params:
+             resource_name: resource.name
+             policy_name: policy.name
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch:
+        type: boolean
+      batch-size:
+        type: number
+      body:
+        type: string
+      headers:
+        additionalProperties:
+          description: header values
+          type: string
+        type: object
+      method:
+        enum:
+        - PUT
+        - POST
+        - GET
+        - PATCH
+        - DELETE
+        type: string
+      query-params:
+        additionalProperties:
+          description: query string values
+          type: string
+        type: object
+      type:
+        enum:
+        - webhook
+      url:
+        type: string
+    required:
+    - url
+    - type
+
+
+
+

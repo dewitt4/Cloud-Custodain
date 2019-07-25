@@ -1,0 +1,319 @@
+.. _aws.eni:
+
+aws.eni
+=======
+
+
+
+Filters
+-------
+
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`flow-logs <aws.eni.filters.flow-logs>`
+
+  - :ref:`json-diff <aws.eni.filters.json-diff>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`network-location <aws.common.filters.network-location>`
+  
+  - :ref:`security-group <aws.common.filters.security-group>`
+  
+  - :ref:`subnet <aws.common.filters.subnet>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+  - :ref:`vpc <aws.common.filters.vpc>`
+  
+
+
+.. _aws.eni.filters.flow-logs:
+
+flow-logs
++++++++++
+Are flow logs enabled on the resource.
+
+ie to find all vpcs with flows logs disabled we can do this
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: flow-logs-enabled
+            resource: vpc
+            filters:
+              - flow-logs
+
+or to find all vpcs with flow logs but that don't match a
+particular configuration.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: flow-mis-configured
+            resource: vpc
+            filters:
+              - not:
+                - type: flow-logs
+                  enabled: true
+                  set-op: or
+                  op: equal
+                  # equality operator applies to following keys
+                  traffic-type: all
+                  status: active
+                  log-group: vpc-logs
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      deliver-status:
+        enum:
+        - success
+        - failure
+      destination:
+        type: string
+      destination-type:
+        enum:
+        - s3
+        - cloud-watch-logs
+      enabled:
+        default: false
+        type: boolean
+      log-group:
+        type: string
+      op:
+        default: equal
+        enum:
+        - equal
+        - not-equal
+      set-op:
+        default: or
+        enum:
+        - or
+        - and
+      status:
+        enum:
+        - active
+      traffic-type:
+        enum:
+        - accept
+        - reject
+        - all
+      type:
+        enum:
+        - flow-logs
+    required:
+    - type
+
+
+.. _aws.eni.filters.json-diff:
+
+json-diff
++++++++++
+Compute the diff from the current resource to a previous version.
+
+A resource matches the filter if a diff exists between the current
+resource and the selected revision.
+
+Utilizes config as a resource revision database.
+
+Revisions can be selected by date, against the previous version, and
+against a locked version (requires use of is-locked filter).
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      selector:
+        enum:
+        - previous
+        - date
+        - locked
+      selector_value:
+        type: string
+      type:
+        enum:
+        - json-diff
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`copy-related-tag <aws.common.actions.copy-related-tag>`
+  
+  - :ref:`delete <aws.eni.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`modify-security-groups <aws.common.actions.modify-security-groups>`
+  
+  - :ref:`normalize-tag <aws.common.actions.normalize-tag>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`rename-tag <aws.common.actions.rename-tag>`
+  
+  - :ref:`set-flow-log <aws.eni.actions.set-flow-log>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`tag-trim <aws.common.actions.tag-trim>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.eni.actions.delete:
+
+delete
+++++++
+Delete a network interface.
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: mark-orphaned-enis
+        comment: Flag abandoned Lambda VPC ENIs for deletion
+        resource: eni
+        filters:
+          - Status: available
+          - type: value
+            op: glob
+            key: Description
+            value: "AWS Lambda VPC ENI*"
+          - "tag:custodian_status": absent
+        actions:
+          - type: mark-for-op
+            tag: custodian_status
+            msg: "Orphaned Lambda VPC ENI: {op}@{action_date}"
+            op: delete
+            days: 1
+
+      - name: delete-marked-enis
+        comment: Delete flagged ENIs that have not been cleaned up naturally
+        resource: eni
+        filters:
+          - type: marked-for-op
+            tag: custodian_status
+            op: delete
+        actions:
+          - type: delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.eni.actions.set-flow-log:
+
+set-flow-log
+++++++++++++
+Create flow logs for a network resource
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: vpc-enable-flow-logs
+        resource: vpc
+        filters:
+          - type: flow-logs
+            enabled: false
+        actions:
+          - type: set-flow-log
+            DeliverLogsPermissionArn: arn:iam:role
+            LogGroupName: /custodian/vpc/flowlogs/
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      DeliverLogsPermissionArn:
+        type: string
+      LogDestination:
+        type: string
+      LogDestinationType:
+        enum:
+        - s3
+        - cloud-watch-logs
+      LogGroupName:
+        type: string
+      TrafficType:
+        enum:
+        - ACCEPT
+        - REJECT
+        - ALL
+        type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-flow-log
+

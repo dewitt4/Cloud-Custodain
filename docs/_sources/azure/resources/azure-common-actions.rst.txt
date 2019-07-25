@@ -1,0 +1,746 @@
+Azure Common Actions
+====================
+
+Actions
+
+
+   - :ref:`auto-tag-date <Azure.common.actions.auto-tag-date>`
+
+
+   - :ref:`auto-tag-user <Azure.common.actions.auto-tag-user>`
+
+
+   - :ref:`delete <Azure.common.actions.delete>`
+
+
+   - :ref:`lock <Azure.common.actions.lock>`
+
+
+   - :ref:`logic-app <Azure.common.actions.logic-app>`
+
+
+   - :ref:`mark-for-op <Azure.common.actions.mark-for-op>`
+
+
+   - :ref:`notify <Azure.common.actions.notify>`
+
+
+   - :ref:`tag <Azure.common.actions.tag>`
+
+
+   - :ref:`tag-trim <Azure.common.actions.tag-trim>`
+
+
+   - :ref:`untag <Azure.common.actions.untag>`
+
+
+   - :ref:`webhook <Azure.common.actions.webhook>`
+
+
+
+
+.. _Azure.common.actions.auto-tag-date:
+
+auto-tag-date
++++++++++++++
+
+Attempts to tag a resource with the date when resource was created.
+
+This action searches from the earliest 'write' operation's caller
+in the activity logs for a particular resource.
+
+Note: activity logs are only held for the last 90 days.
+
+:example:
+
+This policy will tag all existing resource groups with the 'CreatedDate' tag
+
+.. code-block:: yaml
+
+    policies:
+      - name: azure-auto-tag-created-date
+        resource: azure.resourcegroup
+        description: |
+          Tag all existing resource groups with the 'CreatedDate' tag
+        actions:
+          - type: auto-tag-date
+            tag: CreatedDate
+            format: "%m-%d-%Y"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: integer
+      format:
+        type: string
+      tag:
+        type: string
+      type:
+        enum:
+        - auto-tag-date
+      update:
+        type: boolean
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.auto-tag-user:
+
+auto-tag-user
++++++++++++++
+
+Attempts to tag a resource with the first user who created/modified it.
+
+:example:
+
+This policy will tag all existing resource groups with the 'CreatorEmail' tag
+
+.. code-block:: yaml
+
+  policies:
+    - name: azure-auto-tag-creator
+      resource: azure.resourcegroup
+      description: |
+        Tag all existing resource groups with the 'CreatorEmail' tag
+      actions:
+       - type: auto-tag-user
+         tag: CreatorEmail
+
+This action searches from the earliest 'write' operation's caller
+in the activity logs for a particular resource.
+
+Note: activity logs are only held for the last 90 days.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: integer
+      tag:
+        type: string
+      type:
+        enum:
+        - auto-tag-user
+      update:
+        type: boolean
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.delete:
+
+delete
+++++++
+
+Perform delete operation on any ARM resource. Can be used with
+generic resource type `armresource` or on any other more specific
+ARM resource type supported by Cloud Custodian.
+
+:example:
+
+This policy will delete any ARM resource with 'test' in the name
+
+.. code-block:: yaml
+
+    policies:
+      - name: delete-test-resources
+        resource: azure.armresource
+        description: |
+          Deletes any ARM resource with 'test' in the name
+        filters:
+          - type: value
+            key: name
+            value: test
+            op: contains
+        actions:
+          - type: delete
+
+
+:example:
+
+This policy will delete any Network Security Group  with 'test' in the name
+
+.. code-block:: yaml
+
+        policies:
+           - name: delete-test-nsg
+             description: |
+               Deletes any Network Security Group with 'test' in the name
+             resource: azure.networksecuritygroup
+             filters:
+               - type: value
+                 key: name
+                 value: test
+                 op: contains
+             actions:
+              - type: delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.lock:
+
+lock
+++++
+
+Perform lock operation on any ARM resource. Can be used with
+generic resource type `armresource` or on any other more specific
+ARM resource type supported by Cloud Custodian.
+
+Lock can be of 2 types: ReadOnly and CanNotDelete. Lock type is required.
+
+To create or delete management locks, you must have proper access.
+See `Who can create or delete locks <https://docs.microsoft.com/en-us/azure/
+azure-resource-manager/resource-group-lock-resources#who-can-create-or-delete-locks>`_
+
+:example:
+
+Add ReadOnly lock to all keyvaults:
+
+.. code-block:: yaml
+
+   policies:
+      - name: lock-keyvaults
+        resource: azure.keyvault
+        actions:
+          - type: lock
+            lock-type: ReadOnly
+ 
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      lock-type:
+        enum:
+        - ReadOnly
+        - CanNotDelete
+      type:
+        enum:
+        - lock
+    required:
+    - lock-type
+    - type
+
+
+
+.. _Azure.common.actions.logic-app:
+
+logic-app
++++++++++
+
+Calls an Azure Logic App with optional parameters and body populated from JMESPath queries.
+Your policy credentials are used to get the trigger endpoint URL with secrets
+using the resource group and app name.
+
+This action is based on the ``webhook`` action and supports the same options.
+
+:example:
+
+This policy will call logic app with list of VM's
+
+    .. code-block:: yaml
+
+      policies:
+        - name: call-logic-app
+          resource: azure.vm
+          description: |
+            Call logic app with list of VM's
+          actions:
+           - type: logic-app
+             resource-group: custodian-test
+             logic-app-name: cclogicapp
+             batch: true
+             body: 'resources[].{ vm_name: name }'
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch:
+        type: boolean
+      batch-size:
+        type: number
+      body:
+        type: string
+      headers:
+        additionalProperties:
+          description: header values
+          type: string
+        type: object
+      logic-app-name:
+        type: string
+      method:
+        enum:
+        - PUT
+        - POST
+        - GET
+        - PATCH
+        - DELETE
+        type: string
+      query-params:
+        additionalProperties:
+          description: query string values
+          type: string
+        type: object
+      resource-group:
+        type: string
+      type:
+        enum:
+        - logic-app
+      url: null
+    required:
+    - resource-group
+    - logic-app-name
+    - type
+
+
+
+.. _Azure.common.actions.mark-for-op:
+
+mark-for-op
++++++++++++
+
+Tag resources for future action.
+
+The optional 'tz' parameter can be used to adjust the clock to align
+with a given timezone. The default value is 'utc'.
+
+If neither 'days' nor 'hours' is specified, Cloud Custodian will default
+to marking the resource for action 4 days in the future.
+
+:example:
+
+.. code-block :: yaml
+
+   policies:
+    - name: vm-mark-for-stop
+      resource: azure.vm
+      filters:
+        - type: value
+          key: Name
+          value: instance-to-stop-in-four-days
+      actions:
+        - type: mark-for-op
+          op: stop
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        exclusiveMinimum: false
+        minimum: 0
+        type: integer
+      hours:
+        exclusiveMinimum: false
+        minimum: 0
+        type: integer
+      msg:
+        type: string
+      op:
+        type: string
+      tag:
+        type: string
+      type:
+        enum:
+        - mark-for-op
+      tz:
+        type: string
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.notify:
+
+notify
+++++++
+
+Action to queue email.
+
+See `c7n_mailer readme.md <https://github.com/cloud-custodian/cloud-custodian/blob/
+master/tools/c7n_mailer/README.md#using-on-azure>`_ for more information.
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: notify
+        resource: azure.resourcegroup
+        actions:
+          - type: notify
+            template: default
+            subject: Hello World
+            to:
+              - someone@somewhere.com
+            transport:
+              type: asq
+              queue: https://storagename.queue.core.windows.net/queuename
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    anyOf:
+    - required:
+      - type
+      - transport
+      - to
+    - required:
+      - type
+      - transport
+      - to_from
+    properties:
+      cc:
+        items:
+          type: string
+        type: array
+      cc_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      cc_manager:
+        type: boolean
+      from:
+        type: string
+      owner_absent_contact:
+        items:
+          type: string
+        type: array
+      subject:
+        type: string
+      template:
+        type: string
+      to:
+        items:
+          type: string
+        type: array
+      to_from: *id001
+      transport:
+        oneOf:
+        - properties:
+            queue:
+              type: string
+            type:
+              enum:
+              - asq
+          required:
+          - type
+          - queue
+          type: object
+      type:
+        enum:
+        - notify
+
+
+
+.. _Azure.common.actions.tag:
+
+tag
++++
+
+Adds tags to Azure resources
+
+:example:
+
+This policy will tag all existing resource groups with a value such as Environment
+
+.. code-block:: yaml
+
+  policies:
+    - name: azure-tag-resourcegroups
+      resource: azure.resourcegroup
+      description: |
+        Tag all existing resource groups with a value such as Environment
+      actions:
+       - type: tag
+         tag: Environment
+         value: Test
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      tag:
+        type: string
+      tags:
+        type: object
+      type:
+        enum:
+        - tag
+      value:
+        type: string
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.tag-trim:
+
+tag-trim
+++++++++
+
+Automatically remove tags from an azure resource.
+Azure Resources and Resource Groups have a limit of 15 tags.
+In order to make additional tag space on a set of resources,
+this action can be used to remove enough tags to make the
+desired amount of space while preserving a given set of tags.
+Setting the space value to 0 removes all tags but those
+listed to preserve.
+
+:example:
+
+.. code-block :: yaml
+
+   policies:
+     - name: azure-tag-trim
+       comment: |
+         Any instances with 14 or more tags get tags removed until
+         they match the target tag count, in this case 13, so
+         that we free up tag slots for another usage.
+       resource: azure.resourcegroup
+       filters:
+           # Filter down to resources that do not have the space
+           # to add additional required tags. For example, if an
+           # additional 2 tags need to be added to a resource, with
+           # 15 tags as the limit, then filter down to resources that
+           # have 14 or more tags since they will need to have tags
+           # removed for the 2 extra. This also ensures that metrics
+           # reporting is correct for the policy.
+          - type: value
+            key: "length(Tags)"
+            op: ge
+            value: 14
+       actions:
+          - type: tag-trim
+            space: 2
+            preserve:
+             - OwnerContact
+             - Environment
+             - downtime
+             - custodian_status
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      preserve:
+        items:
+          type: string
+        type: array
+      space:
+        type: integer
+      type:
+        enum:
+        - tag-trim
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.untag:
+
+untag
++++++
+
+Removes tags from Azure resources
+
+:example:
+
+This policy will remove tag for all existing resource groups with a key such as Environment
+
+    .. code-block:: yaml
+
+      policies:
+        - name: azure-remove-tag-resourcegroups
+          resource: azure.resourcegroup
+          description: |
+            Remove tag for all existing resource groups with a key such as Environment
+          actions:
+           - type: untag
+             tags: ['Environment']
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      tags:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - untag
+    required:
+    - type
+
+
+
+.. _Azure.common.actions.webhook:
+
+webhook
++++++++
+
+Calls a webhook with optional parameters and body
+populated from JMESPath queries.
+
+ .. code-block:: yaml
+
+   policies:
+     - name: call-webhook
+       resource: ec2
+       description: |
+         Call webhook with list of resource groups
+       actions:
+        - type: webhook
+          url: http://foo.com
+          query-params:
+             resource_name: resource.name
+             policy_name: policy.name
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      batch:
+        type: boolean
+      batch-size:
+        type: number
+      body:
+        type: string
+      headers:
+        additionalProperties:
+          description: header values
+          type: string
+        type: object
+      method:
+        enum:
+        - PUT
+        - POST
+        - GET
+        - PATCH
+        - DELETE
+        type: string
+      query-params:
+        additionalProperties:
+          description: query string values
+          type: string
+        type: object
+      type:
+        enum:
+        - webhook
+      url:
+        type: string
+    required:
+    - url
+    - type
+
+
+
+

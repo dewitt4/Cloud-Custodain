@@ -1,0 +1,1406 @@
+.. _aws.account:
+
+aws.account
+===========
+
+
+
+Filters
+-------
+
+
+  - :ref:`check-cloudtrail <aws.account.filters.check-cloudtrail>`
+
+  - :ref:`check-config <aws.account.filters.check-config>`
+
+  - :ref:`credential <aws.account.filters.credential>`
+
+  - :ref:`default-ebs-encryption <aws.account.filters.default-ebs-encryption>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`guard-duty <aws.account.filters.guard-duty>`
+
+  - :ref:`has-virtual-mfa <aws.account.filters.has-virtual-mfa>`
+
+  - :ref:`iam-summary <aws.account.filters.iam-summary>`
+
+  - :ref:`missing <aws.account.filters.missing>`
+
+  - :ref:`password-policy <aws.account.filters.password-policy>`
+
+  - :ref:`s3-public-block <aws.account.filters.s3-public-block>`
+
+  - :ref:`service-limit <aws.account.filters.service-limit>`
+
+  - :ref:`shield-enabled <aws.account.filters.shield-enabled>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+  - :ref:`xray-encrypt-key <aws.account.filters.xray-encrypt-key>`
+
+
+
+.. _aws.account.filters.check-cloudtrail:
+
+check-cloudtrail
+++++++++++++++++
+Verify cloud trail enabled for this account per specifications.
+
+Returns an annotated account resource if trail is not enabled.
+
+Of particular note, the current-region option will evaluate whether cloudtrail is available
+in the current region, either as a multi region trail or as a trail with it as the home region.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: account-cloudtrail-enabled
+            resource: account
+            region: us-east-1
+            filters:
+              - type: check-cloudtrail
+                global-events: true
+                multi-region: true
+                running: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      current-region:
+        type: boolean
+      file-digest:
+        type: boolean
+      global-events:
+        type: boolean
+      kms:
+        type: boolean
+      kms-key:
+        type: string
+      multi-region:
+        type: boolean
+      notifies:
+        type: boolean
+      running:
+        type: boolean
+      type:
+        enum:
+        - check-cloudtrail
+    required:
+    - type
+
+
+.. _aws.account.filters.check-config:
+
+check-config
+++++++++++++
+Is config service enabled for this account
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: account-check-config-services
+            resource: account
+            region: us-east-1
+            filters:
+              - type: check-config
+                all-resources: true
+                global-resources: true
+                running: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      all-resources:
+        type: boolean
+      global-resources:
+        type: boolean
+      running:
+        type: boolean
+      type:
+        enum:
+        - check-config
+    required:
+    - type
+
+
+.. _aws.account.filters.credential:
+
+credential
+++++++++++
+Use IAM Credential report to filter users.
+
+The IAM Credential report aggregates multiple pieces of
+information on iam users. This makes it highly efficient for
+querying multiple aspects of a user that would otherwise require
+per user api calls.
+
+https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_getting-report.html
+
+For example if we wanted to retrieve all users with mfa who have
+never used their password but have active access keys from the
+last month
+
+.. code-block:: yaml
+
+ - name: iam-mfa-active-keys-no-login
+   resource: iam-user
+   filters:
+     - type: credential
+       key: mfa_active
+       value: true
+     - type: credential
+       key: password_last_used
+       value: absent
+     - type: credential
+       key: access_keys.last_used
+       value_type: age
+       value: 30
+       op: less-than
+
+Credential Report Transforms
+
+We perform some default transformations from the raw
+credential report. Sub-objects (access_key_1, cert_2)
+are turned into array of dictionaries for matching
+purposes with their common prefixes stripped.
+N/A values are turned into None, TRUE/FALSE are turned
+into boolean values.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        enum:
+        - user
+        - arn
+        - user_creation_time
+        - password_enabled
+        - password_last_used
+        - password_last_changed
+        - password_next_rotation
+        - mfa_active
+        - access_keys
+        - access_keys.active
+        - access_keys.last_used_date
+        - access_keys.last_used_region
+        - access_keys.last_used_service
+        - access_keys.last_rotated
+        - certs
+        - certs.active
+        - certs.last_rotated
+        title: report key to search
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      report_delay:
+        default: 10
+        title: Number of seconds to wait for report generation.
+        type: number
+      report_generate:
+        default: true
+        title: Generate a report if none is present.
+        type: boolean
+      report_max_age:
+        default: 86400
+        title: Number of seconds to consider a report valid.
+        type: number
+      type:
+        enum:
+        - credential
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.account.filters.default-ebs-encryption:
+
+default-ebs-encryption
+++++++++++++++++++++++
+Filter an account by its ebs encryption status.
+
+By default for key we match on the alias name for a key.
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: check-default-ebs-encryption
+       resource: aws.account
+       filters:
+        - type: default-ebs-encryption
+          key: "alias/aws/ebs"
+          state: true
+
+It is also possible to match on specific key attributes (tags, origin)
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: check-ebs-encryption-key-origin
+       resource: aws.account
+       filters:
+        - type: default-ebs-encryption
+          key:
+            type: value
+            key: Origin
+            value: AWS_KMS
+          state: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        oneOf:
+        - $ref: '#/definitions/filters/value'
+        - type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - default-ebs-encryption
+    required:
+    - type
+
+
+.. _aws.account.filters.guard-duty:
+
+guard-duty
+++++++++++
+Check if the guard duty service is enabled.
+
+This allows looking at account's detector and its associated
+master if any.
+
+:example:
+
+ Check to ensure guard duty is active on account and associated to a master.
+
+.. code-block:: yaml
+
+        policies:
+          - name: guardduty-enabled
+            resource: account
+            filters:
+              - type: guard-duty
+                Detector.Status: ENABLED
+                Master.AccountId: "00011001"
+                Master.RelationshipStatus: "Enabled"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    patternProperties:
+      ^Detector:
+        oneOf:
+        - type: object
+        - type: string
+      ^Master:
+        oneOf:
+        - type: object
+        - type: string
+    properties:
+      match-operator:
+        enum:
+        - or
+        - and
+      type:
+        enum:
+        - guard-duty
+
+
+.. _aws.account.filters.has-virtual-mfa:
+
+has-virtual-mfa
++++++++++++++++
+Is the account configured with a virtual MFA device?
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+            - name: account-with-virtual-mfa
+              resource: account
+              region: us-east-1
+              filters:
+                - type: has-virtual-mfa
+                  value: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - has-virtual-mfa
+      value:
+        type: boolean
+    required:
+    - type
+
+
+.. _aws.account.filters.iam-summary:
+
+iam-summary
++++++++++++
+Return annotated account resource if iam summary filter matches.
+
+Some use cases include, detecting root api keys or mfa usage.
+
+Example iam summary wrt to matchable fields::
+
+  {
+        "AccessKeysPerUserQuota": 2,
+        "AccountAccessKeysPresent": 0,
+        "AccountMFAEnabled": 1,
+        "AccountSigningCertificatesPresent": 0,
+        "AssumeRolePolicySizeQuota": 2048,
+        "AttachedPoliciesPerGroupQuota": 10,
+        "AttachedPoliciesPerRoleQuota": 10,
+        "AttachedPoliciesPerUserQuota": 10,
+        "GroupPolicySizeQuota": 5120,
+        "Groups": 1,
+        "GroupsPerUserQuota": 10,
+        "GroupsQuota": 100,
+        "InstanceProfiles": 0,
+        "InstanceProfilesQuota": 100,
+        "MFADevices": 3,
+        "MFADevicesInUse": 2,
+        "Policies": 3,
+        "PoliciesQuota": 1000,
+        "PolicySizeQuota": 5120,
+        "PolicyVersionsInUse": 5,
+        "PolicyVersionsInUseQuota": 10000,
+        "Providers": 0,
+        "RolePolicySizeQuota": 10240,
+        "Roles": 4,
+        "RolesQuota": 250,
+        "ServerCertificates": 0,
+        "ServerCertificatesQuota": 20,
+        "SigningCertificatesPerUserQuota": 2,
+        "UserPolicySizeQuota": 2048,
+        "Users": 5,
+        "UsersQuota": 5000,
+        "VersionsPerPolicyQuota": 5,
+    }
+
+For example to determine if an account has either not been
+enabled with root mfa or has root api keys.
+
+.. code-block:: yaml
+
+  policies:
+    - name: root-keys-or-no-mfa
+      resource: account
+      filters:
+        - type: iam-summary
+          key: AccountMFAEnabled
+          value: true
+          op: eq
+          value_type: swap
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - iam-summary
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.account.filters.missing:
+
+missing
++++++++
+Assert the absence of a particular resource.
+
+Intended for use at a logical account/subscription/project level
+
+This works as an effectively an embedded policy thats evaluated.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      policy:
+        type: object
+      type:
+        enum:
+        - missing
+    required:
+    - policy
+    - type
+
+
+.. _aws.account.filters.password-policy:
+
+password-policy
++++++++++++++++
+Check an account's password policy.
+
+Note that on top of the default password policy fields, we also add an extra key,
+PasswordPolicyConfigured which will be set to true or false to signify if the given
+account has attempted to set a policy at all.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: password-policy-check
+            resource: account
+            region: us-east-1
+            filters:
+              - type: password-policy
+                key: MinimumPasswordLength
+                value: 10
+                op: ge
+              - type: password-policy
+                key: RequireSymbols
+                value: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - password-policy
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.account.filters.s3-public-block:
+
+s3-public-block
++++++++++++++++
+Check for s3 public blocks on an account.
+
+https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-block-public-access.html
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - s3-public-block
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.account.filters.service-limit:
+
+service-limit
++++++++++++++
+Check if account's service limits are past a given threshold.
+
+Supported limits are per trusted advisor, which is variable based
+on usage in the account and support level enabled on the account.
+
+  - service: AutoScaling limit: Auto Scaling groups
+  - service: AutoScaling limit: Launch configurations
+  - service: EBS limit: Active snapshots
+  - service: EBS limit: Active volumes
+  - service: EBS limit: General Purpose (SSD) volume storage (GiB)
+  - service: EBS limit: Magnetic volume storage (GiB)
+  - service: EBS limit: Provisioned IOPS
+  - service: EBS limit: Provisioned IOPS (SSD) storage (GiB)
+  - service: EC2 limit: Elastic IP addresses (EIPs)
+
+  # Note this is extant for each active instance type in the account
+  # however the total value is against sum of all instance types.
+  # see issue https://github.com/cloud-custodian/cloud-custodian/issues/516
+
+  - service: EC2 limit: On-Demand instances - m3.medium
+
+  - service: EC2 limit: Reserved Instances - purchase limit (monthly)
+  - service: ELB limit: Active load balancers
+  - service: IAM limit: Groups
+  - service: IAM limit: Instance profiles
+  - service: IAM limit: Roles
+  - service: IAM limit: Server certificates
+  - service: IAM limit: Users
+  - service: RDS limit: DB instances
+  - service: RDS limit: DB parameter groups
+  - service: RDS limit: DB security groups
+  - service: RDS limit: DB snapshots per user
+  - service: RDS limit: Storage quota (GB)
+  - service: RDS limit: Internet gateways
+  - service: SES limit: Daily sending quota
+  - service: VPC limit: VPCs
+  - service: VPC limit: VPC Elastic IP addresses (EIPs)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: increase-account-service-limits
+            resource: account
+            filters:
+              - type: service-limit
+                services:
+                  - EC2
+                threshold: 1.0
+          - name: specify-region-for-global-service
+            region: us-east-1
+            resource: account
+            filters:
+              - type: service-limit
+                services:
+                  - IAM
+                limits:
+                  - Roles
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      limits:
+        items:
+          type: string
+        type: array
+      refresh_period:
+        title: how long should a check result be considered fresh
+        type: integer
+      services:
+        items:
+          enum:
+          - EC2
+          - ELB
+          - VPC
+          - AutoScaling
+          - RDS
+          - EBS
+          - SES
+          - IAM
+        type: array
+      threshold:
+        type: number
+      type:
+        enum:
+        - service-limit
+    required:
+    - type
+
+
+.. _aws.account.filters.shield-enabled:
+
+shield-enabled
+++++++++++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      type:
+        enum:
+        - shield-enabled
+    required:
+    - type
+
+
+.. _aws.account.filters.xray-encrypt-key:
+
+xray-encrypt-key
+++++++++++++++++
+Determine if xray is encrypted.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: xray-encrypt-with-default
+            resource: aws.account
+            filters:
+               - type: xray-encrypt-key
+                 key: default
+          - name: xray-encrypt-with-kms
+            resource: aws.account
+            filters:
+               - type: xray-encrypt-key
+                 key: kms
+          - name: xray-encrypt-with-specific-key
+            resource: aws.account
+            filters:
+               - type: xray-encrypt-key
+                 key: alias/my-alias or arn or keyid
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      type:
+        enum:
+        - xray-encrypt-key
+    required:
+    - key
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`enable-cloudtrail <aws.account.actions.enable-cloudtrail>`
+
+  - :ref:`enable-data-events <aws.account.actions.enable-data-events>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`request-limit-increase <aws.account.actions.request-limit-increase>`
+
+  - :ref:`set-ebs-encryption <aws.account.actions.set-ebs-encryption>`
+
+  - :ref:`set-s3-public-block <aws.account.actions.set-s3-public-block>`
+
+  - :ref:`set-shield-advanced <aws.account.actions.set-shield-advanced>`
+
+  - :ref:`set-xray-encrypt <aws.account.actions.set-xray-encrypt>`
+
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.account.actions.enable-cloudtrail:
+
+enable-cloudtrail
++++++++++++++++++
+Enables logging on the trail(s) named in the policy
+
+:Example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: trail-test
+        description: Ensure CloudTrail logging is enabled
+        resource: account
+        actions:
+          - type: enable-cloudtrail
+            trail: mytrail
+            bucket: trails
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      bucket:
+        type: string
+      bucket-region:
+        type: string
+      file-digest:
+        type: boolean
+      global-events:
+        type: boolean
+      kms:
+        type: boolean
+      kms-key:
+        type: string
+      multi-region:
+        type: boolean
+      notify:
+        type: string
+      trail:
+        type: string
+      type:
+        enum:
+        - enable-cloudtrail
+    required:
+    - bucket
+
+
+.. _aws.account.actions.enable-data-events:
+
+enable-data-events
+++++++++++++++++++
+Ensure all buckets in account are setup to log data events.
+
+Note this works via a single trail for data events per
+https://aws.amazon.com/about-aws/whats-new/2017/09/aws-cloudtrail-enables-option-to-add-all-amazon-s3-buckets-to-data-events/
+
+This trail should NOT be used for api management events, the
+configuration here is soley for data events. If directed to create
+a trail this will do so without management events.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-enable-data-events-logging
+            resource: account
+            actions:
+             - type: enable-data-events
+               data-trail:
+                 name: s3-events
+                 multi-region: us-east-1
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      data-trail:
+        additionalProperties: false
+        properties:
+          create:
+            title: Should we create trail if needed for events?
+            type: boolean
+          key-id:
+            title: If creating, Enable kms on the trail
+            type: string
+          multi-region:
+            title: If creating, use this region for all data trails
+            type: string
+          name:
+            title: The name of the event trail
+            type: string
+          s3-bucket:
+            title: If creating, the bucket to store trail event data
+            type: string
+          s3-prefix:
+            type: string
+          topic:
+            title: If creating, the sns topic for the trail to send updates
+            type: string
+          type:
+            enum:
+            - ReadOnly
+            - WriteOnly
+            - All
+        required:
+        - name
+        type: object
+      type:
+        enum:
+        - enable-data-events
+    required:
+    - data-trail
+    - type
+
+
+.. _aws.account.actions.request-limit-increase:
+
+request-limit-increase
+++++++++++++++++++++++
+File support ticket to raise limit.
+
+:Example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: raise-account-service-limits
+        resource: account
+        filters:
+          - type: service-limit
+            services:
+              - EBS
+            limits:
+              - Provisioned IOPS (SSD) storage (GiB)
+            threshold: 60.5
+        actions:
+          - type: request-limit-increase
+            notify: [email, email2]
+            ## You can use one of either percent-increase or an amount-increase.
+            percent-increase: 50
+            message: "Please raise the below account limit(s); \n {limits}"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    oneOf:
+    - required:
+      - type
+      - percent-increase
+    - required:
+      - type
+      - amount-increase
+    properties:
+      amount-increase:
+        minimum: 1
+        type: number
+      message:
+        type: string
+      minimum-increase:
+        minimum: 1
+        type: number
+      notify:
+        items:
+          type: string
+        type: array
+      percent-increase:
+        minimum: 1
+        type: number
+      severity:
+        enum:
+        - urgent
+        - high
+        - normal
+        - low
+        type: string
+      subject:
+        type: string
+      type:
+        enum:
+        - request-limit-increase
+
+
+.. _aws.account.actions.set-ebs-encryption:
+
+set-ebs-encryption
+++++++++++++++++++
+Set AWS EBS default encryption on an account
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: set-default-ebs-encryption
+       resource: aws.account
+       filters:
+        - type: default-ebs-encryption
+          state: false
+       actions:
+        - type: set-ebs-encryption
+          state: true
+          key: alias/aws/ebs
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-ebs-encryption
+    required:
+    - type
+
+
+.. _aws.account.actions.set-s3-public-block:
+
+set-s3-public-block
++++++++++++++++++++
+Configure S3 Public Access Block on an account.
+
+All public access block attributes can be set. If not specified they are merged
+with the extant configuration.
+
+https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-block-public-access.html
+
+:example:
+
+.. yaml:
+
+  policies:
+    - name: restrict-public-buckets
+      resource: aws.account
+      filters:
+        - not:
+           - type: s3-public-block
+             key: RestrictPublicBuckets
+             value: true
+      actions:
+        - type: set-s3-public-block
+          RestrictPublicBuckets: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      BlockPublicAcls:
+        type: boolean
+      BlockPublicPolicy:
+        type: boolean
+      IgnorePublicAcls:
+        type: boolean
+      RestrictPublicBuckets:
+        type: boolean
+      state:
+        default: true
+        type: boolean
+      type:
+        enum:
+        - set-s3-public-block
+    required:
+    - type
+
+
+.. _aws.account.actions.set-shield-advanced:
+
+set-shield-advanced
++++++++++++++++++++
+Enable/disable Shield Advanced on an account.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-shield-advanced
+    required:
+    - type
+
+
+.. _aws.account.actions.set-xray-encrypt:
+
+set-xray-encrypt
+++++++++++++++++
+Enable specific xray encryption.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: xray-default-encrypt
+            resource: aws.account
+            actions:
+              - type: set-xray-encrypt
+                key: default
+          - name: xray-kms-encrypt
+            resource: aws.account
+            actions:
+              - type: set-xray-encrypt
+                key: alias/some/alias/key
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      type:
+        enum:
+        - set-xray-encrypt
+    required:
+    - key
+    - type
+

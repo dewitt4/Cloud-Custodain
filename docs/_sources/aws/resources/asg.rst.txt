@@ -1,0 +1,1178 @@
+.. _aws.asg:
+
+aws.asg
+=======
+
+
+
+Filters
+-------
+
+
+  - :ref:`capacity-delta <aws.asg.filters.capacity-delta>`
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`image <aws.common.filters.image>`
+  
+  - :ref:`image-age <aws.asg.filters.image-age>`
+
+  - :ref:`invalid <aws.asg.filters.invalid>`
+
+  - :ref:`launch-config <aws.asg.filters.launch-config>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`metrics <aws.common.filters.metrics>`
+  
+  - :ref:`network-location <aws.common.filters.network-location>`
+  
+  - :ref:`not-encrypted <aws.asg.filters.not-encrypted>`
+
+  - :ref:`offhour <aws.common.filters.offhour>`
+  
+  - :ref:`onhour <aws.common.filters.onhour>`
+  
+  - :ref:`progagated-tags <aws.asg.filters.progagated-tags>`
+
+  - :ref:`security-group <aws.common.filters.security-group>`
+  
+  - :ref:`subnet <aws.common.filters.subnet>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`user-data <aws.asg.filters.user-data>`
+
+  - :ref:`valid <aws.asg.filters.valid>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+  - :ref:`vpc-id <aws.asg.filters.vpc-id>`
+
+
+
+.. _aws.asg.filters.capacity-delta:
+
+capacity-delta
+++++++++++++++
+Filter returns ASG that have less instances than desired or required
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-capacity-delta
+            resource: asg
+            filters:
+              - capacity-delta
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - capacity-delta
+    required:
+    - type
+
+
+.. _aws.asg.filters.image-age:
+
+image-age
++++++++++
+Filter asg by image age (in days).
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-older-image
+            resource: asg
+            filters:
+              - type: image-age
+                days: 90
+                op: ge
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: number
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - image-age
+    required:
+    - type
+
+
+.. _aws.asg.filters.invalid:
+
+invalid
++++++++
+Filter autoscale groups to find those that are structurally invalid.
+
+Structurally invalid means that the auto scale group will not be able
+to launch an instance succesfully as the configuration has
+
+- invalid subnets
+- invalid security groups
+- invalid key pair name
+- invalid launch config volume snapshots
+- invalid amis
+- invalid health check elb (slower)
+
+Internally this tries to reuse other resource managers for better
+cache utilization.
+
+:example:
+
+    .. code-block:: yaml
+
+        policies:
+          - name: asg-invalid-config
+            resource: asg
+            filters:
+              - invalid
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - invalid
+    required:
+    - type
+
+
+.. _aws.asg.filters.launch-config:
+
+launch-config
++++++++++++++
+Filter asg by launch config attributes.
+
+This will also filter to launch template data in addition
+to launch configurations.
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: launch-configs-with-public-address
+        resource: asg
+        filters:
+          - type: launch-config
+            key: AssociatePublicIpAddress
+            value: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - launch-config
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.asg.filters.not-encrypted:
+
+not-encrypted
++++++++++++++
+Check if an ASG is configured to have unencrypted volumes.
+
+Checks both the ami snapshots and the launch configuration.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-unencrypted
+            resource: asg
+            filters:
+              - type: not-encrypted
+                exclude_image: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      exclude_image:
+        type: boolean
+      type:
+        enum:
+        - not-encrypted
+    required:
+    - type
+
+
+.. _aws.asg.filters.progagated-tags:
+
+progagated-tags
++++++++++++++++
+Filter ASG based on propagated tags
+
+This filter is designed to find all autoscaling groups that have a list
+of tag keys (provided) that are set to propagate to new instances. Using
+this will allow for easy validation of asg tag sets are in place across an
+account for compliance.
+
+:example:
+
+   .. code-block:: yaml
+
+        policies:
+          - name: asg-non-propagated-tags
+            resource: asg
+            filters:
+              - type: propagated-tags
+                keys: ["ABC", "BCD"]
+                match: false
+                propagate: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      keys:
+        items:
+          type: string
+        type: array
+      match:
+        type: boolean
+      propagate:
+        type: boolean
+      type:
+        enum:
+        - progagated-tags
+        - propagated-tags
+    required:
+    - type
+
+
+.. _aws.asg.filters.user-data:
+
+user-data
++++++++++
+Filter on ASG's whose launch configs have matching userdata.
+Note: It is highly recommended to use regexes with the ?sm flags, since Custodian
+uses re.match() and userdata spans multiple lines.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: lc_userdata
+            resource: asg
+            filters:
+              - type: user-data
+                op: regex
+                value: (?smi).*password=
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - user-data
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.asg.filters.valid:
+
+valid
++++++
+Filters autoscale groups to find those that are structurally valid.
+
+This operates as the inverse of the invalid filter for multi-step
+workflows.
+
+See details on the invalid filter for a list of checks made.
+
+:example:
+
+  .. code-block:: yaml
+
+      policies:
+        - name: asg-valid-config
+          resource: asg
+          filters:
+           - valid
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - valid
+    required:
+    - type
+
+
+.. _aws.asg.filters.vpc-id:
+
+vpc-id
+++++++
+Filters ASG based on the VpcId
+
+This filter is available as a ValueFilter as the vpc-id is not natively
+associated to the results from describing the autoscaling groups.
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: asg-vpc-xyz
+        resource: asg
+        filters:
+          - type: vpc-id
+            value: vpc-12ab34cd
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - vpc-id
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <aws.asg.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.asg.actions.mark-for-op>`
+
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`propagate-tags <aws.asg.actions.propagate-tags>`
+
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.asg.actions.remove-tag>`
+
+  - :ref:`rename-tag <aws.asg.actions.rename-tag>`
+
+  - :ref:`resize <aws.asg.actions.resize>`
+
+  - :ref:`resume <aws.asg.actions.resume>`
+
+  - :ref:`suspend <aws.asg.actions.suspend>`
+
+  - :ref:`tag <aws.asg.actions.tag>`
+
+  - :ref:`tag-trim <aws.common.actions.tag-trim>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.asg.actions.delete:
+
+delete
+++++++
+Action to delete an ASG
+
+The 'force' parameter is needed when deleting an ASG that has instances
+attached to it.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-delete-bad-encryption
+            resource: asg
+            filters:
+              - type: not-encrypted
+                exclude_image: true
+            actions:
+              - type: delete
+                force: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      force:
+        type: boolean
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.asg.actions.mark-for-op:
+
+mark-for-op
++++++++++++
+Action to create a delayed action for a later date
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-suspend-schedule
+            resource: asg
+            filters:
+              - type: value
+                key: MinSize
+                value: 2
+            actions:
+              - type: mark-for-op
+                tag: custodian_suspend
+                message: "Suspending: {op}@{action_date}"
+                op: suspend
+                days: 7
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        minimum: 0
+        type: number
+      hours:
+        minimum: 0
+        type: number
+      key:
+        type: string
+      message:
+        type: string
+      op:
+        type: string
+      tag:
+        type: string
+      type:
+        enum:
+        - mark-for-op
+      tz:
+        type: string
+    required:
+    - type
+
+
+.. _aws.asg.actions.propagate-tags:
+
+propagate-tags
+++++++++++++++
+Propagate tags to an asg instances.
+
+In AWS changing an asg tag does not propagate to instances.
+
+This action exists to do that, and can also trim older tags
+not present on the asg anymore that are present on instances.
+
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-propagate-required
+            resource: asg
+            filters:
+              - "tag:OwnerName": present
+            actions:
+              - type: propagate-tags
+                tags:
+                  - OwnerName
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      tags:
+        items:
+          type: string
+        type: array
+      trim:
+        type: boolean
+      type:
+        enum:
+        - propagate-tags
+    required:
+    - type
+
+
+.. _aws.asg.actions.remove-tag:
+
+remove-tag
+++++++++++
+Action to remove tag/tags from an ASG
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-remove-unnecessary-tags
+            resource: asg
+            filters:
+              - "tag:UnnecessaryTag": present
+            actions:
+              - type: remove-tag
+                key: UnnecessaryTag
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - remove-tag
+        - untag
+        - unmark
+    required:
+    - type
+
+
+.. _aws.asg.actions.rename-tag:
+
+rename-tag
+++++++++++
+Rename a tag on an AutoScaleGroup.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-rename-owner-tag
+            resource: asg
+            filters:
+              - "tag:OwnerNames": present
+            actions:
+              - type: rename-tag
+                propagate: true
+                source: OwnerNames
+                dest: OwnerName
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      dest:
+        type: string
+      propagate:
+        type: boolean
+      source:
+        type: string
+      type:
+        enum:
+        - rename-tag
+    required:
+    - source
+    - dest
+    - type
+
+
+.. _aws.asg.actions.resize:
+
+resize
+++++++
+Action to resize the min/max/desired instances in an ASG
+
+There are several ways to use this action:
+
+1. set min/desired to current running instances
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-resize
+            resource: asg
+            filters:
+              - capacity-delta
+            actions:
+              - type: resize
+                desired-size: "current"
+
+2. apply a fixed resize of min, max or desired, optionally saving the
+   previous values to a named tag (for restoring later):
+
+.. code-block:: yaml
+
+        policies:
+          - name: offhours-asg-off
+            resource: asg
+            filters:
+              - type: offhour
+                offhour: 19
+                default_tz: bst
+            actions:
+              - type: resize
+                min-size: 0
+                desired-size: 0
+                save-options-tag: OffHoursPrevious
+
+3. restore previous values for min/max/desired from a tag:
+
+.. code-block:: yaml
+
+        policies:
+          - name: offhours-asg-on
+            resource: asg
+            filters:
+              - type: onhour
+                onhour: 8
+                default_tz: bst
+            actions:
+              - type: resize
+                restore-options-tag: OffHoursPrevious
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      desired-size:
+        anyOf:
+        - enum:
+          - current
+        - minimum: 0
+          type: integer
+      desired_size:
+        anyOf:
+        - enum:
+          - current
+        - minimum: 0
+          type: integer
+      max-size:
+        minimum: 0
+        type: integer
+      min-size:
+        minimum: 0
+        type: integer
+      restore-options-tag:
+        type: string
+      save-options-tag:
+        type: string
+      type:
+        enum:
+        - resize
+    required:
+    - type
+
+
+.. _aws.asg.actions.resume:
+
+resume
+++++++
+Resume a suspended autoscale group and its instances
+
+Parameter 'delay' is the amount of time (in seconds) to wait
+between resuming instances in the asg, and restarting the internal
+asg processed which gives some grace period before health checks
+turn on within the ASG (default value: 30)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-resume-processes
+            resource: asg
+            filters:
+              - "tag:Resume": present
+            actions:
+              - type: resume
+                delay: 300
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      delay:
+        type: number
+      type:
+        enum:
+        - resume
+    required:
+    - type
+
+
+.. _aws.asg.actions.suspend:
+
+suspend
++++++++
+Action to suspend ASG processes and instances
+
+AWS ASG suspend/resume and process docs
+ https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-suspend-resume-processes.html
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-suspend-processes
+            resource: asg
+            filters:
+              - "tag:SuspendTag": present
+            actions:
+              - type: suspend
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      exclude:
+        items:
+          enum:
+          - Launch
+          - Terminate
+          - HealthCheck
+          - ReplaceUnhealthy
+          - AZRebalance
+          - AlarmNotification
+          - ScheduledActions
+          - AddToLoadBalancer
+        title: ASG Processes to not suspend
+        type: array
+      type:
+        enum:
+        - suspend
+    required:
+    - type
+
+
+.. _aws.asg.actions.tag:
+
+tag
++++
+Action to add a tag to an ASG
+
+The *propagate* parameter can be used to specify that the tag being added
+will need to be propagated down to each ASG instance associated or simply
+to the ASG itself.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: asg-add-owner-tag
+            resource: asg
+            filters:
+              - "tag:OwnerName": absent
+            actions:
+              - type: tag
+                key: OwnerName
+                value: OwnerName
+                propagate: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      msg:
+        type: string
+      propagate:
+        type: boolean
+      tag:
+        type: string
+      tags:
+        type: object
+      type:
+        enum:
+        - tag
+        - mark
+      value:
+        type: string
+    required:
+    - type
+

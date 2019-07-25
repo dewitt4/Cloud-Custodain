@@ -1,0 +1,269 @@
+.. _aws.log-group:
+
+aws.log-group
+=============
+
+
+
+Filters
+-------
+
+
+  - :ref:`cross-account <aws.log-group.filters.cross-account>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`last-write <aws.log-group.filters.last-write>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`metrics <aws.common.filters.metrics>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.log-group.filters.cross-account:
+
+cross-account
++++++++++++++
+Check a resource's embedded iam policy for cross account access.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - cross-account
+      whitelist:
+        items:
+          type: string
+        type: array
+      whitelist_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+    required:
+    - type
+
+
+.. _aws.log-group.filters.last-write:
+
+last-write
+++++++++++
+Filters CloudWatch log groups by last write
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: cloudwatch-stale-groups
+            resource: log-group
+            filters:
+              - type: last-write
+                days: 60
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: number
+      type:
+        enum:
+        - last-write
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <aws.log-group.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`retention <aws.log-group.actions.retention>`
+
+  - :ref:`set-encryption <aws.log-group.actions.set-encryption>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.log-group.actions.delete:
+
+delete
+++++++
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: cloudwatch-delete-stale-log-group
+            resource: log-group
+            filters:
+              - type: last-write
+                days: 182.5
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.log-group.actions.retention:
+
+retention
++++++++++
+Action to set the retention period (in days) for CloudWatch log groups
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: cloudwatch-set-log-group-retention
+            resource: log-group
+            actions:
+              - type: retention
+                days: 200
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: integer
+      type:
+        enum:
+        - retention
+    required:
+    - type
+
+
+.. _aws.log-group.actions.set-encryption:
+
+set-encryption
+++++++++++++++
+Encrypt/Decrypt a log group
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: encrypt-log-group
+        resource: log-group
+        filters:
+          - kmsKeyId: absent
+        actions:
+          - type: set-encryption
+            kms-key: alias/mylogkey
+            state: True
+
+      - name: decrypt-log-group
+        resource: log-group
+        filters:
+          - kmsKeyId: kms:key:arn
+        actions:
+          - type: set-encryption
+            state: False
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      kms-key:
+        type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-encryption
+    required:
+    - type
+

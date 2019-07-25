@@ -1,0 +1,720 @@
+.. _aws.app-elb:
+
+aws.app-elb
+===========
+
+Resource manager for v2 ELBs (AKA ALBs and NLBs).
+    
+
+Filters
+-------
+
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`default-vpc <aws.app-elb.filters.default-vpc>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`health-event <aws.common.filters.health-event>`
+  
+  - :ref:`healthcheck-protocol-mismatch <aws.app-elb.filters.healthcheck-protocol-mismatch>`
+
+  - :ref:`is-logging <aws.app-elb.filters.is-logging>`
+
+  - :ref:`is-not-logging <aws.app-elb.filters.is-not-logging>`
+
+  - :ref:`listener <aws.app-elb.filters.listener>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`metrics <aws.common.filters.metrics>`
+  
+  - :ref:`network-location <aws.common.filters.network-location>`
+  
+  - :ref:`security-group <aws.common.filters.security-group>`
+  
+  - :ref:`shield-enabled <aws.app-elb.filters.shield-enabled>`
+
+  - :ref:`subnet <aws.common.filters.subnet>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`target-group <aws.app-elb.filters.target-group>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+  - :ref:`vpc <aws.common.filters.vpc>`
+  
+  - :ref:`waf-enabled <aws.app-elb.filters.waf-enabled>`
+
+
+
+.. _aws.app-elb.filters.default-vpc:
+
+default-vpc
++++++++++++
+Filter all ELB that exist within the default vpc
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-in-default-vpc
+            resource: app-elb
+            filters:
+              - default-vpc
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - default-vpc
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.healthcheck-protocol-mismatch:
+
+healthcheck-protocol-mismatch
++++++++++++++++++++++++++++++
+Filter AppELBs with mismatched health check protocols
+
+A mismatched health check protocol is where the protocol on the target group
+does not match the load balancer health check protocol
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-healthcheck-mismatch
+            resource: app-elb
+            filters:
+              - healthcheck-protocol-mismatch
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - healthcheck-protocol-mismatch
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.is-logging:
+
+is-logging
+++++++++++
+Matches AppELBs that are logging to S3.
+    bucket and prefix are optional
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+            - name: alb-is-logging-test
+              resource: app-elb
+              filters:
+                - type: is-logging
+
+            - name: alb-is-logging-bucket-and-prefix-test
+              resource: app-elb
+              filters:
+                - type: is-logging
+                  bucket: prodlogs
+                  prefix: alblogs
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      bucket:
+        type: string
+      prefix:
+        type: string
+      type:
+        enum:
+        - is-logging
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.is-not-logging:
+
+is-not-logging
+++++++++++++++
+Matches AppELBs that are NOT logging to S3.
+    or do not match the optional bucket and/or prefix.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+            - name: alb-is-not-logging-test
+              resource: app-elb
+              filters:
+                - type: is-not-logging
+
+            - name: alb-is-not-logging-bucket-and-prefix-test
+              resource: app-elb
+              filters:
+                - type: is-not-logging
+                  bucket: prodlogs
+                  prefix: alblogs
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      bucket:
+        type: string
+      prefix:
+        type: string
+      type:
+        enum:
+        - is-not-logging
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.listener:
+
+listener
+++++++++
+Filter ALB based on matching listener attributes
+
+Adding the `matched` flag will filter on previously matched listeners
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: app-elb-invalid-ciphers
+            resource: app-elb
+            filters:
+              - type: listener
+                key: Protocol
+                value: HTTPS
+              - type: listener
+                key: SslPolicy
+                value: ['ELBSecurityPolicy-TLS-1-1-2017-01','ELBSecurityPolicy-TLS-1-2-2017-01']
+                op: ni
+                matched: true
+            actions:
+              - type: modify-listener
+                sslpolicy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      matched:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - listener
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.shield-enabled:
+
+shield-enabled
+++++++++++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      type:
+        enum:
+        - shield-enabled
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.target-group:
+
+target-group
+++++++++++++
+Filter ALB based on matching target group value
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - target-group
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.app-elb.filters.waf-enabled:
+
+waf-enabled
++++++++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      type:
+        enum:
+        - waf-enabled
+      web-acl:
+        type: string
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <aws.app-elb.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`modify-listener <aws.app-elb.actions.modify-listener>`
+
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`set-s3-logging <aws.app-elb.actions.set-s3-logging>`
+
+  - :ref:`set-shield <aws.app-elb.actions.set-shield>`
+
+  - :ref:`set-waf <aws.app-elb.actions.set-waf>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.app-elb.actions.delete:
+
+delete
+++++++
+Action to delete an ELB
+
+To avoid unwanted deletions of ELB, it is recommended to apply a filter
+to the rule
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-delete-failed-elb
+            resource: app-elb
+            filters:
+              - State: failed
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      force:
+        type: boolean
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.app-elb.actions.modify-listener:
+
+modify-listener
++++++++++++++++
+Action to modify the policy for an App ELB
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-modify-listener
+            resource: app-elb
+            filters:
+              - type: listener
+                key: Protocol
+                value: HTTP
+            actions:
+              - type: modify-listener
+                protocol: HTTPS
+                sslpolicy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+                certificate: "arn:aws:acm:region:123456789012:certificate/12345678-                    1234-1234-1234-123456789012"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      certificate:
+        type: string
+      port:
+        type: integer
+      protocol:
+        enum:
+        - HTTP
+        - HTTPS
+      sslpolicy:
+        type: string
+      type:
+        enum:
+        - modify-listener
+    required:
+    - type
+
+
+.. _aws.app-elb.actions.set-s3-logging:
+
+set-s3-logging
+++++++++++++++
+Action to enable/disable S3 logging for an application loadbalancer.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elbv2-test
+            resource: app-elb
+            filters:
+              - type: value
+                key: Attributes."access_logs.s3.enabled"
+                value: False
+            actions:
+              - type: set-s3-logging
+                bucket: elbv2logtest
+                prefix: dahlogs
+                state: enabled
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      bucket:
+        type: string
+      prefix:
+        type: string
+      state:
+        enum:
+        - enabled
+        - disabled
+      type:
+        enum:
+        - set-s3-logging
+    required:
+    - state
+
+
+.. _aws.app-elb.actions.set-shield:
+
+set-shield
+++++++++++
+Enable shield protection on applicable resource.
+
+setting `sync` parameter will also clear out stale shield protections
+for resources that no longer exist.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      sync:
+        type: boolean
+      type:
+        enum:
+        - set-shield
+    required:
+    - type
+
+
+.. _aws.app-elb.actions.set-waf:
+
+set-waf
++++++++
+Enable/Disable waf protection on applicable resource.
+
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-waf
+      web-acl:
+        type: string
+    required:
+    - web-acl
+    - type
+

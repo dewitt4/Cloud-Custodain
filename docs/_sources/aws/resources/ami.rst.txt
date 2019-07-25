@@ -1,0 +1,355 @@
+.. _aws.ami:
+
+aws.ami
+=======
+
+
+
+Filters
+-------
+
+
+  - :ref:`cross-account <aws.ami.filters.cross-account>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`image-age <aws.ami.filters.image-age>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`unused <aws.ami.filters.unused>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.ami.filters.cross-account:
+
+cross-account
++++++++++++++
+Check a resource's embedded iam policy for cross account access.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - cross-account
+      whitelist:
+        items:
+          type: string
+        type: array
+      whitelist_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+    required:
+    - type
+
+
+.. _aws.ami.filters.image-age:
+
+image-age
++++++++++
+Filters images based on the age (in days)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ami-remove-launch-permissions
+            resource: ami
+            filters:
+              - type: image-age
+                days: 30
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        minimum: 0
+        type: number
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - image-age
+    required:
+    - type
+
+
+.. _aws.ami.filters.unused:
+
+unused
+++++++
+Filters images based on usage
+
+true: image has no instances spawned from it
+false: image has instances spawned from it
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ami-unused
+            resource: ami
+            filters:
+              - type: unused
+                value: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - unused
+      value:
+        type: boolean
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`copy <aws.ami.actions.copy>`
+
+  - :ref:`copy-related-tag <aws.common.actions.copy-related-tag>`
+  
+  - :ref:`deregister <aws.ami.actions.deregister>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`normalize-tag <aws.common.actions.normalize-tag>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-launch-permissions <aws.ami.actions.remove-launch-permissions>`
+
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`rename-tag <aws.common.actions.rename-tag>`
+  
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`tag-trim <aws.common.actions.tag-trim>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.ami.actions.copy:
+
+copy
+++++
+Action to copy AMIs with optional encryption
+
+This action can copy AMIs while optionally encrypting or decrypting
+the target AMI. It is advised to use in conjunction with a filter.
+
+Note there is a max in flight of 5 per account/region.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ami-ensure-encrypted
+            resource: ami
+            filters:
+              - type: value
+                key: encrypted
+                value: true
+            actions:
+              - type: copy
+                encrypt: true
+                key-id: 00000000-0000-0000-0000-000000000000
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      description:
+        type: string
+      encrypt:
+        type: boolean
+      key-id:
+        type: string
+      name:
+        type: string
+      region:
+        type: string
+      type:
+        enum:
+        - copy
+
+
+.. _aws.ami.actions.deregister:
+
+deregister
+++++++++++
+Action to deregister AMI
+
+To prevent deregistering all AMI, it is advised to use in conjunction with
+a filter (such as image-age)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ami-deregister-old
+            resource: ami
+            filters:
+              - type: image-age
+                days: 90
+            actions:
+              - deregister
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      delete-snapshots:
+        type: boolean
+      type:
+        enum:
+        - deregister
+    required:
+    - type
+
+
+.. _aws.ami.actions.remove-launch-permissions:
+
+remove-launch-permissions
++++++++++++++++++++++++++
+Action to remove the ability to launch an instance from an AMI
+
+This action will remove any launch permissions granted to other
+AWS accounts from the image, leaving only the owner capable of
+launching it
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ami-stop-share-old
+            resource: ami
+            filters:
+              - type: image-age
+                days: 60
+            actions:
+              - remove-launch-permissions
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - remove-launch-permissions
+    required:
+    - type
+

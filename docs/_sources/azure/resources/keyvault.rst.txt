@@ -1,0 +1,242 @@
+.. _azure.keyvault:
+
+azure.keyvault
+==============
+
+Key Vault Resource
+
+:example:
+
+This policy will find all KeyVaults with 10 or less API Hits over the last 72 hours
+
+.. code-block:: yaml
+
+    policies:
+      - name: inactive-keyvaults
+        resource: azure.keyvault
+        filters:
+          - type: metric
+            metric: ServiceApiHit
+            op: ge
+            aggregation: total
+            threshold: 10
+            timeframe: 72
+
+:example:
+
+This policy will find all KeyVaults with an access of Service Principals not in the white list
+that exceed read-only access
+
+.. code-block:: yaml
+
+    policies:
+        - name: policy
+          description:
+            Ensure only authorized people have an access
+          resource: azure.keyvault
+          filters:
+            - not:
+              - type: whitelist
+                key: principalName
+                users:
+                  - account1@sample.com
+                  - account2@sample.com
+                permissions:
+                  keys:
+                    - get
+                  secrets:
+                    - get
+                  certificates:
+                    - get
+
+:example:
+
+This policy will find all KeyVaults and add get and list permissions for keys.
+
+.. code-block:: yaml
+
+    policies:
+        - name: policy
+          description:
+            Add get and list permissions to keys access policy
+          resource: azure.keyvault
+          actions:
+            - type: update-access-policy
+              operation: add
+              access-policies:
+                - tenant-id: 00000000-0000-0000-0000-000000000000
+                  object-id: 11111111-1111-1111-1111-111111111111
+                  permissions:
+                    keys:
+                      - get
+                      - list
+
+Filters
+-------
+
+
+  - :ref:`cost <azure.common.filters.cost>`
+  
+  - :ref:`diagnostic-settings <azure.common.filters.diagnostic-settings>`
+  
+  - :ref:`event <azure.common.filters.event>`
+  
+  - :ref:`firewall-rules <azure.common.filters.firewall-rules>`
+  
+  - :ref:`marked-for-op <azure.common.filters.marked-for-op>`
+  
+  - :ref:`metric <azure.common.filters.metric>`
+  
+  - :ref:`offhour <azure.common.filters.offhour>`
+  
+  - :ref:`onhour <azure.common.filters.onhour>`
+  
+  - :ref:`policy-compliant <azure.common.filters.policy-compliant>`
+  
+  - :ref:`resource-lock <azure.common.filters.resource-lock>`
+  
+  - :ref:`value <azure.common.filters.value>`
+  
+  - :ref:`whitelist <azure.keyvault.filters.whitelist>`
+
+
+
+.. _azure.keyvault.filters.whitelist:
+
+whitelist
++++++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      key:
+        type: string
+      permissions:
+        certificates:
+          type: array
+        keys:
+          type: array
+        secrets:
+          type: array
+      type:
+        enum:
+        - whitelist
+      users:
+        type: array
+    required:
+    - key
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-date <azure.common.actions.auto-tag-date>`
+  
+  - :ref:`auto-tag-user <azure.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <azure.common.actions.delete>`
+  
+  - :ref:`lock <azure.common.actions.lock>`
+  
+  - :ref:`logic-app <azure.common.actions.logic-app>`
+  
+  - :ref:`mark-for-op <azure.common.actions.mark-for-op>`
+  
+  - :ref:`notify <azure.common.actions.notify>`
+  
+  - :ref:`tag <azure.common.actions.tag>`
+  
+  - :ref:`tag-trim <azure.common.actions.tag-trim>`
+  
+  - :ref:`untag <azure.common.actions.untag>`
+  
+  - :ref:`update-access-policy <azure.keyvault.actions.update-access-policy>`
+
+  - :ref:`webhook <azure.common.actions.webhook>`
+  
+
+
+
+.. _azure.keyvault.actions.update-access-policy:
+
+update-access-policy
+++++++++++++++++++++
+Adds Get and List key access policy to all keyvaults
+
+    .. code-block:: yaml
+
+      policies:
+        - name: azure-keyvault-update-access-policies
+          resource: azure.keyvault
+          description: |
+            Add key get and list to all keyvault access policies
+          actions:
+           - type: update-access-policy
+             operation: add
+             access-policies:
+              - tenant-id: 00000000-0000-0000-0000-000000000000
+                object-id: 11111111-1111-1111-1111-111111111111
+                permissions:
+                  keys:
+                    - Get
+                    - List
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      access-policies:
+        items:
+          object-id:
+            type: string
+          permissions:
+            certificates:
+              items:
+                type: string
+              type: array
+            keys:
+              items:
+                type: string
+              type: array
+            secrets:
+              items:
+                type: string
+              type: array
+            type: object
+          tenant-id:
+            type: string
+          type: object
+        type: array
+      operation:
+        enum:
+        - add
+        - replace
+        type: string
+      type:
+        enum:
+        - update-access-policy
+    required:
+    - operation
+    - access-policies
+    - type
+

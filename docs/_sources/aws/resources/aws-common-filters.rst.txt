@@ -1,0 +1,1549 @@
+AWS Common Filters
+==================
+
+Filters
+
+
+   - :ref:`check-permissions <AWS.common.filters.check-permissions>`
+
+
+   - :ref:`config-compliance <AWS.common.filters.config-compliance>`
+
+
+   - :ref:`event <AWS.common.filters.event>`
+
+
+   - :ref:`finding <AWS.common.filters.finding>`
+
+
+   - :ref:`health-event <AWS.common.filters.health-event>`
+
+
+   - :ref:`image <AWS.common.filters.image>`
+
+
+   - :ref:`marked-for-op <AWS.common.filters.marked-for-op>`
+
+
+   - :ref:`metrics <AWS.common.filters.metrics>`
+
+
+   - :ref:`network-location <AWS.common.filters.network-location>`
+
+
+   - :ref:`offhour <AWS.common.filters.offhour>`
+
+
+   - :ref:`onhour <AWS.common.filters.onhour>`
+
+
+   - :ref:`security-group <AWS.common.filters.security-group>`
+
+
+   - :ref:`shield-metrics <AWS.common.filters.shield-metrics>`
+
+
+   - :ref:`subnet <AWS.common.filters.subnet>`
+
+
+   - :ref:`tag-count <AWS.common.filters.tag-count>`
+
+
+   - :ref:`usage <AWS.common.filters.usage>`
+
+
+   - :ref:`value <AWS.common.filters.value>`
+
+
+   - :ref:`vpc <AWS.common.filters.vpc>`
+
+
+
+
+.. _AWS.common.filters.check-permissions:
+
+check-permissions
++++++++++++++++++
+
+Check IAM permissions associated with a resource.
+
+:example:
+
+Find users that can create other users
+
+.. code-block:: yaml
+
+    policies:
+      - name: super-users
+        resource: iam-user
+        filters:
+          - type: check-permissions
+            match: allowed
+            actions:
+             - iam:CreateUser
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      match:
+        oneOf:
+        - enum:
+          - allowed
+          - denied
+        - $ref: '#/definitions/filters/valuekv'
+        - $ref: '#/definitions/filters/value'
+      match-operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - check-permissions
+    required:
+    - actions
+    - match
+
+
+
+.. _AWS.common.filters.config-compliance:
+
+config-compliance
++++++++++++++++++
+
+Filter resources by their compliance with one or more AWS config rules.
+
+An example of using the filter to find all ec2 instances that have
+been registered as non compliant in the last 30 days against two
+custom AWS Config rules.
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: non-compliant-ec2
+       resource: ec2
+       filters:
+        - type: config-compliance
+          eval_filters:
+           - type: value
+             key: ResultRecordedTime
+             value_type: age
+             value: 30
+             op: less-than
+          rules:
+           - custodian-ec2-encryption-required
+           - custodian-ec2-tags-required
+
+Also note, custodian has direct support for deploying policies as config
+rules see https://bit.ly/2mblVpq
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      eval_filters:
+        items:
+          oneOf:
+          - $ref: '#/definitions/filters/valuekv'
+          - $ref: '#/definitions/filters/value'
+        type: array
+      op:
+        enum:
+        - or
+        - and
+      rules:
+        items:
+          type: string
+        type: array
+      states:
+        items:
+          enum:
+          - COMPLIANT
+          - NON_COMPLIANT
+          - NOT_APPLICABLE
+          - INSUFFICIENT_DATA
+        type: array
+      type:
+        enum:
+        - config-compliance
+    required:
+    - rules
+
+
+
+.. _AWS.common.filters.event:
+
+event
++++++
+
+Filter a resource based on an event.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - event
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.finding:
+
+finding
++++++++
+
+Check if there are Security Hub Findings related to the resources
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      query:
+        type: object
+      region:
+        type: string
+      type:
+        enum:
+        - finding
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.health-event:
+
+health-event
+++++++++++++
+
+Check if there are operations health events (phd) related to the resources
+
+https://aws.amazon.com/premiumsupport/technology/personal-health-dashboard/
+
+Health events are stored as annotation on a resource.
+
+Custodian also supports responding to phd events via a lambda execution mode.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      category:
+        items:
+          enum:
+          - issue
+          - accountNotification
+          - scheduledChange
+        type: array
+      statuses:
+        items:
+          enum:
+          - open
+          - upcoming
+          - closed
+          type: string
+        type: array
+      type:
+        enum:
+        - health-event
+      types:
+        items:
+          type: string
+        type: array
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.image:
+
+image
++++++
+
+Filter asg by image
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: non-windows-asg
+        resource: asg
+        filters:
+          - type: image
+            key: Platform
+            value: Windows
+            op: ne
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - image
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.marked-for-op:
+
+marked-for-op
++++++++++++++
+
+Filter resources for tag specified future action
+
+Filters resources by a 'custodian_status' tag which specifies a future
+date for an action.
+
+The filter parses the tag values looking for an 'op@date'
+string. The date is parsed and compared to do today's date, the
+filter succeeds if today's date is gte to the target date.
+
+The optional 'skew' parameter provides for incrementing today's
+date a number of days into the future. An example use case might
+be sending a final notice email a few days before terminating an
+instance, or snapshotting a volume prior to deletion.
+
+The optional 'skew_hours' parameter provides for incrementing the current
+time a number of hours into the future.
+
+Optionally, the 'tz' parameter can get used to specify the timezone
+in which to interpret the clock (default value is 'utc')
+
+.. code-block :: yaml
+
+  policies:
+    - name: ec2-stop-marked
+      resource: ec2
+      filters:
+        - type: marked-for-op
+          # The default tag used is custodian_status
+          # but that is configurable
+          tag: custodian_status
+          op: stop
+          # Another optional tag is skew
+          tz: utc
+      actions:
+        - type: stop
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      op:
+        type: string
+      skew:
+        minimum: 0
+        type: number
+      skew_hours:
+        minimum: 0
+        type: number
+      tag:
+        type: string
+      type:
+        enum:
+        - marked-for-op
+      tz:
+        type: string
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.metrics:
+
+metrics
++++++++
+
+Supports cloud watch metrics filters on resources.
+
+All resources that have cloud watch metrics are supported.
+
+Docs on cloud watch metrics
+
+- GetMetricStatistics
+  https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricStatistics.html
+
+- Supported Metrics
+  https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/aws-services-cloudwatch-metrics.html
+
+.. code-block:: yaml
+
+  - name: ec2-underutilized
+    resource: ec2
+    filters:
+      - type: metrics
+        name: CPUUtilization
+        days: 4
+        period: 86400
+        value: 30
+        op: less-than
+
+Note periods when a resource is not sending metrics are not part
+of calculated statistics as in the case of a stopped ec2 instance,
+nor for resources to new to have existed the entire
+period. ie. being stopped for an ec2 instance wouldn't lower the
+average cpu utilization.
+
+The "missing-value" key allows a policy to specify a default
+value when CloudWatch has no data to report:
+
+.. code-block:: yaml
+
+  - name: elb-low-request-count
+    resource: elb
+    filters:
+      - type: metrics
+        name: RequestCount
+        statistics: Sum
+        days: 7
+        value: 7
+        missing-value: 0
+        op: less-than
+
+This policy matches any ELB with fewer than 7 requests for the past week.
+ELBs with no requests during that time will have an empty set of metrics.
+Rather than skipping those resources, "missing-value: 0" causes the
+policy to treat their request counts as 0.
+
+Note the default statistic for metrics is Average.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      attr-multiplier:
+        type: number
+      days:
+        type: number
+      dimensions:
+        items:
+          type: string
+        type: array
+      missing-value:
+        type: number
+      name:
+        type: string
+      namespace:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+        type: string
+      percent-attr:
+        type: string
+      period:
+        type: number
+      statistics:
+        enum:
+        - Average
+        - Sum
+        - Maximum
+        - Minimum
+        - SampleCount
+        type: string
+      type:
+        enum:
+        - metrics
+      value:
+        type: number
+    required:
+    - value
+    - name
+
+
+
+.. _AWS.common.filters.network-location:
+
+network-location
+++++++++++++++++
+
+On a network attached resource, determine intersection of
+security-group attributes, subnet attributes, and resource attributes.
+
+The use case is a bit specialized, for most use cases using `subnet`
+and `security-group` filters suffice. but say for example you wanted to
+verify that an ec2 instance was only using subnets and security groups
+with a given tag value, and that tag was not present on the resource.
+
+:Example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: ec2-mismatched-sg-remove
+        resource: ec2
+        filters:
+          - type: network-location
+            compare: ["resource","security-group"]
+            key: "tag:TEAM_NAME"
+            ignore:
+              - "tag:TEAM_NAME": Enterprise
+        actions:
+          - type: modify-security-groups
+            remove: network-location
+            isolation-group: sg-xxxxxxxx
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      compare:
+        default:
+        - resource
+        - subnet
+        - security-group
+        description: Which elements of network location should be considered when matching.
+        items:
+          enum:
+          - resource
+          - subnet
+          - security-group
+        type: array
+      ignore:
+        items:
+          type: object
+        type: array
+      key:
+        description: The attribute expression that should be matched on
+        type: string
+      match:
+        default: non-equal
+        enum:
+        - equal
+        - not-equal
+        type: string
+      max-cardinality:
+        default: 1
+        title: ''
+        type: integer
+      missing-ok:
+        default: false
+        description: How to handle missing keys on elements, by default this causesresources
+          to be considered not-equal
+        type: boolean
+      type:
+        enum:
+        - network-location
+    required:
+    - key
+    - type
+
+
+
+.. _AWS.common.filters.offhour:
+
+offhour
++++++++
+
+Schedule offhours for resources see :ref:`offhours <offhours>`
+for features and configuration.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default_tz:
+        type: string
+      offhour:
+        maximum: 23
+        minimum: 0
+        type: integer
+      opt-out:
+        type: boolean
+      skip-days:
+        items:
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}
+          type: string
+        type: array
+      skip-days-from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      tag:
+        type: string
+      type:
+        enum:
+        - offhour
+      weekends:
+        type: boolean
+      weekends-only:
+        type: boolean
+    required:
+    - offhour
+    - default_tz
+    - type
+
+
+
+.. _AWS.common.filters.onhour:
+
+onhour
+++++++
+
+Schedule offhours for resources see :ref:`offhours <offhours>`
+for features and configuration.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default_tz:
+        type: string
+      onhour:
+        maximum: 23
+        minimum: 0
+        type: integer
+      opt-out:
+        type: boolean
+      skip-days:
+        items:
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}
+          type: string
+        type: array
+      skip-days-from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      tag:
+        type: string
+      type:
+        enum:
+        - onhour
+      weekends:
+        type: boolean
+      weekends-only:
+        type: boolean
+    required:
+    - onhour
+    - default_tz
+    - type
+
+
+
+.. _AWS.common.filters.security-group:
+
+security-group
+++++++++++++++
+
+Filter a resource by its associated security groups.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - security-group
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.shield-metrics:
+
+shield-metrics
+++++++++++++++
+
+Specialized metrics filter for shield
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      attr-multiplier:
+        type: number
+      days:
+        type: number
+      dimensions:
+        items:
+          type: string
+        type: array
+      missing-value:
+        type: number
+      name:
+        type: string
+      namespace:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+        type: string
+      percent-attr:
+        type: string
+      period:
+        type: number
+      statistics:
+        enum:
+        - Average
+        - Sum
+        - Maximum
+        - Minimum
+        - SampleCount
+        type: string
+      type:
+        enum:
+        - shield-metrics
+      value:
+        type: number
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.subnet:
+
+subnet
+++++++
+
+Filter a resource by its associated subnets.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - subnet
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.tag-count:
+
+tag-count
++++++++++
+
+Simplify tag counting..
+
+ie. these two blocks are equivalent
+
+.. code-block :: yaml
+
+   - filters:
+       - type: value
+         op: gte
+         count: 8
+
+   - filters:
+       - type: tag-count
+         count: 8
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      count:
+        minimum: 0
+        type: integer
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - tag-count
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.usage:
+
+usage
++++++
+
+Filter iam resources by their api/service usage.
+
+Note recent activity (last 4hrs) may not be shown, evaluation
+is against the last 365 days of data.
+
+Each service access record is evaluated against all specified
+attributes.  Attribute filters can be specified in short form k:v
+pairs or in long form as a value type filter.
+
+match-operator allows to specify how a resource is treated across
+service access record matches. 'any' means a single matching
+service record will return the policy resource as matching. 'all'
+means all service access records have to match.
+
+
+Find iam users that have not used any services in the last year
+
+:example:
+
+.. code-block:: yaml
+
+  - name: unused-users
+    resource: iam-user
+    filters:
+      - type: usage
+        match-operator: all
+        LastAuthenticated: null
+
+Find iam users that have used dynamodb in last 30 days
+
+:example:
+
+.. code-block:: yaml
+
+  - name: unused-users
+    resource: iam-user
+    filters:
+      - type: usage
+        ServiceNamespace: dynamodb
+        TotalAuthenticatedEntities: 1
+        LastAuthenticated:
+          type: value
+          value_type: age
+          op: less-than
+          value: 30
+        match-operator: any
+
+https://aws.amazon.com/blogs/security/automate-analyzing-permissions-using-iam-access-advisor/
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      LastAuthenticated:
+        oneOf:
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+        - $ref: '#/definitions/filters/value'
+      LastAuthenticatedEntity:
+        oneOf:
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+        - $ref: '#/definitions/filters/value'
+      ServiceName:
+        oneOf:
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+        - $ref: '#/definitions/filters/value'
+      ServiceNamespace:
+        oneOf:
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+        - $ref: '#/definitions/filters/value'
+      TotalAuthenticatedEntities:
+        oneOf:
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+        - $ref: '#/definitions/filters/value'
+      match-operator:
+        enum:
+        - all
+        - any
+      poll-delay:
+        type: number
+      type:
+        enum:
+        - usage
+    required:
+    - match-operator
+
+
+
+.. _AWS.common.filters.value:
+
+value
++++++
+
+Generic value filter using jmespath
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - value
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+.. _AWS.common.filters.vpc:
+
+vpc
++++
+
+Filter a resource by its associated vpc.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - vpc
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+
+

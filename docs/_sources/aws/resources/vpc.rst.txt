@@ -1,0 +1,803 @@
+.. _aws.vpc:
+
+aws.vpc
+=======
+
+
+
+Filters
+-------
+
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`dhcp-options <aws.vpc.filters.dhcp-options>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`flow-logs <aws.vpc.filters.flow-logs>`
+
+  - :ref:`internet-gateway <aws.vpc.filters.internet-gateway>`
+
+  - :ref:`json-diff <aws.vpc.filters.json-diff>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`nat-gateway <aws.vpc.filters.nat-gateway>`
+
+  - :ref:`security-group <aws.vpc.filters.security-group>`
+
+  - :ref:`subnet <aws.vpc.filters.subnet>`
+
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+  - :ref:`vpc-attributes <aws.vpc.filters.vpc-attributes>`
+
+
+
+.. _aws.vpc.filters.dhcp-options:
+
+dhcp-options
+++++++++++++
+Filter VPCs based on their dhcp options
+
+ :example:
+
+ .. code-block:: yaml
+
+      policies:
+         - name: vpcs-in-domain
+           resource: vpc
+           filters:
+             - type: dhcp-options
+               domain-name: ec2.internal
+
+if an option value is specified as a list, then all elements must be present.
+if an option value is specified as a string, then that string must be present.
+
+vpcs not matching a given option value can be found via specifying
+a `present: false` parameter.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      domain-name:
+        oneOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+      domain-name-servers:
+        oneOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+      ntp-servers:
+        oneOf:
+        - items:
+            type: string
+          type: array
+        - type: string
+      present:
+        type: boolean
+      type:
+        enum:
+        - dhcp-options
+    required:
+    - type
+
+
+.. _aws.vpc.filters.flow-logs:
+
+flow-logs
++++++++++
+Are flow logs enabled on the resource.
+
+ie to find all vpcs with flows logs disabled we can do this
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: flow-logs-enabled
+            resource: vpc
+            filters:
+              - flow-logs
+
+or to find all vpcs with flow logs but that don't match a
+particular configuration.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: flow-mis-configured
+            resource: vpc
+            filters:
+              - not:
+                - type: flow-logs
+                  enabled: true
+                  set-op: or
+                  op: equal
+                  # equality operator applies to following keys
+                  traffic-type: all
+                  status: active
+                  log-group: vpc-logs
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      deliver-status:
+        enum:
+        - success
+        - failure
+      destination:
+        type: string
+      destination-type:
+        enum:
+        - s3
+        - cloud-watch-logs
+      enabled:
+        default: false
+        type: boolean
+      log-group:
+        type: string
+      op:
+        default: equal
+        enum:
+        - equal
+        - not-equal
+      set-op:
+        default: or
+        enum:
+        - or
+        - and
+      status:
+        enum:
+        - active
+      traffic-type:
+        enum:
+        - accept
+        - reject
+        - all
+      type:
+        enum:
+        - flow-logs
+    required:
+    - type
+
+
+.. _aws.vpc.filters.internet-gateway:
+
+internet-gateway
+++++++++++++++++
+Filter VPCs based on Internet Gateway attributes
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: vpc-by-igw
+            resource: vpc
+            filters:
+              - type: internet-gateway
+                key: tag:Color
+                value: Gray
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - internet-gateway
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.vpc.filters.json-diff:
+
+json-diff
++++++++++
+Compute the diff from the current resource to a previous version.
+
+A resource matches the filter if a diff exists between the current
+resource and the selected revision.
+
+Utilizes config as a resource revision database.
+
+Revisions can be selected by date, against the previous version, and
+against a locked version (requires use of is-locked filter).
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      selector:
+        enum:
+        - previous
+        - date
+        - locked
+      selector_value:
+        type: string
+      type:
+        enum:
+        - json-diff
+    required:
+    - type
+
+
+.. _aws.vpc.filters.nat-gateway:
+
+nat-gateway
++++++++++++
+Filter VPCs based on NAT Gateway attributes
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: vpc-by-nat
+            resource: vpc
+            filters:
+              - type: nat-gateway
+                key: tag:Color
+                value: Gray
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - nat-gateway
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.vpc.filters.security-group:
+
+security-group
+++++++++++++++
+Filter VPCs based on Security Group attributes
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: vpc-by-sg
+            resource: vpc
+            filters:
+              - type: security-group
+                key: tag:Color
+                value: Gray
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - security-group
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.vpc.filters.subnet:
+
+subnet
+++++++
+Filter VPCs based on Subnet attributes
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: vpc-by-subnet
+            resource: vpc
+            filters:
+              - type: subnet
+                key: tag:Color
+                value: Gray
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      match-resource:
+        type: boolean
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      operator:
+        enum:
+        - and
+        - or
+      type:
+        enum:
+        - subnet
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.vpc.filters.vpc-attributes:
+
+vpc-attributes
+++++++++++++++
+Filters VPCs based on their DNS attributes
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: dns-hostname-enabled
+            resource: vpc
+            filters:
+              - type: vpc-attributes
+                dnshostnames: True
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      dnshostnames:
+        type: boolean
+      dnssupport:
+        type: boolean
+      type:
+        enum:
+        - vpc-attributes
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`copy-related-tag <aws.common.actions.copy-related-tag>`
+  
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`normalize-tag <aws.common.actions.normalize-tag>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`rename-tag <aws.common.actions.rename-tag>`
+  
+  - :ref:`set-flow-log <aws.vpc.actions.set-flow-log>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`tag-trim <aws.common.actions.tag-trim>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.vpc.actions.set-flow-log:
+
+set-flow-log
+++++++++++++
+Create flow logs for a network resource
+
+:example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: vpc-enable-flow-logs
+        resource: vpc
+        filters:
+          - type: flow-logs
+            enabled: false
+        actions:
+          - type: set-flow-log
+            DeliverLogsPermissionArn: arn:iam:role
+            LogGroupName: /custodian/vpc/flowlogs/
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      DeliverLogsPermissionArn:
+        type: string
+      LogDestination:
+        type: string
+      LogDestinationType:
+        enum:
+        - s3
+        - cloud-watch-logs
+      LogGroupName:
+        type: string
+      TrafficType:
+        enum:
+        - ACCEPT
+        - REJECT
+        - ALL
+        type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-flow-log
+

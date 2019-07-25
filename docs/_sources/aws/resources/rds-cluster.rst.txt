@@ -1,0 +1,305 @@
+.. _aws.rds-cluster:
+
+aws.rds-cluster
+===============
+
+Resource manager for RDS clusters.
+    
+
+Filters
+-------
+
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`metrics <aws.common.filters.metrics>`
+  
+  - :ref:`network-location <aws.common.filters.network-location>`
+  
+  - :ref:`offhour <aws.common.filters.offhour>`
+  
+  - :ref:`onhour <aws.common.filters.onhour>`
+  
+  - :ref:`security-group <aws.common.filters.security-group>`
+  
+  - :ref:`subnet <aws.common.filters.subnet>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <aws.rds-cluster.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`modify-db-cluster <aws.rds-cluster.actions.modify-db-cluster>`
+
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`retention <aws.rds-cluster.actions.retention>`
+
+  - :ref:`snapshot <aws.rds-cluster.actions.snapshot>`
+
+  - :ref:`start <aws.rds-cluster.actions.start>`
+
+  - :ref:`stop <aws.rds-cluster.actions.stop>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.rds-cluster.actions.delete:
+
+delete
+++++++
+Action to delete a RDS cluster
+
+To prevent unwanted deletion of clusters, it is recommended to apply a
+filter to the rule
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: rds-cluster-delete-unused
+            resource: rds-cluster
+            filters:
+              - type: metrics
+                name: CPUUtilization
+                days: 21
+                value: 1.0
+                op: le
+            actions:
+              - type: delete
+                skip-snapshot: false
+                delete-instances: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      delete-instances:
+        type: boolean
+      skip-snapshot:
+        type: boolean
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.rds-cluster.actions.modify-db-cluster:
+
+modify-db-cluster
++++++++++++++++++
+Modifies an RDS instance based on specified parameter
+using ModifyDbInstance.
+
+'Immediate" determines whether the modification is applied immediately
+or not. If 'immediate' is not specified, default is false.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: disable-db-cluster-deletion-protection
+            resource: rds-cluster
+            filters:
+              - DeletionProtection: true
+              - PubliclyAccessible: true
+            actions:
+              - type: modify-db-cluster
+                attributes:
+                    CopyTagsToSnapshot: true
+                    DeletionProtection: false
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      attributes:
+        type: object
+      type:
+        enum:
+        - modify-db-cluster
+    required:
+    - attributes
+
+
+.. _aws.rds-cluster.actions.retention:
+
+retention
++++++++++
+Action to set the retention period on rds cluster snapshots,
+enforce (min, max, exact) sets retention days occordingly.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: rds-cluster-backup-retention
+            resource: rds-cluster
+            filters:
+              - type: value
+                key: BackupRetentionPeriod
+                value: 21
+                op: ne
+            actions:
+              - type: retention
+                days: 21
+                enforce: min
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: number
+      enforce:
+        enum:
+        - min
+        - max
+        - exact
+        type: string
+      type:
+        enum:
+        - retention
+    required:
+    - type
+
+
+.. _aws.rds-cluster.actions.snapshot:
+
+snapshot
+++++++++
+Action to create a snapshot of a rds cluster
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: rds-cluster-snapshot
+            resource: rds-cluster
+            actions:
+              - snapshot
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - snapshot
+    required:
+    - type
+
+
+.. _aws.rds-cluster.actions.start:
+
+start
++++++
+Start a stopped db cluster
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - start
+    required:
+    - type
+
+
+.. _aws.rds-cluster.actions.stop:
+
+stop
+++++
+Stop a running db cluster
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - stop
+    required:
+    - type
+

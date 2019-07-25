@@ -1,0 +1,318 @@
+.. _aws.ecr:
+
+aws.ecr
+=======
+
+
+
+Filters
+-------
+
+
+  - :ref:`cross-account <aws.ecr.filters.cross-account>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`lifecycle-rule <aws.ecr.filters.lifecycle-rule>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.ecr.filters.cross-account:
+
+cross-account
++++++++++++++
+Filters all EC2 Container Registries (ECR) with cross-account access
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ecr-cross-account
+            resource: ecr
+            filters:
+              - type: cross-account
+                whitelist_from:
+                  expr: "accounts.*.accountNumber"
+                  url: accounts_url
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      everyone_only:
+        type: boolean
+      type:
+        enum:
+        - cross-account
+      whitelist:
+        items:
+          type: string
+        type: array
+      whitelist_conditions:
+        items:
+          type: string
+        type: array
+      whitelist_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      whitelist_orgids:
+        items:
+          type: string
+        type: array
+      whitelist_orgids_from: *id001
+      whitelist_vpc:
+        items:
+          type: string
+        type: array
+      whitelist_vpc_from: *id001
+      whitelist_vpce:
+        items:
+          type: string
+        type: array
+      whitelist_vpce_from: *id001
+    required:
+    - type
+
+
+.. _aws.ecr.filters.lifecycle-rule:
+
+lifecycle-rule
+++++++++++++++
+Lifecycle rule filtering
+
+:Example:
+
+.. code-block:: yaml
+
+   policies:
+    - name: ecr-life
+      resource: aws.ecr
+      filters:
+        - type: lifecycle-rule
+          state: False
+          match:
+            - selection.tagStatus: untagged
+            - action.type: expire
+            - type: value
+              key: selection.countNumber
+              value: 30
+              op: less-than
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      match:
+        items:
+          oneOf:
+          - $ref: '#/definitions/filters/value'
+          - maxProperties: 1
+            minProperties: 1
+            type: object
+        type: array
+      state:
+        type: boolean
+      type:
+        enum:
+        - lifecycle-rule
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-statements <aws.ecr.actions.remove-statements>`
+
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`set-lifecycle <aws.ecr.actions.set-lifecycle>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.ecr.actions.remove-statements:
+
+remove-statements
++++++++++++++++++
+Action to remove policy statements from ECR
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: ecr-remove-cross-accounts
+            resource: ecr
+            filters:
+              - type: cross-account
+            actions:
+              - type: remove-statements
+                statement_ids: matched
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statement_ids:
+        oneOf:
+        - enum:
+          - matched
+          - '*'
+        - items:
+            type: string
+          type: array
+      type:
+        enum:
+        - remove-statements
+    required:
+    - statement_ids
+    - type
+
+
+.. _aws.ecr.actions.set-lifecycle:
+
+set-lifecycle
++++++++++++++
+Set the lifecycle policy for ECR repositories.
+
+
+Note at the moment this is limited to set/delete/replacement of
+lifecycle policies, not merge.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      rules:
+        items:
+          additionalProperties: false
+          properties:
+            action:
+              additionalProperties: false
+              properties:
+                type:
+                  enum:
+                  - expire
+              required:
+              - type
+              type: object
+            description:
+              type: string
+            rulePriority:
+              type: integer
+            selection:
+              addtionalProperties: false
+              properties:
+                countNumber:
+                  type: integer
+                countType:
+                  enum:
+                  - imageCountMoreThan
+                  - sinceImagePushed
+                countUnit:
+                  enum:
+                  - hours
+                  - days
+                tagPrefixList:
+                  items:
+                    type: string
+                  type: array
+                tagStatus:
+                  enum:
+                  - tagged
+                  - untagged
+                  - any
+              required:
+              - countType
+              - countUnit
+              type: object
+          required:
+          - rulePriority
+          - action
+          - selection
+          type: object
+        type: array
+      state:
+        type: boolean
+      type:
+        enum:
+        - set-lifecycle
+    required:
+    - type
+

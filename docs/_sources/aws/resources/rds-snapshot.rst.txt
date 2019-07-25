@@ -1,0 +1,362 @@
+.. _aws.rds-snapshot:
+
+aws.rds-snapshot
+================
+
+Resource manager for RDS DB snapshots.
+    
+
+Filters
+-------
+
+
+  - :ref:`age <aws.rds-snapshot.filters.age>`
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`cross-account <aws.rds-snapshot.filters.cross-account>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`latest <aws.rds-snapshot.filters.latest>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`onhour <aws.common.filters.onhour>`
+  
+  - :ref:`tag-count <aws.common.filters.tag-count>`
+  
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.rds-snapshot.filters.age:
+
+age
++++
+Filters RDS snapshots based on age (in days)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: rds-snapshot-expired
+            resource: rds-snapshot
+            filters:
+              - type: age
+                days: 28
+                op: ge
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      days:
+        type: number
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - age
+    required:
+    - type
+
+
+.. _aws.rds-snapshot.filters.cross-account:
+
+cross-account
++++++++++++++
+Check a resource's embedded iam policy for cross account access.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      everyone_only:
+        type: boolean
+      type:
+        enum:
+        - cross-account
+      whitelist:
+        items:
+          type: string
+        type: array
+      whitelist_conditions:
+        items:
+          type: string
+        type: array
+      whitelist_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      whitelist_orgids:
+        items:
+          type: string
+        type: array
+      whitelist_orgids_from: *id001
+      whitelist_vpc:
+        items:
+          type: string
+        type: array
+      whitelist_vpc_from: *id001
+      whitelist_vpce:
+        items:
+          type: string
+        type: array
+      whitelist_vpce_from: *id001
+    required:
+    - type
+
+
+.. _aws.rds-snapshot.filters.latest:
+
+latest
+++++++
+Return the latest snapshot for each database.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      automatic:
+        type: boolean
+      type:
+        enum:
+        - latest
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`delete <aws.rds-snapshot.actions.delete>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`region-copy <aws.rds-snapshot.actions.region-copy>`
+
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`restore <aws.rds-snapshot.actions.restore>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.rds-snapshot.actions.delete:
+
+delete
+++++++
+Deletes a RDS snapshot resource
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: rds-snapshot-delete-stale
+            resource: rds-snapshot
+            filters:
+              - type: age
+                days: 28
+                op: ge
+            actions:
+              - delete
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.rds-snapshot.actions.region-copy:
+
+region-copy
++++++++++++
+Copy a snapshot across regions.
+
+Note there is a max in flight for cross region rds snapshots
+of 5 per region. This action will attempt to retry automatically
+for an hr.
+
+Example::
+
+  - name: copy-encrypted-snapshots
+    description: |
+      copy snapshots under 1 day old to dr region with kms
+    resource: rdb-snapshot
+    region: us-east-1
+    filters:
+     - Status: available
+     - type: value
+       key: SnapshotCreateTime
+       value_type: age
+       value: 1
+       op: less-than
+    actions:
+      - type: region-copy
+        target_region: us-east-2
+        target_key: arn:aws:kms:us-east-2:0000:key/cb291f53-c9cf61
+        copy_tags: true
+        tags:
+          - OriginRegion: us-east-1
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      copy_tags:
+        type: boolean
+      tags:
+        type: object
+      target_key:
+        type: string
+      target_region:
+        type: string
+      type:
+        enum:
+        - region-copy
+    required:
+    - target_region
+
+
+.. _aws.rds-snapshot.actions.restore:
+
+restore
++++++++
+Restore an rds instance from a snapshot.
+
+Note this requires the snapshot or db deletion be taken
+with the `copy-restore-info` boolean flag set to true, as
+various instance metadata is stored on the snapshot as tags.
+
+additional parameters to restore db instance api call be overriden
+via `restore_options` settings. various modify db instance parameters
+can be specified via `modify_options` settings.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      modify_options:
+        type: object
+      restore_options:
+        type: object
+      type:
+        enum:
+        - restore
+    required:
+    - type
+

@@ -1,0 +1,1607 @@
+.. _aws.s3:
+
+aws.s3
+======
+
+
+
+Filters
+-------
+
+
+  - :ref:`bucket-encryption <aws.s3.filters.bucket-encryption>`
+
+  - :ref:`bucket-notification <aws.s3.filters.bucket-notification>`
+
+  - :ref:`config-compliance <aws.common.filters.config-compliance>`
+  
+  - :ref:`cross-account <aws.s3.filters.cross-account>`
+
+  - :ref:`data-events <aws.s3.filters.data-events>`
+
+  - :ref:`event <aws.common.filters.event>`
+  
+  - :ref:`finding <aws.common.filters.finding>`
+  
+  - :ref:`global-grants <aws.s3.filters.global-grants>`
+
+  - :ref:`has-statement <aws.s3.filters.has-statement>`
+
+  - :ref:`inventory <aws.s3.filters.inventory>`
+
+  - :ref:`is-log-target <aws.s3.filters.is-log-target>`
+
+  - :ref:`marked-for-op <aws.common.filters.marked-for-op>`
+  
+  - :ref:`metrics <aws.common.filters.metrics>`
+  
+  - :ref:`missing-policy-statement <aws.s3.filters.missing-policy-statement>`
+
+  - :ref:`no-encryption-statement <aws.s3.filters.no-encryption-statement>`
+
+  - :ref:`value <aws.common.filters.value>`
+  
+
+
+.. _aws.s3.filters.bucket-encryption:
+
+bucket-encryption
++++++++++++++++++
+Filters for S3 buckets that have bucket-encryption
+
+:example
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-bucket-encryption-AES256
+            resource: s3
+            region: us-east-1
+            filters:
+              - type: bucket-encryption
+                state: True
+                crypto: AES256
+          - name: s3-bucket-encryption-KMS
+            resource: s3
+            region: us-east-1
+            filters:
+              - type: bucket-encryption
+                state: True
+                crypto: aws:kms
+                key: alias/some/alias/key
+          - name: s3-bucket-encryption-off
+            resource: s3
+            region: us-east-1
+            filters:
+              - type: bucket-encryption
+                state: False
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      crypto:
+        enum:
+        - AES256
+        - aws:kms
+        type: string
+      key:
+        type: string
+      state:
+        type: boolean
+      type:
+        enum:
+        - bucket-encryption
+    required:
+    - type
+
+
+.. _aws.s3.filters.bucket-notification:
+
+bucket-notification
++++++++++++++++++++
+Filter based on bucket notification configuration.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: delete-incorrect-notification
+            resource: s3
+            filters:
+              - type: bucket-notification
+                kind: lambda
+                key: Id
+                value: "IncorrectLambda"
+                op: eq
+            actions:
+              - type: delete-bucket-notification
+                statement_ids: matched
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      kind:
+        enum:
+        - lambda
+        - sns
+        - sqs
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - bucket-notification
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - kind
+    - type
+
+
+.. _aws.s3.filters.cross-account:
+
+cross-account
++++++++++++++
+Filters cross-account access to S3 buckets
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-acl
+            resource: s3
+            region: us-east-1
+            filters:
+              - type: cross-account
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      everyone_only:
+        type: boolean
+      type:
+        enum:
+        - cross-account
+      whitelist:
+        items:
+          type: string
+        type: array
+      whitelist_conditions:
+        items:
+          type: string
+        type: array
+      whitelist_from: &id001
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      whitelist_orgids:
+        items:
+          type: string
+        type: array
+      whitelist_orgids_from: *id001
+      whitelist_vpc:
+        items:
+          type: string
+        type: array
+      whitelist_vpc_from: *id001
+      whitelist_vpce:
+        items:
+          type: string
+        type: array
+      whitelist_vpce_from: *id001
+    required:
+    - type
+
+
+.. _aws.s3.filters.data-events:
+
+data-events
++++++++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      state:
+        enum:
+        - present
+        - absent
+      type:
+        enum:
+        - data-events
+    required:
+    - type
+
+
+.. _aws.s3.filters.global-grants:
+
+global-grants
++++++++++++++
+Filters for all S3 buckets that have global-grants
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: remove-global-grants
+            resource: s3
+            filters:
+              - type: global-grants
+            actions:
+              - delete-global-grants
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      allow_website:
+        type: boolean
+      operator:
+        enum:
+        - or
+        - and
+        type: string
+      permissions:
+        items:
+          enum:
+          - READ
+          - WRITE
+          - WRITE_ACP
+          - READ_ACP
+          - FULL_CONTROL
+          type: string
+        type: array
+      type:
+        enum:
+        - global-grants
+    required:
+    - type
+
+
+.. _aws.s3.filters.has-statement:
+
+has-statement
++++++++++++++
+Find buckets with set of policy statements.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-bucket-has-statement
+            resource: s3
+            filters:
+              - type: has-statement
+                statement_ids:
+                  - RequiredEncryptedPutObject
+
+
+        policies:
+          - name: s3-public-policy
+            resource: s3
+            filters:
+              - type: has-statement
+                statements:
+                  - Effect: Allow
+                    Action: 's3:*'
+                    Principal: '*'
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statement_ids:
+        items:
+          type: string
+        type: array
+      statements:
+        items:
+          properties:
+            Action:
+              anyOf:
+              - type: string
+              - type: array
+            Condition:
+              type: object
+            Effect:
+              enum:
+              - Allow
+              - Deny
+              type: string
+            NotAction:
+              anyOf:
+              - type: string
+              - type: array
+            NotPrincipal:
+              anyOf:
+              - type: object
+              - type: array
+            NotResource:
+              anyOf:
+              - type: string
+              - type: array
+            Principal:
+              anyOf:
+              - type: string
+              - type: object
+              - type: array
+            Resource:
+              anyOf:
+              - type: string
+              - type: array
+            Sid:
+              type: string
+          required:
+          - Effect
+          type: object
+        type: array
+      type:
+        enum:
+        - has-statement
+    required:
+    - type
+
+
+.. _aws.s3.filters.inventory:
+
+inventory
++++++++++
+Filter inventories for a bucket
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      default:
+        type: object
+      key:
+        type: string
+      op:
+        enum:
+        - eq
+        - equal
+        - ne
+        - not-equal
+        - gt
+        - greater-than
+        - ge
+        - gte
+        - le
+        - lte
+        - lt
+        - less-than
+        - glob
+        - regex
+        - regex-case
+        - in
+        - ni
+        - not-in
+        - contains
+        - difference
+        - intersect
+      type:
+        enum:
+        - inventory
+      value:
+        oneOf:
+        - type: array
+        - type: string
+        - type: boolean
+        - type: number
+        - type: 'null'
+      value_from:
+        additionalProperties: 'False'
+        properties:
+          expr:
+            oneOf:
+            - type: integer
+            - type: string
+          format:
+            enum:
+            - csv
+            - json
+            - txt
+            - csv2dict
+          url:
+            type: string
+        required:
+        - url
+        type: object
+      value_regex:
+        type: string
+      value_type:
+        enum:
+        - age
+        - integer
+        - expiration
+        - normalize
+        - size
+        - cidr
+        - cidr_size
+        - swap
+        - resource_count
+        - expr
+        - unique_size
+        - date
+    required:
+    - type
+
+
+.. _aws.s3.filters.is-log-target:
+
+is-log-target
++++++++++++++
+Filter and return buckets are log destinations.
+
+Not suitable for use in lambda on large accounts, This is a api
+heavy process to detect scan all possible log sources.
+
+Sources:
+  - elb (Access Log)
+  - s3 (Access Log)
+  - cfn (Template writes)
+  - cloudtrail
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-log-bucket
+            resource: s3
+            filters:
+              - type: is-log-target
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      self:
+        type: boolean
+      services:
+        items:
+          enum:
+          - s3
+          - elb
+          - cloudtrail
+        type: array
+      type:
+        enum:
+        - is-log-target
+      value:
+        type: boolean
+    required:
+    - type
+
+
+.. _aws.s3.filters.missing-policy-statement:
+
+missing-policy-statement
+++++++++++++++++++++++++
+Find buckets missing a set of named policy statements.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-bucket-missing-statement
+            resource: s3
+            filters:
+              - type: missing-statement
+                statement_ids:
+                  - RequiredEncryptedPutObject
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statement_ids:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - missing-policy-statement
+        - missing-statement
+    required:
+    - type
+
+
+.. _aws.s3.filters.no-encryption-statement:
+
+no-encryption-statement
++++++++++++++++++++++++
+Find buckets with missing encryption policy statements.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-bucket-not-encrypted
+            resource: s3
+            filters:
+              - type: no-encryption-statement
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - no-encryption-statement
+    required:
+    - type
+
+
+
+
+Actions
+-------
+
+
+  - :ref:`attach-encrypt <aws.s3.actions.attach-encrypt>`
+
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
+  - :ref:`configure-lifecycle <aws.s3.actions.configure-lifecycle>`
+
+  - :ref:`delete <aws.s3.actions.delete>`
+
+  - :ref:`delete-bucket-notification <aws.s3.actions.delete-bucket-notification>`
+
+  - :ref:`delete-global-grants <aws.s3.actions.delete-global-grants>`
+
+  - :ref:`encrypt-keys <aws.s3.actions.encrypt-keys>`
+
+  - :ref:`encryption-policy <aws.s3.actions.encryption-policy>`
+
+  - :ref:`invoke-lambda <aws.common.actions.invoke-lambda>`
+  
+  - :ref:`invoke-sfn <aws.common.actions.invoke-sfn>`
+  
+  - :ref:`mark-for-op <aws.common.actions.mark-for-op>`
+  
+  - :ref:`no-op <aws.s3.actions.no-op>`
+
+  - :ref:`notify <aws.common.actions.notify>`
+  
+  - :ref:`post-finding <aws.common.actions.post-finding>`
+  
+  - :ref:`put-metric <aws.common.actions.put-metric>`
+  
+  - :ref:`remove-statements <aws.s3.actions.remove-statements>`
+
+  - :ref:`remove-tag <aws.common.actions.remove-tag>`
+  
+  - :ref:`remove-website-hosting <aws.s3.actions.remove-website-hosting>`
+
+  - :ref:`set-bucket-encryption <aws.s3.actions.set-bucket-encryption>`
+
+  - :ref:`set-inventory <aws.s3.actions.set-inventory>`
+
+  - :ref:`set-statements <aws.s3.actions.set-statements>`
+
+  - :ref:`tag <aws.common.actions.tag>`
+  
+  - :ref:`toggle-logging <aws.s3.actions.toggle-logging>`
+
+  - :ref:`toggle-versioning <aws.s3.actions.toggle-versioning>`
+
+  - :ref:`webhook <aws.common.actions.webhook>`
+  
+
+
+
+.. _aws.s3.actions.attach-encrypt:
+
+attach-encrypt
+++++++++++++++
+Action attaches lambda encryption policy to S3 bucket
+   supports attachment via lambda bucket notification or sns notification
+   to invoke lambda. a special topic value of `default` will utilize an
+   extant notification or create one matching the bucket name.
+
+   :example:
+
+
+.. code-block:: yaml
+
+
+            policies:
+              - name: attach-lambda-encrypt
+                resource: s3
+                filters:
+                  - type: missing-policy-statement
+                actions:
+                  - type: attach-encrypt
+                    role: arn:aws:iam::123456789012:role/my-role
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      role:
+        type: string
+      tags:
+        type: object
+      topic:
+        type: string
+      type:
+        enum:
+        - attach-encrypt
+    required:
+    - type
+
+
+.. _aws.s3.actions.configure-lifecycle:
+
+configure-lifecycle
++++++++++++++++++++
+Action applies a lifecycle policy to versioned S3 buckets
+
+The schema to supply to the rule follows the schema here:
+ https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_bucket_lifecycle_configuration
+
+To delete a lifecycle rule, supply Status=absent
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-apply-lifecycle
+            resource: s3
+            actions:
+              - type: configure-lifecycle
+                rules:
+                  - ID: my-lifecycle-id
+                    Status: Enabled
+                    Prefix: foo/
+                    Transitions:
+                      - Days: 60
+                        StorageClass: GLACIER
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      rules:
+        items:
+          additionalProperties: false
+          properties:
+            AbortIncompleteMultipartUpload:
+              additionalProperties: false
+              properties:
+                DaysAfterInitiation:
+                  type: integer
+              type: object
+            Expiration:
+              additionalProperties: false
+              properties:
+                Date:
+                  type: string
+                Days:
+                  type: integer
+                ExpiredObjectDeleteMarker:
+                  type: boolean
+              type: object
+            Filter:
+              additionalProperties: false
+              maxProperties: 1
+              minProperties: 1
+              properties:
+                And:
+                  additionalProperties: false
+                  properties:
+                    Prefix:
+                      type: string
+                    Tags:
+                      items:
+                        additionalProperties: false
+                        properties:
+                          Key:
+                            type: string
+                          Value:
+                            type: string
+                        required:
+                        - Key
+                        - Value
+                        type: object
+                      type: array
+                  type: object
+                Prefix:
+                  type: string
+                Tag:
+                  additionalProperties: false
+                  properties:
+                    Key:
+                      type: string
+                    Value:
+                      type: string
+                  required:
+                  - Key
+                  - Value
+                  type: object
+              type: object
+            ID:
+              type: string
+            NoncurrentVersionExpiration:
+              additionalProperties: false
+              properties:
+                NoncurrentDays:
+                  type: integer
+              type: object
+            NoncurrentVersionTransitions:
+              items:
+                additionalProperties: false
+                properties:
+                  NoncurrentDays:
+                    type: integer
+                  StorageClass:
+                    type: string
+                type: object
+              type: array
+            Prefix:
+              type: string
+            Status:
+              enum:
+              - Enabled
+              - Disabled
+              - absent
+            Transitions:
+              items:
+                additionalProperties: false
+                properties:
+                  Date:
+                    type: string
+                  Days:
+                    type: integer
+                  StorageClass:
+                    type: string
+                type: object
+              type: array
+          required:
+          - ID
+          - Status
+          type: object
+        type: array
+      type:
+        enum:
+        - configure-lifecycle
+    required:
+    - type
+
+
+.. _aws.s3.actions.delete:
+
+delete
+++++++
+Action deletes a S3 bucket
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: delete-unencrypted-buckets
+            resource: s3
+            filters:
+              - type: missing-statement
+                statement_ids:
+                  - RequiredEncryptedPutObject
+            actions:
+              - type: delete
+                remove-contents: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      remove-contents:
+        type: boolean
+      type:
+        enum:
+        - delete
+    required:
+    - type
+
+
+.. _aws.s3.actions.delete-bucket-notification:
+
+delete-bucket-notification
+++++++++++++++++++++++++++
+Action to delete S3 bucket notification configurations
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statement_ids:
+        oneOf:
+        - enum:
+          - matched
+        - items:
+            type: string
+          type: array
+      type:
+        enum:
+        - delete-bucket-notification
+    required:
+    - statement_ids
+    - type
+
+
+.. _aws.s3.actions.delete-global-grants:
+
+delete-global-grants
+++++++++++++++++++++
+Deletes global grants associated to a S3 bucket
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-delete-global-grants
+            resource: s3
+            filters:
+              - type: global-grants
+            actions:
+              - delete-global-grants
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      grantees:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - delete-global-grants
+    required:
+    - type
+
+
+.. _aws.s3.actions.encrypt-keys:
+
+encrypt-keys
+++++++++++++
+Action to encrypt unencrypted S3 objects
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-encrypt-objects
+            resource: s3
+            actions:
+              - type: encrypt-keys
+                crypto: aws:kms
+                key-id: 9c3983be-c6cf-11e6-9d9d-cec0c932ce01
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    dependencies:
+      key-id:
+        properties:
+          crypto:
+            pattern: aws:kms
+        required:
+        - crypto
+    properties:
+      crypto:
+        enum:
+        - AES256
+        - aws:kms
+      glacier:
+        type: boolean
+      key-id:
+        type: string
+      large:
+        type: boolean
+      report-only:
+        type: boolean
+      type:
+        enum:
+        - encrypt-keys
+
+
+.. _aws.s3.actions.encryption-policy:
+
+encryption-policy
++++++++++++++++++
+Action to apply an encryption policy to S3 buckets
+
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-enforce-encryption
+            resource: s3
+            mode:
+              type: cloudtrail
+              events:
+                - CreateBucket
+            actions:
+              - encryption-policy
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - encryption-policy
+    required:
+    - type
+
+
+.. _aws.s3.actions.no-op:
+
+no-op
++++++
+
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - no-op
+    required:
+    - type
+
+
+.. _aws.s3.actions.remove-statements:
+
+remove-statements
++++++++++++++++++
+Action to remove policy statements from S3 buckets
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-remove-encrypt-put
+            resource: s3
+            filters:
+              - type: has-statement
+                statement_ids:
+                  - RequireEncryptedPutObject
+            actions:
+              - type: remove-statements
+                statement_ids:
+                  - RequiredEncryptedPutObject
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statement_ids:
+        oneOf:
+        - enum:
+          - matched
+          - '*'
+        - items:
+            type: string
+          type: array
+      type:
+        enum:
+        - remove-statements
+    required:
+    - statement_ids
+    - type
+
+
+.. _aws.s3.actions.remove-website-hosting:
+
+remove-website-hosting
+++++++++++++++++++++++
+Action that removes website hosting configuration.
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      type:
+        enum:
+        - remove-website-hosting
+    required:
+    - type
+
+
+.. _aws.s3.actions.set-bucket-encryption:
+
+set-bucket-encryption
++++++++++++++++++++++
+Action enables default encryption on S3 buckets
+
+`enabled`: boolean Optional: Defaults to True
+`crypto`: aws:kms | AES256` Optional: Defaults to AES256
+`key`: arn, alias, or kms id key
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-enable-default-encryption-kms
+            resource: s3
+            actions:
+              - type: set-bucket-encryption
+              # enabled: true <------ optional (true by default)
+                crypto: aws:kms
+                key: 1234abcd-12ab-34cd-56ef-1234567890ab
+
+          - name: s3-enable-default-encryption-kms-alias
+            resource: s3
+            actions:
+              - type: set-bucket-encryption
+              # enabled: true <------ optional (true by default)
+                crypto: aws:kms
+                key: alias/some/alias/key
+
+          - name: s3-enable-default-encryption-aes256
+            resource: s3
+            actions:
+              - type: set-bucket-encryption
+              # crypto: AES256 <----- optional (AES256 by default)
+              # enabled: true <------ optional (true by default)
+
+          - name: s3-disable-default-encryption
+            resource: s3
+            actions:
+              - type: set-bucket-encryption
+                enabled: false
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    dependencies:
+      key:
+        properties:
+          crypto:
+            pattern: aws:kms
+        required:
+        - crypto
+    properties:
+      crypto:
+        enum:
+        - aws:kms
+        - AES256
+      enabled:
+        type: boolean
+      key:
+        type: string
+      type:
+        enum:
+        - set-bucket-encryption
+
+
+.. _aws.s3.actions.set-inventory:
+
+set-inventory
++++++++++++++
+Configure bucket inventories for an s3 bucket.
+    
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      destination:
+        description: Name of destination bucket
+        type: string
+      encryption:
+        enum:
+        - SSES3
+        - SSEKMS
+      fields:
+        items:
+          enum:
+          - Size
+          - LastModifiedDate
+          - StorageClass
+          - ETag
+          - IsMultipartUploaded
+          - ReplicationStatus
+          - EncryptionStatus
+        type: array
+      key_id:
+        description: Optional Customer KMS KeyId for SSE-KMS
+        type: string
+      name:
+        description: Name of inventory
+        type: string
+      prefix:
+        description: Destination prefix
+        type: string
+      schedule:
+        enum:
+        - Daily
+        - Weekly
+      state:
+        enum:
+        - enabled
+        - disabled
+        - absent
+      type:
+        enum:
+        - set-inventory
+      versions:
+        enum:
+        - All
+        - Current
+    required:
+    - name
+    - destination
+    - type
+
+
+.. _aws.s3.actions.set-statements:
+
+set-statements
+++++++++++++++
+Action to add or update policy statements to S3 buckets
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: force-s3-https
+            resource: s3
+            actions:
+              - type: set-statements
+                statements:
+                  - Sid: "DenyHttp"
+                    Effect: "Deny"
+                    Action: "s3:GetObject"
+                    Principal:
+                      AWS: "*"
+                    Resource: "arn:aws:s3:::{bucket_name}/*"
+                    Condition:
+                      Bool:
+                        "aws:SecureTransport": false
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      statements:
+        items:
+          oneOf:
+          - required:
+            - Principal
+            - Action
+            - Resource
+          - required:
+            - NotPrincipal
+            - Action
+            - Resource
+          - required:
+            - Principal
+            - NotAction
+            - Resource
+          - required:
+            - NotPrincipal
+            - NotAction
+            - Resource
+          - required:
+            - Principal
+            - Action
+            - NotResource
+          - required:
+            - NotPrincipal
+            - Action
+            - NotResource
+          - required:
+            - Principal
+            - NotAction
+            - NotResource
+          - required:
+            - NotPrincipal
+            - NotAction
+            - NotResource
+          properties:
+            Action:
+              anyOf:
+              - type: string
+              - type: array
+            Condition:
+              type: object
+            Effect:
+              enum:
+              - Allow
+              - Deny
+              type: string
+            NotAction:
+              anyOf:
+              - type: string
+              - type: array
+            NotPrincipal:
+              anyOf:
+              - type: object
+              - type: array
+            NotResource:
+              anyOf:
+              - type: string
+              - type: array
+            Principal:
+              anyOf:
+              - type: string
+              - type: object
+              - type: array
+            Resource:
+              anyOf:
+              - type: string
+              - type: array
+            Sid:
+              type: string
+          required:
+          - Sid
+          - Effect
+          type: object
+        type: array
+      type:
+        enum:
+        - set-statements
+    required:
+    - type
+
+
+.. _aws.s3.actions.toggle-logging:
+
+toggle-logging
+++++++++++++++
+Action to enable/disable logging on a S3 bucket.
+
+Target bucket ACL must allow for WRITE and READ_ACP Permissions
+Not specifying a target_prefix will default to the current bucket name.
+https://docs.aws.amazon.com/AmazonS3/latest/dev/enable-logging-programming.html
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-enable-logging
+            resource: s3
+            filters:
+              - "tag:Testing": present
+            actions:
+              - type: toggle-logging
+                target_bucket: log-bucket
+                target_prefix: logs123
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      enabled:
+        type: boolean
+      target_bucket:
+        type: string
+      target_prefix:
+        type: string
+      type:
+        enum:
+        - toggle-logging
+    required:
+    - type
+
+
+.. _aws.s3.actions.toggle-versioning:
+
+toggle-versioning
++++++++++++++++++
+Action to enable/suspend versioning on a S3 bucket
+
+Note versioning can never be disabled only suspended.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-enable-versioning
+            resource: s3
+            filters:
+              - or:
+                - type: value
+                  key: Versioning.Status
+                  value: Suspended
+                - type: value
+                  key: Versioning.Status
+                  value: absent
+            actions:
+              - type: toggle-versioning
+                enabled: true
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      enabled:
+        type: boolean
+      type:
+        enum:
+        - toggle-versioning
+    required:
+    - type
+
