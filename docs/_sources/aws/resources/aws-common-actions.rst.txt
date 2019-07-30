@@ -34,6 +34,9 @@ Actions
    - :ref:`post-finding <AWS.common.actions.post-finding>`
 
 
+   - :ref:`post-item <AWS.common.actions.post-item>`
+
+
    - :ref:`put-metric <AWS.common.actions.put-metric>`
 
 
@@ -935,6 +938,97 @@ Example generate a finding for accounts that don't have shield enabled.
         type: array
     required:
     - types
+    - type
+
+
+
+.. _AWS.common.actions.post-item:
+
+post-item
++++++++++
+
+Post an OpsItem to AWS Systems Manager OpsCenter Dashboard.
+
+https://docs.aws.amazon.com/systems-manager/latest/userguide/OpsCenter.html
+
+Each ops item supports up to a 100 associated resources. This
+action supports the builtin OpsCenter dedup logic with additional
+support for associating new resources to existing Open ops items.
+
+: Example :
+
+Create an ops item for ec2 instances with Create User permissions
+
+.. code-block:: yaml
+
+    policies:
+      - name: over-privileged-ec2
+        resource: aws.ec2
+        filters:
+          - type: check-permissions
+            match: allowed
+            actions:
+              - iam:CreateUser
+        actions:
+          - type: post-item
+            priority: 3
+
+The builtin OpsCenter dedup logic will kick in if the same
+resource set (ec2 instances in this case) is posted for the same
+policy.
+
+: Example :
+
+Create an ops item for sqs queues with cross account access as ops items.
+
+.. code-block:: yaml
+
+    policies:
+      - name: sqs-cross-account-access
+        resource: aws.sqs
+        filters:
+          - type: cross-account
+        actions:
+          - type: mark-for-op
+            days: 5
+            op: delete
+          - type: post-item
+            title: SQS Cross Account Access
+            description: |
+              Cross Account Access detected in SQS resource IAM Policy.
+            tags:
+              Topic: Security
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      description:
+        type: string
+      priority:
+        enum:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      tags:
+        type: object
+      title:
+        type: string
+      topics:
+        type: string
+      type:
+        enum:
+        - post-item
+    required:
     - type
 
 
