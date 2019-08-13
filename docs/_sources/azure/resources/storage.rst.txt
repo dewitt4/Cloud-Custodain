@@ -63,9 +63,9 @@ Actions
   
   - :ref:`notify <azure.common.actions.notify>`
   
-  - :ref:`set-log-settings <azure.storage.actions.set-log-settings>`
+  - :ref:`set-firewall-rules <azure.storage.actions.set-firewall-rules>`
 
-  - :ref:`set-network-rules <azure.storage.actions.set-network-rules>`
+  - :ref:`set-log-settings <azure.storage.actions.set-log-settings>`
 
   - :ref:`tag <azure.common.actions.tag>`
   
@@ -76,6 +76,112 @@ Actions
   - :ref:`webhook <azure.common.actions.webhook>`
   
 
+
+
+.. _azure.storage.actions.set-firewall-rules:
+
+set-firewall-rules
+++++++++++++++++++
+Set Network Rules Action
+
+Updates Azure Storage Firewalls and Virtual Networks settings.
+
+By default the firewall rules are replaced with the new values.  The ``append``
+flag can be used to force merging the new rules with the existing ones on
+the resource.
+
+You may also reference azure public cloud Service Tags by name in place of
+an IP address.  Use ``ServiceTags.`` followed by the ``name`` of any group
+from https://www.microsoft.com/en-us/download/details.aspx?id=56519.
+
+Note that there are firewall rule number limits and that you will likely need to
+use a regional block to fit within the limit.  The limit for storage accounts is
+200 rules.
+
+.. code-block:: yaml
+
+    - type: set-firewall-rules
+          bypass-rules:
+              - Logging
+              - Metrics
+          ip-rules:
+              - 11.12.13.0/16
+              - ServiceTags.AppService.CentralUS
+
+
+:example:
+
+Find storage accounts without any firewall rules.
+
+Configure default-action to ``Deny`` and then allow:
+- Azure Logging and Metrics services
+- Two specific IPs
+- Two subnets
+
+.. code-block:: yaml
+
+    policies:
+        - name: add-storage-firewall
+          resource: azure.storage
+
+        filters:
+            - type: value
+              key: properties.networkAcls.ipRules
+              value_type: size
+              op: eq
+              value: 0
+
+        actions:
+            - type: set-firewall-rules
+              bypass-rules:
+                  - Logging
+                  - Metrics
+              ip-rules:
+                  - 11.12.13.0/16
+                  - 21.22.23.24
+              virtual-network-rules:
+                  - <subnet_resource_id>
+                  - <subnet_resource_id>
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      append:
+        default: false
+        type: boolean
+      bypass-rules:
+        items:
+          enum:
+          - AzureServices
+          - Logging
+          - Metrics
+        type: array
+      default-action:
+        default: Deny
+        enum:
+        - Allow
+        - Deny
+      ip-rules:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - set-firewall-rules
+      virtual-network-rules:
+        items:
+          type: string
+        type: array
+    required:
+    - type
 
 
 .. _azure.storage.actions.set-log-settings:
@@ -140,86 +246,5 @@ action will disable read).
     - storage-types
     - log
     - retention
-    - type
-
-
-.. _azure.storage.actions.set-network-rules:
-
-set-network-rules
-+++++++++++++++++
-Set Network Rules Action
-
-Updates Azure Storage Firewalls and Virtual Networks settings.
-
-:example:
-
-Find storage accounts without any firewall rules.
-
-Configure default-action to ``Deny`` and then allow:
-- Azure Logging and Metrics services
-- Two specific IPs
-- Two subnets
-
-.. code-block:: yaml
-
-    policies:
-        - name: add-storage-firewall
-          resource: azure.storage
-
-        filters:
-            - type: value
-              key: properties.networkAcls.ipRules
-              value_type: size
-              op: eq
-              value: 0
-
-        actions:
-            - type: set-network-rules
-              default-action: Deny
-              bypass: [Logging, Metrics]
-              ip-rules:
-                  - ip-address-or-range: 11.12.13.14
-                  - ip-address-or-range: 21.22.23.24
-              virtual-network-rules:
-                  - virtual-network-resource-id: <subnet_resource_id>
-                  - virtual-network-resource-id: <subnet_resource_id>
-
-.. container:: toggle
-
-  
-
-  .. raw:: html
-     
-    <div class="header docutils container" style=""></div>
-
-  .. code-block:: yaml
-
-    properties:
-      bypass:
-        items:
-          enum:
-          - AzureServices
-          - Logging
-          - Metrics
-        type: array
-      default-action:
-        enum:
-        - Allow
-        - Deny
-      ip-rules:
-        items:
-          ip-address-or-range:
-            type: string
-        type: array
-      type:
-        enum:
-        - set-network-rules
-      virtual-network-rules:
-        items:
-          virtual-network-resource-id:
-            type: string
-        type: array
-    required:
-    - default-action
     - type
 
