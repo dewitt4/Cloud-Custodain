@@ -2536,23 +2536,29 @@
 <span id="azure-functionshosting"></span><h1>Azure Functions Hosting<a class="headerlink" href="#azure-functions-hosting" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="overview">
 <h2>Overview<a class="headerlink" href="#overview" title="Permalink to this headline">¶</a></h2>
-<p>The Azure provider supports deploying policies into Azure Functions to allow
-them to run inexpensively in your subscription.</p>
-<p>Python support in Azure Functions V2 is in preview and this feature is still immature.</p>
+<p>The Azure provider supports deploying policies into Azure Functions to run them
+inexpensively in your subscription. Currently you can deploy timer
+triggered functions (azure-periodic) or Event Grid triggered functions
+(azure-event-grid) depending on your needs.</p>
+<p>The first deployment to an Azure Function will create the following resources
+in your Azure subscription:</p>
 <ul class="simple">
-<li><p>Linux is currently the only supported operating system.</p></li>
-<li><p>Python 3.6+ is the only supported version.</p></li>
-<li><p>Only Service Principal authentication is currently supported.</p></li>
+<li><p>Resource Group: Holds all of the resources</p></li>
+<li><p>Azure Storage: Serves as the backend data store for the Functions</p></li>
+<li><p>Application Insights: Provides logging and metric track ing for the Functions</p></li>
+<li><p>App Service Plan: A Linux based consumption plan using the V2 runtime to support Python Functions</p></li>
+<li><p>Function App: The Function that executes the given policy</p></li>
 </ul>
-<p>Currently periodic (CRON) and Event Grid functions are supported, however consumption pricing is not
-yet supported.</p>
+<p>Successive policy deployments will only create a new Function App for the policy,
+because the rest of the infrastructure can be shared.</p>
+<p>Note: Python 3.6 or higher is required to deploy a policy to an Azure Function.</p>
 </div>
 <div class="section" id="azure-modes">
 <h2>Azure Modes<a class="headerlink" href="#azure-modes" title="Permalink to this headline">¶</a></h2>
 <p>Custodian can run in numerous modes with the default being pull Mode.</p>
 <ul>
 <li><dl class="simple">
-<dt>pull:</dt><dd><p>Default mode, which runs locally where custodian is run.</p>
+<dt>pull:</dt><dd><p>Default mode, which executes the policy local to where Custodian is run.</p>
 </dd>
 </dl>
 <div class="toggle docutils container">
@@ -2567,7 +2573,9 @@ yet supported.</p>
 </div>
 </li>
 <li><dl class="simple">
-<dt>azure-periodic:</dt><dd><p>Runs custodian in Azure Functions at a user defined cron interval.</p>
+<dt>azure-periodic:</dt><dd><p>Creates a timer triggered Azure Function to run the policy in Custodian. The timing is executed
+based on a <a class="reference external" href="https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-timer#ncrontab-expressions">user defined cron interval</a>
+, such as every 15 minutes or every hour on weekdays.</p>
 </dd>
 </dl>
 <div class="toggle docutils container">
@@ -2628,7 +2636,7 @@ yet supported.</p>
 </div>
 </li>
 <li><dl class="simple">
-<dt>azure-event-grid:</dt><dd><p>Runs custodian in Azure Functions triggered by event-grid events. This allows
+<dt>azure-event-grid:</dt><dd><p>Creates Event Grid triggered Azure Functions to run the policy in Custodian. This allows
 you to apply your policies as soon as events occur. See <a class="reference external" href="https://azure.microsoft.com/en-us/services/event-grid/">Azure Event Grid</a> for more details.</p>
 </dd>
 </dl>
@@ -2706,7 +2714,8 @@ you to apply your policies as soon as events occur. See <a class="reference exte
 </div>
 <div class="section" id="provision-options">
 <h2>Provision Options<a class="headerlink" href="#provision-options" title="Permalink to this headline">¶</a></h2>
-<p>When deploying an Azure function the following ARM resources are required and created on demand if necessary:</p>
+<p>The following Azure resources are required to support an Azure Function. If they do not
+exist, Custodian will create them as it creates the Azure Function for the policy.</p>
 <ul class="simple">
 <li><p>Storage (shared across functions)</p></li>
 <li><p>Application Insights (shared across functions)</p></li>
@@ -2715,18 +2724,20 @@ you to apply your policies as soon as events occur. See <a class="reference exte
 </ul>
 <p>Functions can be deployed in either a dedicated Application Service Plan (Basic, Standard or Premium) or in a Consumption plan.
 More details on the different hosting models offered by Azure Functions can be found in the <a class="reference external" href="https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale">Azure Functions documentation</a>.
-By default, we will run all Custodian policies using the Consumption hosting model. (i.e. skuTier=dynamic)
-Linux Consumption is currently only available in the following regions: East Asia, East US, West Europe, and West US</p>
-<p>A dedicated plan can service multiple Function Applications.  If you provide the same servicePlanName with all policies or
-use the default name then only new Function Applications will be created during deployment, all using the same
-shared plan resources.</p>
-<p>You can enable default auto scaling option for your dedicated App Service Plan. Default option allows you
-to specify minimum and maximum number of underlying VMs. Scaling is performed based on the average RAM usage.
-App Service Plan will be scaled up if average RAM usage was more than 80% in the past 10 minutes.
+By default, Custodian policies are run using the Consumption hosting model. (i.e. skuTier=dynamic)</p>
+<p>Note: Linux Consumption plans are not available in all regions. You will recieve an error when applying the
+policy if use an unsupported location.</p>
+<p>You can enable auto scaling for your dedicated App Service Plan. The default auto scaling allows you
+to specify the minimum and maximum number of VMs underlying the Functions. The App Service Plan will
+be scaled up if the average RAM usage was more than 80% in the past 10 minutes.
 This option is disabled by default.</p>
-<p>Execution in Azure functions comes with a default set of configurations for the provisioned
-resources. To override these settings you must set ‘provision-options’ with one of the following
-keys:</p>
+<p>The same shared resources from above can be used to service multiple Functions. This is done by
+specifying the resources names in the policy deployment, or by using the default names every time.
+When deploying a new policy using existing infrastructure, only the new Function will be created.</p>
+<p>The default set of parameters for Azure Storage, Application Insights and Application
+Service Plan will deploy the function successfully. To customize the deployment, the defaults
+can be overwritten by setting the <code class="docutils literal notranslate"><span class="pre">provision-options</span></code> object on <code class="docutils literal notranslate"><span class="pre">mode</span></code>. The following keys are
+supported, with their default values shown:</p>
 <ul class="simple">
 <li><dl class="simple">
 <dt>servicePlan</dt><dd><ul>
@@ -2769,21 +2780,19 @@ keys:</p>
 </li>
 </ul>
 <p>The location allows you to choose the region to deploy the resource group and resources that will be
-provisioned. Application Insights has six available locations and thus can not always be in the same
-region as the other resources: West US 2, East US, North Europe, South Central US, Southeast Asia, and
-West Europe. The sku, skuCode, and workerSize correlate to scaling up the App Service Plan.</p>
-<p>If specified resources already exist in the subscription (discoverable by resource group name and resource name), Cloud Custodian won’t make any changes (location, sku)
-and will use existing resources as-is. If resource doesn’t exist, it will be provisioned using provided configuration.</p>
-<p>If you have existing infrastructure, you can specify resource ids for the following items (instead of applying previous schema):</p>
-<ul class="simple">
-<li><p>storageAccount</p></li>
-<li><p>servicePlan</p></li>
-<li><p>appInsights</p></li>
-</ul>
-<p>If you provide resource ids, Cloud Custodian verifies that resource exists before function app provisioning. It returns an error if resource is missing.</p>
-<p>An example on how to set the servicePlanName, accept defaults for the other values and enable default scaling:</p>
-<p>This policy deploys dedicated Standard S2 App Service Plan with enabled auto scale rule for 1-3 VMs.
-Default scaling rule scales app service plan if total RAM consumption is more than 80%.</p>
+provisioned. Application Insights has 20 available locations and thus can not always be in the same
+region as the other resources. Please see <a class="reference external" href="https://azure.microsoft.com/en-us/global-infrastructure/services/?products=monitor">Application Insights availability by region</a> for more details.</p>
+<p>If the specified resources already exist in the subscription (discovered by resource group and
+resource name), Custodian will not change the existing resource regardless of the parameters set by the policy.
+If a resource does not exist, it will be provisioned using the provided configuration.</p>
+<p>You can provide resource IDs to specify existing infrastructure, rather than matching resource group
+and resource name. Please see the third example below for the correct formatting. Custodian verifies
+that the resources defined by the given IDs exist before creating the Function. If the resource
+is missing, it will return an error.</p>
+<p>The following example shows how to deploy a policy to a timer triggered Function that runs every hour.
+The defaults are accepted for Storage and Application Insights and custom values are provided for the
+Service Plan. This policy deploys a dedicated Basic B1 App Service Plan with the default auto scaling
+turned on. Based on the RAM consumption in the underlying VMs, the App Service Plan will be backed by 1-3 VMs.</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
     <span class="nt">mode</span><span class="p">:</span>
@@ -2792,8 +2801,8 @@ Default scaling rule scales app service plan if total RAM consumption is more th
         <span class="nt">provision-options</span><span class="p">:</span>
           <span class="nt">servicePlan</span><span class="p">:</span>
             <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">functionshost</span>
-            <span class="nt">skuTier</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Standard</span>
-            <span class="nt">skuName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">S2</span>
+            <span class="nt">skuTier</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Basic</span>
+            <span class="nt">skuName</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">B1</span>
             <span class="nt">autoScale</span><span class="p">:</span>
               <span class="nt">enabled</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
               <span class="nt">minCapacity</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
@@ -2808,7 +2817,8 @@ Default scaling rule scales app service plan if total RAM consumption is more th
         <span class="nt">value</span><span class="p">:</span> <span class="s">&quot;PowerState/running&quot;</span>
 </pre></div>
 </div>
-<p>An example on how to set size and location as well:</p>
+<p>The following example shows how to set the name, size and location of all three components
+of the supporting infrastructure:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
     <span class="nt">mode</span><span class="p">:</span>
@@ -2834,7 +2844,7 @@ Default scaling rule scales app service plan if total RAM consumption is more th
         <span class="nt">value</span><span class="p">:</span> <span class="s">&quot;PowerState/running&quot;</span>
 </pre></div>
 </div>
-<p>An example on how to use existing infrastructure:</p>
+<p>The final example shows how to use resource ids to specify existing infrastructure:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
     <span class="nt">mode</span><span class="p">:</span>
@@ -2865,7 +2875,9 @@ be provided on the command line in non-serverless scenarios.</p>
 <li><p>dryrun</p></li>
 <li><p>metrics</p></li>
 </ul>
-<p>Output directory defaults to <cite>/tmp/&lt;random_uuid&gt;</cite> but you can point it to a Azure Blob Storage container instead</p>
+<p>The default output directory for an Azure Function is <code class="docutils literal notranslate"><span class="pre">/tmp/&lt;random_uuid&gt;</span></code>. The following
+example shows how to save the output of the policy to an Azure Storage Account instead of in
+the default Function location.</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">stopped-vm</span>
     <span class="nt">mode</span><span class="p">:</span>
@@ -2890,12 +2902,15 @@ be provided on the command line in non-serverless scenarios.</p>
 </div>
 <div class="section" id="event-grid-functions">
 <h2>Event Grid Functions<a class="headerlink" href="#event-grid-functions" title="Permalink to this headline">¶</a></h2>
-<p>Currently, support for event grid functions is at the subscription level and can listen to write and delete
-events. When deploying an event grid function, an Event Grid Subscription is created that triggers the Azure Function
-when any event is triggered in the subscription. Cloud custodian filters to the events you passed to your policy and
-ignores all other events.</p>
-<p>In order to subscribe on an event you need to provide the resource provider and the action, or provide the string
-of one of the <a class="reference external" href="https://github.com/cloud-custodian/cloud-custodian/blob/master/tools/c7n_azure/c7n_azure/azure_events.py">shortcuts</a>.</p>
+<p>Currently, support for Event Grid Functions is at the subscription level. You can set the function to be
+triggered by write and/or delete events. When an Event Grid Function is deployed, Custodian creates an
+Event Grid Subscription to trigger the new Function when any event occurs in the Subscription. Once triggered,
+Custodian only executes the policy if the event was caused by the resource provider and event type specified
+by the policy.</p>
+<p>In order to subscribe to an event, you need to provide the resource provider and the action, or provide the string
+of one of the <a class="reference external" href="https://github.com/cloud-custodian/cloud-custodian/blob/master/tools/c7n_azure/c7n_azure/azure_events.py">shortcuts</a>.
+For a list of all of the resource providers and their actions please see <a class="reference external" href="https://docs.microsoft.com/en-us/azure/role-based-access-control/resource-provider-operations">Azure Resource Manager resource provider options</a>.</p>
+<p>The following example shows an Event Grid Function that runs when a value is written to Key Vault.</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
     <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">tag-key-vault-creator</span>
       <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.keyvault</span>
@@ -2915,28 +2930,30 @@ of one of the <a class="reference external" href="https://github.com/cloud-custo
 </div>
 <div class="section" id="advanced-authentication-options">
 <h2>Advanced Authentication Options<a class="headerlink" href="#advanced-authentication-options" title="Permalink to this headline">¶</a></h2>
-<p>By default the function is both deployed and executed with the credentials and subscription ID you have configured
-for the custodian CLI.  You may optionally provide environment variables to use exclusively at function execution time
-which also allow you to target your policy towards a subscription ID different than the one to which you are deploying.</p>
-<p>The following variables will be obeyed if set:</p>
+<p>By default the Function is both deployed and executed with the credentials and subscription ID you have configured
+for the custodian CLI.  You may optionally provide environment variables to set the service principal that should be
+used when the function is executed. This allows you to target your policy towards a subscription ID different than
+the one that the Function is deployed in.</p>
+<p>The following variables are used to overwrite the service principal configuration used when the Function is executed:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>AZURE_FUNCTION_TENANT_ID
 AZURE_FUNCTION_CLIENT_ID
 AZURE_FUNCTION_CLIENT_SECRET
 AZURE_FUNCTION_SUBSCRIPTION_ID
 </pre></div>
 </div>
-<p>These will be used for function execution, but the normal service principal credentials will still be
+<p>These will be used for Function execution, but the normal service principal credentials will still be
 used for deployment.</p>
-<p>You may provide the service principal but omit the subscription ID if you wish.</p>
+<p>You may provide the service principal credentials for the function but omit the subscription ID if you wish.</p>
 </div>
 <div class="section" id="management-groups-support">
 <h2>Management Groups Support<a class="headerlink" href="#management-groups-support" title="Permalink to this headline">¶</a></h2>
-<p>You can deploy Azure Functions targeting all subscriptions that are part of specified Management Group.</p>
+<p>You can deploy Azure Functions targeting all subscriptions that are part of a specified Management Group.</p>
 <p>The following variable allows you to specify Management Group name:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>AZURE_FUNCTION_MANAGEMENT_GROUP_NAME
 </pre></div>
 </div>
-<p>It can be used with Function specific Service Principal credentials described before. Management Group environment variable has the highest priority, so <cite>AZURE_FUNCTION_SUBSCRIPTION_ID</cite> will be ignored.</p>
+<p>It can be used with Function specific Service Principal credentials described in the previous section.
+The Management Group environment variable has the highest priority, so <cite>AZURE_FUNCTION_SUBSCRIPTION_ID</cite> will be ignored.</p>
 <div class="section" id="timer-triggered-functions">
 <h3>Timer triggered functions<a class="headerlink" href="#timer-triggered-functions" title="Permalink to this headline">¶</a></h3>
 <p>When Management Groups option is used with periodic mode, Cloud Custodian deploys a single Azure Function App with multiple Azure Functions following single subscription per function rule.</p>
