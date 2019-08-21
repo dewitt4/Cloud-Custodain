@@ -70,6 +70,8 @@ Actions
   
   - :ref:`notify <azure.common.actions.notify>`
   
+  - :ref:`set-firewall-rules <azure.cosmosdb.actions.set-firewall-rules>`
+
   - :ref:`tag <azure.common.actions.tag>`
   
   - :ref:`tag-trim <azure.common.actions.tag-trim>`
@@ -79,4 +81,118 @@ Actions
   - :ref:`webhook <azure.common.actions.webhook>`
   
 
+
+
+.. _azure.cosmosdb.actions.set-firewall-rules:
+
+set-firewall-rules
+++++++++++++++++++
+Set Firewall Rules Action
+
+Updates CosmosDB Firewall settings.  Learn about the firewall at:
+https://docs.microsoft.com/en-us/azure/cosmos-db/firewall-support
+
+By default the firewall rules are appended with the new values.  The ``append: False``
+flag can be used to replace the old rules with the new ones on
+the resource.
+
+You may also reference azure public cloud Service Tags by name in place of
+an IP address.  Use ``ServiceTags.`` followed by the ``name`` of any group
+from https://www.microsoft.com/en-us/download/details.aspx?id=56519.
+
+Note that there are firewall rule number limits.  The limit for CosmosDB is
+1000 rules (maximum tested rule count).
+
+.. code-block:: yaml
+
+    - type: set-firewall-rules
+          ip-rules:
+              - 11.12.13.0/16
+              - ServiceTags.AppService.CentralUS
+
+
+:example:
+
+Find CosmosDB accounts without any firewall rules.
+
+Enable the firewall and allow:
+- All Azure Cloud IP space
+- All Portal UI IP space
+- Two additional external IP ranges
+
+``append: True`` (default) ensures we only add to the existing configuration.
+
+.. code-block:: yaml
+
+   policies:
+     - name: cosmos-firewall
+       resource: azure.cosmosdb
+       filters:
+         # The firewall is disabled
+         - type: value
+           key: properties.ipRangeFilter
+           value: empty
+       actions:
+         - type: set-firewall-rules
+           append: True
+           bypass-rules:
+             - AzureCloud
+             - Portal
+           ip-rules:
+             - 19.0.0.0/16
+             - 20.0.1.2
+
+
+Cosmos firewalls are disabled by simply configuring them with empty values.
+We can do this by passing an empty array with ``append: False``
+
+.. code-block:: yaml
+
+   policies:
+     - name: cosmos-firewall-clear
+       resource: azure.cosmosdb
+       filters:
+         # The firewall is enabled
+         - not:
+           - type: value
+             key: properties.ipRangeFilter
+             value: empty
+       actions:
+         - type: set-firewall-rules
+           append: False
+           ip-rules: []
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      append:
+        default: true
+        type: boolean
+      bypass-rules:
+        items:
+          enum:
+          - Portal
+          - AzureCloud
+        type: array
+      ip-rules:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - set-firewall-rules
+      virtual-network-rules:
+        items:
+          type: string
+        type: array
+    required:
+    - type
 
