@@ -191,12 +191,12 @@ class MetricFilter(Filter):
             return cached_metric_data['measurement']
         try:
             metrics_data = self.client.metrics.list(
-                resource['id'],
+                self.get_resource_id(resource),
                 timespan=self.timespan,
                 interval=self.interval,
                 metricnames=self.metric,
                 aggregation=self.aggregation,
-                filter=self.filter
+                filter=self.get_filter(resource)
             )
         except HttpOperationError as e:
             self.log.error("could not get metric:%s on %s. Full error: %s" % (
@@ -212,6 +212,12 @@ class MetricFilter(Filter):
         self._write_metric_to_resource(resource, metrics_data, m)
 
         return m
+
+    def get_resource_id(self, resource):
+        return resource['id']
+
+    def get_filter(self, resource):
+        return self.filter
 
     def _write_metric_to_resource(self, resource, metrics_data, m):
         resource_metrics = resource.setdefault(get_annotation_prefix('metrics'), {})

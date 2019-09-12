@@ -22,7 +22,7 @@ from azure.mgmt.cosmosdb.models import VirtualNetworkRule
 from c7n_azure import constants
 from c7n_azure.actions.base import AzureBaseAction
 from c7n_azure.actions.firewall import SetFirewallAction
-from c7n_azure.filters import FirewallRulesFilter
+from c7n_azure.filters import (FirewallRulesFilter, MetricFilter)
 from c7n_azure.provider import resources
 from c7n_azure.query import ChildResourceManager, ChildTypeInfo
 from c7n_azure.resources.arm import ArmResourceManager
@@ -185,6 +185,43 @@ class CosmosDBDatabase(CosmosDBChildResource):
         return databases
 
 
+@CosmosDBDatabase.filter_registry.register('metric')
+class CosmosDBDatabaseMetricFilter(MetricFilter):
+    """CosmosDB Database Metric Filter
+
+    :example:
+
+    This policy will find cosmos db databases with less than 1000 requests per day
+
+    .. code-block:: yaml
+
+        policies:
+          - name: low-request-databases
+            description: |
+              get databases with less than 1000 requests per day
+            resource: azure.cosmosdb-database
+            filters:
+              - type: metric
+                metric: TotalRequests
+                op: le
+                aggregation: average
+                interval: P1D
+                threshold: 1000
+                timeframe: 72
+
+    """
+    def get_resource_id(self, resource):
+        return resource['c7n:parent-id']
+
+    def get_filter(self, resource):
+        if self.filter is None:
+            parent_filter = "DatabaseName eq '%s'" % resource['id']
+        else:
+            parent_filter = "%s and DatabaseName eq '%s'" % (self.filter, resource['id'])
+
+        return parent_filter
+
+
 @resources.register('cosmosdb-collection')
 class CosmosDBCollection(CosmosDBChildResource):
     """CosmosDB Collection Resource
@@ -229,9 +266,48 @@ class CosmosDBCollection(CosmosDBChildResource):
                 c.update({'c7n:document-endpoint':
                          parent_resource.get('properties').get('documentEndpoint')})
                 c['c7n:parent'] = parent_resource
+                c['c7n:database'] = d['id']
                 collections.append(c)
 
         return collections
+
+
+@CosmosDBCollection.filter_registry.register('metric')
+class CosmosDBCollectionMetricFilter(MetricFilter):
+    """CosmosDB Collection Metric Filter
+
+    :example:
+
+    This policy will find cosmos db collections with less than 1000 requests per day
+
+    .. code-block:: yaml
+
+        policies:
+          - name: low-request-collections
+            description: |
+              get collections with less than 1000 requests per day
+            resource: azure.cosmosdb-database
+            filters:
+              - type: metric
+                metric: TotalRequestUnits
+                op: le
+                aggregation: average
+                interval: P1D
+                threshold: 1000
+                timeframe: 72
+
+    """
+    def get_resource_id(self, resource):
+        return resource['c7n:parent-id']
+
+    def get_filter(self, resource):
+        container_filter = "DatabaseName eq '%s' and CollectionName eq '%s'" \
+            % (resource['c7n:database'], resource['id'])
+
+        if self.filter is not None:
+            container_filter = "%s and %s" % (self.filter, container_filter)
+
+        return container_filter
 
 
 @CosmosDBCollection.filter_registry.register('offer')
