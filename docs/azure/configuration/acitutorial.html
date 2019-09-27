@@ -1400,11 +1400,21 @@
 <li class="toctree-l4"><a class="reference internal" href="#create-a-resource-group">1. Create a Resource Group</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#create-a-storage-account">2. Create a Storage Account</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#create-a-managed-identity">3. Create a Managed Identity</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#create-the-aci-container-host">4. Create the ACI Container Host</a></li>
-<li class="toctree-l4"><a class="reference internal" href="#upload-a-custodian-policy">5. Upload a Custodian Policy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-an-application-insights-instance">4. Create an Application Insights Instance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-the-aci-container-host">5. Create the ACI Container Host</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#upload-a-custodian-policy">6. Upload a Custodian Policy</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="helmtutorial.html">Tutorial - Helm Deployment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="helmtutorial.html">Tutorial - Helm Deployment</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#create-a-resource-group">1. Create a Resource Group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#create-a-storage-account">2. Create a Storage Account</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#create-a-service-principal">3. Create a Service Principal</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#create-an-application-insights-instance">4. Create an Application Insights Instance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#create-an-aks-cluster-and-install-tiller">5. Create an AKS Cluster and Install Tiller</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#deploy-the-helm-chart">6. Deploy the Helm Chart</a></li>
+<li class="toctree-l4"><a class="reference internal" href="helmtutorial.html#upload-a-custodian-policy">7. Upload a Custodian Policy</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -2618,12 +2628,13 @@ resource group too.</p>
 <h2>2. Create a Storage Account<a class="headerlink" href="#create-a-storage-account" title="Permalink to this headline">¶</a></h2>
 <p>This storage account will hold all of the blobs and queues used by the container host. You could
 also use an existing resource here or multiple storage accounts.</p>
-<p>We will also create a blob container. One will host the uploaded policies, and the other will store
+<p>We will also create two blob containers. One will host the uploaded policies, and the other will store
 the custodian output files of running policies.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az storage account create --resource-group c7n-aci-tutorial --name c7nstorage
 
 <span class="nv">account_key</span><span class="o">=</span><span class="k">$(</span>az storage account keys list --account-name c7nstorage --query <span class="s2">&quot;[0].value&quot;</span> --output tsv<span class="k">)</span>
 az storage container create --account-name c7nstorage --account-key <span class="nv">$account_key</span> --name c7n-aci-policies
+az storage container create --account-name c7nstorage --account-key <span class="nv">$account_key</span> --name c7n-aci-logs
 </pre></div>
 </div>
 </div>
@@ -2639,6 +2650,9 @@ policies will run against.</p>
 <p>The simplest way to grant these permissions is to make the identity a <code class="docutils literal notranslate"><span class="pre">Contributor</span></code> on the target
 subscription and a <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Blob</span> <span class="pre">Data</span> <span class="pre">Contributor</span></code> and <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Queue</span> <span class="pre">Data</span> <span class="pre">Contributor</span></code> on the
 storage account created above.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">&lt;Target</span> <span class="pre">Subscription</span> <span class="pre">Resource</span> <span class="pre">Id&gt;</span></code> should be in the format <code class="docutils literal notranslate"><span class="pre">/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span></code>.
+The <code class="docutils literal notranslate"><span class="pre">&lt;Storage</span> <span class="pre">Account</span> <span class="pre">Resource</span> <span class="pre">Id&gt;</span></code> should be in the format <code class="docutils literal notranslate"><span class="pre">/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/c7n-aci-tutorial/providers/Microsoft.Storage/storageAccounts/c7nstorage</span></code>,
+and is available in the json output from creating the storage account in step 2.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az role assignment create --assignee &lt;Managed Identity Client Id&gt; <span class="se">\</span>
     --role <span class="s2">&quot;Contributor&quot;</span> --scope &lt;Target Subscription Resource Id&gt;
 
@@ -2650,10 +2664,22 @@ az role assignment create --assignee &lt;Managed Identity Client Id&gt; <span cl
 </pre></div>
 </div>
 </div>
+<div class="section" id="create-an-application-insights-instance">
+<h2>4. Create an Application Insights Instance<a class="headerlink" href="#create-an-application-insights-instance" title="Permalink to this headline">¶</a></h2>
+<p>We will create an Application Insights instance to gather logs and telemetry generated by the
+running container host.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># You may need to add the application-insights extension</span>
+az extension add -n application-insights
+
+az monitor app-insights component create --resource-group c7n-aci-tutorial --app c7n-aci-insights --location westus2
+</pre></div>
+</div>
+</div>
 <div class="section" id="create-the-aci-container-host">
-<h2>4. Create the ACI Container Host<a class="headerlink" href="#create-the-aci-container-host" title="Permalink to this headline">¶</a></h2>
+<h2>5. Create the ACI Container Host<a class="headerlink" href="#create-the-aci-container-host" title="Permalink to this headline">¶</a></h2>
 <p>Now all of the required Azure resources should exist, and we can deploy the Container Host ARM template.
-Create a parameters file called <code class="docutils literal notranslate"><span class="pre">c7n-aci-tutorial.json</span></code></p>
+Create a parameters file called <code class="docutils literal notranslate"><span class="pre">c7n-aci-tutorial.json</span></code>.
+See the <a class="reference internal" href="containerhosting.html#azure-containerhosting"><span class="std std-ref">Container Host Documentation</span></a> for information on filling out the environment variables.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
     <span class="nt">&quot;$schema&quot;</span><span class="p">:</span> <span class="s2">&quot;https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#&quot;</span><span class="p">,</span>
     <span class="nt">&quot;contentVersion&quot;</span><span class="p">:</span> <span class="s2">&quot;1.0.0.0&quot;</span><span class="p">,</span>
@@ -2665,16 +2691,25 @@ Create a parameters file called <code class="docutils literal notranslate"><span
             <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;c7n-aci&quot;</span>
         <span class="p">},</span>
         <span class="nt">&quot;azure_subscription_id&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Target Subscription Id&gt;&quot;</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Target Subscription ID&gt;&quot;</span>
         <span class="p">},</span>
-        <span class="nt">&quot;azure_event_queue_name&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&quot;azure_container_queue_name&quot;</span><span class="p">:</span> <span class="p">{</span>
             <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;c7n-aci-events&quot;</span>
         <span class="p">},</span>
-        <span class="nt">&quot;azure_container_storage&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;https://c7nstorage.blob.core.windows.net/c7n-aci-policies&quot;</span>
+        <span class="nt">&quot;azure_container_policy_uri&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Policy Storage Container URI&gt;&quot;</span>
         <span class="p">},</span>
-        <span class="nt">&quot;azure_event_queue_resource_id&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Storage Account Resource Id&gt;&quot;</span>
+        <span class="nt">&quot;azure_container_storage_resource_id&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Storage Account Resource ID&gt;&quot;</span>
+        <span class="p">},</span>
+        <span class="nt">&quot;azure_container_log_group&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;azure://&lt;Instrumentation Key&gt;&quot;</span>
+        <span class="p">},</span>
+        <span class="nt">&quot;azure_container_metrics&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;azure://&lt;Instrumentation Key&gt;&quot;</span>
+        <span class="p">},</span>
+        <span class="nt">&quot;azure_container_output_dir&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="nt">&quot;value&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;Log Storage Container URI&gt;&quot;</span>
         <span class="p">}</span>
     <span class="p">}</span>
 <span class="p">}</span>
@@ -2694,7 +2729,7 @@ with the following command:</p>
 </div>
 </div>
 <div class="section" id="upload-a-custodian-policy">
-<h2>5. Upload a Custodian Policy<a class="headerlink" href="#upload-a-custodian-policy" title="Permalink to this headline">¶</a></h2>
+<h2>6. Upload a Custodian Policy<a class="headerlink" href="#upload-a-custodian-policy" title="Permalink to this headline">¶</a></h2>
 <p>Finally, create a custodian policy called <code class="docutils literal notranslate"><span class="pre">find-c7nstorage.yaml</span></code>. This policy will just find the
 storage account we made earlier. We’ll set the mode to run every minute for easier testing.</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>

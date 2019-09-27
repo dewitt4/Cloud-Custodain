@@ -1400,11 +1400,21 @@
 <li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-a-resource-group">1. Create a Resource Group</a></li>
 <li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-a-storage-account">2. Create a Storage Account</a></li>
 <li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-a-managed-identity">3. Create a Managed Identity</a></li>
-<li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-the-aci-container-host">4. Create the ACI Container Host</a></li>
-<li class="toctree-l4"><a class="reference internal" href="acitutorial.html#upload-a-custodian-policy">5. Upload a Custodian Policy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-an-application-insights-instance">4. Create an Application Insights Instance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="acitutorial.html#create-the-aci-container-host">5. Create the ACI Container Host</a></li>
+<li class="toctree-l4"><a class="reference internal" href="acitutorial.html#upload-a-custodian-policy">6. Upload a Custodian Policy</a></li>
 </ul>
 </li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">Tutorial - Helm Deployment</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Tutorial - Helm Deployment</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#create-a-resource-group">1. Create a Resource Group</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-a-storage-account">2. Create a Storage Account</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-a-service-principal">3. Create a Service Principal</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-an-application-insights-instance">4. Create an Application Insights Instance</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-an-aks-cluster-and-install-tiller">5. Create an AKS Cluster and Install Tiller</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#deploy-the-helm-chart">6. Deploy the Helm Chart</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#upload-a-custodian-policy">7. Upload a Custodian Policy</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -2603,7 +2613,171 @@
   <div class="section" id="tutorial-helm-deployment">
 <span id="azure-configuration-helmtutorial"></span><h1>Tutorial - Helm Deployment<a class="headerlink" href="#tutorial-helm-deployment" title="Permalink to this headline">¶</a></h1>
 <p>This is a step-by-step tutorial for deploying the Azure Container Host in Azure Kubernetes Service
-(AKS) with the provided helm chart and deployment script.</p>
+(AKS) with the provided helm chart and deployment script. This tutorial makes use of the
+<a class="reference external" href="https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest">Azure CLI</a>
+and <a class="reference external" href="https://helm.sh/">helm</a>. Make sure that both are installed and you are logged in to your
+subscription.</p>
+<div class="section" id="create-a-resource-group">
+<h2>1. Create a Resource Group<a class="headerlink" href="#create-a-resource-group" title="Permalink to this headline">¶</a></h2>
+<p>This will hold all of the Azure resources created in this tutorial. You could use an existing
+resource group too.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az group create --name c7n-helm-tutorial --location westus2
+</pre></div>
+</div>
+</div>
+<div class="section" id="create-a-storage-account">
+<h2>2. Create a Storage Account<a class="headerlink" href="#create-a-storage-account" title="Permalink to this headline">¶</a></h2>
+<p>This storage account will hold all of the blobs and queues used by the container host. You could
+also use an existing resource here or multiple storage accounts.</p>
+<p>We will also create two blob containers. One will host the uploaded policies, and the other will store
+the custodian output files of running policies.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az storage account create --resource-group c7n-helm-tutorial --name c7nstorage
+
+<span class="nv">account_key</span><span class="o">=</span><span class="k">$(</span>az storage account keys list --account-name c7nstorage --query <span class="s2">&quot;[0].value&quot;</span> --output tsv<span class="k">)</span>
+az storage container create --account-name c7nstorage --account-key <span class="nv">$account_key</span> --name c7n-helm-policies
+az storage container create --account-name c7nstorage --account-key <span class="nv">$account_key</span> --name c7n-helm-logs
+</pre></div>
+</div>
+</div>
+<div class="section" id="create-a-service-principal">
+<h2>3. Create a Service Principal<a class="headerlink" href="#create-a-service-principal" title="Permalink to this headline">¶</a></h2>
+<p>This service principal will be used as the identity for the container host. You could also use an existing service principal.
+Remember to save the password to use as the client secret.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az ad sp create-for-rbac --name c7n-helm
+</pre></div>
+</div>
+<p>This service principal will need the proper permissions to interact with the storage account and any other
+azure resources that the Azure Container Host interacts with. This includes the resources that
+policies will run against.</p>
+<p>The simplest way to grant these permissions is to make the identity a <code class="docutils literal notranslate"><span class="pre">Contributor</span></code> on the target
+subscription and a <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Blob</span> <span class="pre">Data</span> <span class="pre">Contributor</span></code> and <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Queue</span> <span class="pre">Data</span> <span class="pre">Contributor</span></code> on the
+storage account created above.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az role assignment create --assignee &lt;Service Principal Client Id&gt; <span class="se">\</span>
+    --role <span class="s2">&quot;Contributor&quot;</span> --scope &lt;Target Subscription Resource Id&gt;
+
+az role assignment create --assignee &lt;Service Principal Client Id&gt; <span class="se">\</span>
+    --role <span class="s2">&quot;Storage Blob Data Contributor&quot;</span> --scope &lt;Storage Account Resource Id&gt;
+
+az role assignment create --assignee &lt;Service Principal Client Id&gt; <span class="se">\</span>
+    --role <span class="s2">&quot;Storage Queue Data Contributor&quot;</span> --scope &lt;Storage Account Resource Id&gt;
+</pre></div>
+</div>
+</div>
+<div class="section" id="create-an-application-insights-instance">
+<h2>4. Create an Application Insights Instance<a class="headerlink" href="#create-an-application-insights-instance" title="Permalink to this headline">¶</a></h2>
+<p>We will create an Application Insights instance to gather logs and telemetry generated by the
+running container host.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># You may need to add the application-insights extension</span>
+az extension add -n application-insights
+
+az monitor app-insights component create --resource-group c7n-helm-tutorial --app c7n-helm-insights --location westus2
+</pre></div>
+</div>
+</div>
+<div class="section" id="create-an-aks-cluster-and-install-tiller">
+<h2>5. Create an AKS Cluster and Install Tiller<a class="headerlink" href="#create-an-aks-cluster-and-install-tiller" title="Permalink to this headline">¶</a></h2>
+<p>This AKS cluster will be used to host the pods running the Container Host. Tiller will also need to
+be installed with the proper service account. The provided node count and vm size will create a
+small cluster and should be adjusted to fit your needs outside this tutorial.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az aks create --resource-group c7n-helm-tutorial --name c7n-helm <span class="se">\</span>
+    --node-count <span class="m">1</span> --node-vm-size Standard_B2s <span class="se">\</span>
+    --service-principal &lt;Service Principal ID&gt; --client-secret &lt;Client Secret&gt;
+
+az aks get-credentials --resource-group c7n-helm-tutorial --name c7n-helm
+</pre></div>
+</div>
+<p>Once the cluster has been created, we can initialize helm and tiller. First, create the Service
+Account and Cluster Roler Binding for Tiller</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># rbac-config.yaml</span>
+<span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ServiceAccount</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">tiller</span>
+  <span class="nt">namespace</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">kube-system</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">rbac.authorization.k8s.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ClusterRoleBinding</span>
+<span class="nt">metadata</span><span class="p">:</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">tiller</span>
+<span class="nt">roleRef</span><span class="p">:</span>
+  <span class="nt">apiGroup</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">rbac.authorization.k8s.io</span>
+  <span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ClusterRole</span>
+  <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cluster-admin</span>
+<span class="nt">subjects</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">kind</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ServiceAccount</span>
+    <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">tiller</span>
+    <span class="nt">namespace</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">kube-system</span>
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kubectl apply -f rbac-config.yaml
+
+helm init --service-account tiller
+</pre></div>
+</div>
+</div>
+<div class="section" id="deploy-the-helm-chart">
+<h2>6. Deploy the Helm Chart<a class="headerlink" href="#deploy-the-helm-chart" title="Permalink to this headline">¶</a></h2>
+<p>Now we are ready to deploy the helm chart and the container host. Create a file with the helm
+configuration values for our container host. See the <a class="reference internal" href="containerhosting.html#azure-containerhosting"><span class="std std-ref">Container Host Documentation</span></a>
+for information on filling out the environment variables.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># helm-values.yaml</span>
+
+<span class="nt">defaultEnvironment</span><span class="p">:</span>
+  <span class="nt">AZURE_TENANT_ID</span><span class="p">:</span> <span class="s">&quot;&lt;Azure</span><span class="nv"> </span><span class="s">Tenant</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
+  <span class="nt">AZURE_CLIENT_ID</span><span class="p">:</span> <span class="s">&quot;&lt;Azure</span><span class="nv"> </span><span class="s">Client</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
+  <span class="nt">AZURE_CONTAINER_POLICY_URI</span><span class="p">:</span> <span class="s">&quot;&lt;Azure</span><span class="nv"> </span><span class="s">Policy</span><span class="nv"> </span><span class="s">Container</span><span class="nv"> </span><span class="s">URI&gt;&quot;</span>
+  <span class="nt">AZURE_CONTAINER_STORAGE_RESOURCE_ID</span><span class="p">:</span> <span class="s">&quot;&lt;Storage</span><span class="nv"> </span><span class="s">Account</span><span class="nv"> </span><span class="s">Resource</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
+  <span class="nt">AZURE_CONTAINER_METRICS</span><span class="p">:</span> <span class="s">&quot;azure://&lt;App</span><span class="nv"> </span><span class="s">Insights</span><span class="nv"> </span><span class="s">Instrumentation</span><span class="nv"> </span><span class="s">Key&gt;&quot;</span>
+  <span class="nt">AZURE_CONTAINER_LOG_GROUP</span><span class="p">:</span> <span class="s">&quot;azure://&lt;App</span><span class="nv"> </span><span class="s">Insights</span><span class="nv"> </span><span class="s">Instrumentation</span><span class="nv"> </span><span class="s">Key&gt;&quot;</span>
+  <span class="nt">AZURE_CONTAINER_OUTPUT_DIR</span><span class="p">:</span> <span class="s">&quot;&lt;Azure</span><span class="nv"> </span><span class="s">Logs</span><span class="nv"> </span><span class="s">Container</span><span class="nv"> </span><span class="s">URI&gt;&quot;</span>
+
+<span class="nt">subscriptionHosts</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="s">&#39;&lt;Subscription</span><span class="nv"> </span><span class="s">Name&gt;&#39;</span>
+    <span class="nt">environment</span><span class="p">:</span>
+      <span class="nt">AZURE_SUBSCRIPTION_ID</span><span class="p">:</span> <span class="s">&quot;&lt;Subscription</span><span class="nv"> </span><span class="s">ID&gt;&quot;</span>
+</pre></div>
+</div>
+<p>Then deploy the chart with the following command. The client secret should come
+from creating the service principal and must be provided in a base64 encoded format.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>helm upgrade --install --debug --force --wait <span class="se">\</span>
+    --namespace cloud-custodian --values helm-values.yaml <span class="se">\</span>
+    --set defaultSecretEnvironment.AZURE_CLIENT_SECRET<span class="o">=</span>&lt;Base <span class="m">64</span> Azure Client Secret&gt; <span class="se">\</span>
+    helm-tutorial tools/ops/azure/container-host/chart
+</pre></div>
+</div>
+<p>To verify that the pod is running:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check if pod status is &quot;Running&quot;</span>
+kubectl get pods --namespace cloud-custodian
+
+<span class="c1"># Watch the logs for the pod</span>
+kubectl logs &lt;Pod Name&gt; --namespace cloud-custodian --follow
+</pre></div>
+</div>
+</div>
+<div class="section" id="upload-a-custodian-policy">
+<h2>7. Upload a Custodian Policy<a class="headerlink" href="#upload-a-custodian-policy" title="Permalink to this headline">¶</a></h2>
+<p>Finally, create a custodian policy called <code class="docutils literal notranslate"><span class="pre">find-c7nstorage.yaml</span></code>. This policy will just find the
+storage account we made earlier. We’ll set the mode to run every minute for easier testing.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+<span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">find-c7nstorage</span>
+  <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">azure.storage</span>
+  <span class="nt">mode</span><span class="p">:</span>
+    <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">container-periodic</span>
+    <span class="nt">schedule</span><span class="p">:</span> <span class="s">&quot;*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>  <span class="c1"># Run every minute as an example</span>
+  <span class="nt">filters</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">value</span>
+    <span class="nt">key</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">name</span>
+    <span class="nt">op</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">eq</span>
+    <span class="nt">value</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">c7nstorage</span>
+</pre></div>
+</div>
+<p>Upload this file to the policy storage container. Within a few minutes, the container host should
+pick it up and begin executing it.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>az storage blob upload --account-name c7nstorage --account-key <span class="nv">$account_key</span> <span class="se">\</span>
+    --container-name c7n-helm-policies --file find-c7nstorage.yaml --name find-c7nstorage.yaml
+</pre></div>
+</div>
+</div>
 </div>
 
 
