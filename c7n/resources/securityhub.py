@@ -24,7 +24,7 @@ import logging
 
 from c7n.actions import Action
 from c7n.filters import Filter
-from c7n.exceptions import PolicyValidationError
+from c7n.exceptions import PolicyValidationError, PolicyExecutionError
 from c7n.manager import resources
 from c7n.policy import LambdaMode, execution
 from c7n.utils import (
@@ -198,17 +198,47 @@ class SecurityHub(LambdaMode):
     def resolve_import_finding(self, event):
         return self.resolve_findings(event['detail']['findings'])
 
-    def resolve_resources(self, event):
-        # For centralized setups in a hub aggregator account
-        self.assume_member(event)
+    def run(self, event, lambda_context):
+        self.setup_exec_environment(event)
+        resource_sets = self.get_resource_sets(event)
+        result_sets = {}
+        for (account_id, region), rarns in resource_sets.items():
+            self.assume_member({'account': account_id, 'region': region})
+            resources = self.resolve_resources(event)
+            rset = result_sets.setdefault((account_id, region), [])
+            if resources:
+                rset.extend(self.run_resource_set(event, resources))
+        return result_sets
 
+    def get_resource_sets(self, event):
+        # return a mapping of (account_id, region): [resource_arns]
+        # per the finding in the event.
+        resource_arns = self.get_resource_arns(event)
+        # Group resources by account_id, region for role assumes
+        resource_sets = {}
+        for rarn in resource_arns:
+            resource_sets.setdefault((rarn.account_id, rarn.region), []).append(rarn)
+        # Warn if not configured for member-role and have multiple accounts resources.
+        if (not self.policy.data['mode'].get('member-role') and
+                set((self.policy.options.account_id,)) != {
+                    rarn.account_id for rarn in resource_arns}):
+            msg = ('hub-mode not configured for multi-account member-role '
+                   'but multiple resource accounts found')
+            self.policy.log.warning(msg)
+            raise PolicyExecutionError(msg)
+        return resource_sets
+
+    def get_resource_arns(self, event):
         event_type = event['detail-type']
         arn_resolver = getattr(self, self.handlers[event_type])
         arns = arn_resolver(event)
-
         # Lazy import to avoid aws sdk runtime dep in core
         from c7n.resources.aws import Arn
-        resource_map = {Arn.parse(r) for r in arns}
+        return {Arn.parse(r) for r in arns}
+
+    def resolve_resources(self, event):
+        # For centralized setups in a hub aggregator account
+        resource_map = self.get_resource_arns(event)
 
         # sanity check on finding resources matching policy resource
         # type's service.
@@ -220,6 +250,9 @@ class SecurityHub(LambdaMode):
             resource_arns = [
                 r for r in resource_map
                 if r.service == self.policy.resource_manager.resource_type.service]
+            if not resource_arns:
+                log.info("mode:security-hub no matching resources arns")
+                return []
             resources = self.policy.resource_manager.get_resources(
                 [r.resource for r in resource_arns])
         else:
