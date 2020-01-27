@@ -68,7 +68,8 @@ class LambdaInvoke(EventAction):
         }
     }
 
-    permissions = ('lambda:InvokeFunction',)
+    permissions = ('lambda:InvokeFunction',
+               'iam:ListAccountAliases',)
 
     def process(self, resources, event=None):
         params = dict(FunctionName=self.data['function'])
@@ -82,10 +83,15 @@ class LambdaInvoke(EventAction):
             'timeout', 90), region_name=self.data.get('region', None))
         client = utils.local_session(
             self.manager.session_factory).client('lambda', config=config)
+        alias = utils.get_account_alias_from_sts(
+            utils.local_session(self.manager.session_factory))
 
         payload = {
             'version': VERSION,
             'event': event,
+            'account_id': self.manager.config.account_id,
+            'account': alias,
+            'region': self.manager.config.region,
             'action': self.data,
             'policy': self.manager.data}
 
