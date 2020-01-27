@@ -12,8 +12,7 @@ ResourceMap = {
     "azure.cosmosdb": "c7n_azure.resources.cosmos_db.CosmosDB",
     "azure.cosmosdb-collection": "c7n_azure.resources.cosmos_db.CosmosDBCollection",
     "azure.cosmosdb-database": "c7n_azure.resources.cosmos_db.CosmosDBDatabase",
-    "azure.cost-management-export": (
-        "c7n_azure.resources.cost_management_export.CostManagementExport"),
+    "azure.cost-management-export": "c7n_azure.resources.cost_management_export.CostManagementExport",  # noqa
     "azure.databricks": "c7n_azure.resources.databricks.Databricks",
     "azure.datafactory": "c7n_azure.resources.data_factory.DataFactory",
     "azure.datalake": "c7n_azure.resources.datalake_store.DataLakeStore",
@@ -31,8 +30,7 @@ ResourceMap = {
     "azure.keyvault-storage": "c7n_azure.resources.key_vault_storage.KeyVaultStorage",
     "azure.loadbalancer": "c7n_azure.resources.load_balancer.LoadBalancer",
     "azure.networkinterface": "c7n_azure.resources.network_interface.NetworkInterface",
-    "azure.networksecuritygroup": (
-        "c7n_azure.resources.network_security_group.NetworkSecurityGroup"),
+    "azure.networksecuritygroup": "c7n_azure.resources.network_security_group.NetworkSecurityGroup",
     "azure.policyassignments": "c7n_azure.resources.policy_assignments.PolicyAssignments",
     "azure.postgresql-database": "c7n_azure.resources.postgresql_database.PostgresqlDatabase",
     "azure.postgresql-server": "c7n_azure.resources.postgresql_server.PostgresqlServer",
