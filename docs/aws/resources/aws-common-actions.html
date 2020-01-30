@@ -2866,7 +2866,25 @@ fit within 32k, we default to batch size 250.</p>
 </div>
 <div class="section" id="mark-for-op">
 <span id="aws-common-actions-mark-for-op"></span><h2>mark-for-op<a class="headerlink" href="#mark-for-op" title="Permalink to this headline">¶</a></h2>
-<p>Action to specify a delayed action on an ELB target group</p>
+<p>Tag resources for future action.</p>
+<dl class="field-list">
+<dt class="field-odd">example</dt>
+<dd class="field-odd"><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+<span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2-mark-stop</span>
+  <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2</span>
+  <span class="nt">filters</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">image-age</span>
+      <span class="nt">op</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ge</span>
+      <span class="nt">days</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">90</span>
+  <span class="nt">actions</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">mark-for-op</span>
+      <span class="nt">tag</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">custodian_cleanup</span>
+      <span class="nt">op</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">terminate</span>
+      <span class="nt">days</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">4</span>
+</pre></div>
+</div>
+</dd>
+</dl>
 <div class="toggle docutils container">
 <div class="header docutils container" style=""></div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">properties</span><span class="p">:</span>
   <span class="nt">days</span><span class="p">:</span>
@@ -3019,22 +3037,31 @@ fit within 32k, we default to batch size 250.</p>
 </div>
 <div class="section" id="modify-security-groups">
 <span id="aws-common-actions-modify-security-groups"></span><h2>modify-security-groups<a class="headerlink" href="#modify-security-groups" title="Permalink to this headline">¶</a></h2>
-<p>Common action for modifying security groups on a vpc attached resources.</p>
-<p>Security groups for add or remove can be specified via group id or
-name. Group removal also supports symbolic names such as
-‘matched’, ‘network-location’ or ‘all’. ‘matched’ uses the
-annotations/output of the ‘security-group’ filter
-filter. ‘network-location’ uses the annotations of the
-‘network-location’ interface filter for <cite>SecurityGroupMismatch</cite>.</p>
-<p>Note a vpc attached resource requires at least one security group,
-this action will use the sg specified in <cite>isolation-group</cite> to ensure
-resources always have at least one security-group.</p>
-<dl class="simple">
-<dt>type: modify-security-groups</dt><dd><p>add: []
-remove: [] | matched | network-location
-isolation-group: sg-xyz</p>
-</dd>
+<p>Remove security groups from an interface.</p>
+<p>Can target either physical groups as a list of group ids or
+symbolic groups like ‘matched’ or ‘all’. ‘matched’ uses
+the annotations of the ‘group’ interface filter.</p>
+<p>Note an interface always gets at least one security group, so
+we also allow specification of an isolation/quarantine group
+that can be specified if there would otherwise be no groups.</p>
+<dl class="field-list simple">
+<dt class="field-odd">example</dt>
+<dd class="field-odd"><p></p></dd>
 </dl>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">network-interface-remove-group</span>
+    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">eni</span>
+    <span class="nt">filters</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">security-group</span>
+        <span class="nt">match-resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">true</span>
+        <span class="nt">key</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">FromPort</span>
+        <span class="nt">value</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">22</span>
+    <span class="nt">actions</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">modify-security-groups</span>
+        <span class="nt">isolation-group</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">sg-01ab23c4</span>
+        <span class="nt">add</span><span class="p">:</span> <span class="p p-Indicator">[]</span>
+</pre></div>
+</div>
 <div class="toggle docutils container">
 <div class="header docutils container" style=""></div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">anyOf</span><span class="p">:</span>
 <span class="p p-Indicator">-</span> <span class="nt">required</span><span class="p">:</span>
@@ -3546,21 +3573,7 @@ policy.</p>
 </div>
 <div class="section" id="remove-tag">
 <span id="aws-common-actions-remove-tag"></span><h2>remove-tag<a class="headerlink" href="#remove-tag" title="Permalink to this headline">¶</a></h2>
-<p>Action to remove tag/tags from ELB target group</p>
-<dl class="field-list simple">
-<dt class="field-odd">example</dt>
-<dd class="field-odd"><p></p></dd>
-</dl>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
-  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">appelb-targetgroup-remove-expired-tag</span>
-    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">app-elb-target-group</span>
-    <span class="nt">filters</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:ExpiredTag&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
-    <span class="nt">actions</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">remove-tag</span>
-        <span class="nt">tags</span><span class="p">:</span> <span class="p p-Indicator">[</span><span class="s">&quot;ExpiredTag&quot;</span><span class="p p-Indicator">]</span>
-</pre></div>
-</div>
+<p>Removes the specified tags from the specified resources.</p>
 <div class="toggle docutils container">
 <div class="header docutils container" style=""></div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">properties</span><span class="p">:</span>
   <span class="nt">tags</span><span class="p">:</span>
@@ -3599,22 +3612,7 @@ policy.</p>
 </div>
 <div class="section" id="tag">
 <span id="aws-common-actions-tag"></span><h2>tag<a class="headerlink" href="#tag" title="Permalink to this headline">¶</a></h2>
-<p>Action to create tag/tags on an ELB target group</p>
-<dl class="field-list simple">
-<dt class="field-odd">example</dt>
-<dd class="field-odd"><p></p></dd>
-</dl>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
-  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">appelb-targetgroup-add-required-tag</span>
-    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">app-elb-target-group</span>
-    <span class="nt">filters</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="s">&quot;tag:RequiredTag&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">absent</span>
-    <span class="nt">actions</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">tag</span>
-        <span class="nt">key</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">RequiredTag</span>
-        <span class="nt">value</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">RequiredValue</span>
-</pre></div>
-</div>
+<p>Applies one or more tags to the specified resources.</p>
 <div class="toggle docutils container">
 <div class="header docutils container" style=""></div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">properties</span><span class="p">:</span>
   <span class="nt">key</span><span class="p">:</span>
