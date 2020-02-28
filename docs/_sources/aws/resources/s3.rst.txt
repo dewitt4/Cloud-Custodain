@@ -11,6 +11,8 @@ Filters
 
   - :ref:`bucket-encryption <aws.s3.filters.bucket-encryption>`
 
+  - :ref:`bucket-logging <aws.s3.filters.bucket-logging>`
+
   - :ref:`bucket-notification <aws.s3.filters.bucket-notification>`
 
   - :ref:`config-compliance <aws.common.filters.config-compliance>`
@@ -104,6 +106,71 @@ Filters for S3 buckets that have bucket-encryption
         enum:
         - bucket-encryption
     required:
+    - type
+
+
+.. _aws.s3.filters.bucket-logging:
+
+bucket-logging
+++++++++++++++
+Filter based on bucket logging configuration.
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: add-bucket-logging-if-missing
+            resource: s3
+            filters:
+              - type: bucket-logging
+                op: disabled
+            actions:
+              - type: toggle-logging
+                target_bucket: "{account_id}-{region}-s3-logs"
+                target_prefix: "{source_bucket_name}/"
+
+        policies:
+          - name: update-incorrect-or-missing-logging
+            resource: s3
+            filters:
+              - type: bucket-logging
+                op: not-equal
+                target_bucket: "{account_id}-{region}-s3-logs"
+                target_prefix: "{account}/{source_bucket_name}/"
+            actions:
+              - type: toggle-logging
+                target_bucket: "{account_id}-{region}-s3-logs"
+                target_prefix: "{account}/{source_bucket_name}/"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      op:
+        enum:
+        - enabled
+        - disabled
+        - equal
+        - not-equal
+        - eq
+        - ne
+      target_bucket:
+        type: string
+      target_prefix:
+        type: string
+      type:
+        enum:
+        - bucket-logging
+    required:
+    - op
     - type
 
 
@@ -804,8 +871,12 @@ Actions
 
   - :ref:`attach-encrypt <aws.s3.actions.attach-encrypt>`
 
+  - :ref:`auto-tag-user <aws.common.actions.auto-tag-user>`
+  
   - :ref:`configure-lifecycle <aws.s3.actions.configure-lifecycle>`
 
+  - :ref:`copy-related-tag <aws.common.actions.copy-related-tag>`
+  
   - :ref:`delete <aws.s3.actions.delete>`
 
   - :ref:`delete-bucket-notification <aws.s3.actions.delete-bucket-notification>`
@@ -1461,7 +1532,16 @@ Configure bucket inventories for an s3 bucket.
           - IsMultipartUploaded
           - ReplicationStatus
           - EncryptionStatus
+          - ObjectLockRetainUntilDate
+          - ObjectLockMode
+          - ObjectLockLegalHoldStatus
+          - IntelligentTieringAccessTier
         type: array
+      format:
+        enum:
+        - CSV
+        - ORC
+        - Parquet
       key_id:
         description: Optional Customer KMS KeyId for SSE-KMS
         type: string
@@ -1634,7 +1714,20 @@ https://docs.aws.amazon.com/AmazonS3/latest/dev/enable-logging-programming.html
             actions:
               - type: toggle-logging
                 target_bucket: log-bucket
-                target_prefix: logs123
+                target_prefix: logs123/
+
+        policies:
+          - name: s3-force-standard-logging
+            resource: s3
+            filters:
+              - type: bucket-logging
+                op: not-equal
+                target_bucket: "{account_id}-{region}-s3-logs"
+                target_prefix: "{account}/{source_bucket_name}/"
+            actions:
+              - type: toggle-logging
+                target_bucket: "{account_id}-{region}-s3-logs"
+                target_prefix: "{account}/{source_bucket_name}/"
 
 .. container:: toggle
 
