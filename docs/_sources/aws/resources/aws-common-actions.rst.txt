@@ -342,23 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action to specify an action to occur at a later date
+Tag resources for future action.
 
 :example:
 
-.. code-block:: yaml
+    .. code-block :: yaml
 
         policies:
-          - name: pipeline-delete-unused
-            resource: datapipeline
-            filters:
-              - "tag:custodian_cleanup": absent
-            actions:
-              - type: mark-for-op
-                tag: custodian_cleanup
-                msg: "Unused data pipeline: {op}@{action_date}"
-                op: delete
-                days: 7
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
 
 .. container:: toggle
 
@@ -535,7 +536,33 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify security groups on a Redshift cluster
+Remove security groups from an interface.
+
+Can target either physical groups as a list of group ids or
+symbolic groups like 'matched' or 'all'. 'matched' uses
+the annotations of the 'group' interface filter.
+
+Note an interface always gets at least one security group, so
+we also allow specification of an isolation/quarantine group
+that can be specified if there would otherwise be no groups.
+
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: network-interface-remove-group
+            resource: eni
+            filters:
+              - type: security-group
+                match-resource: true
+                key: FromPort
+                value: 22
+            actions:
+              - type: modify-security-groups
+                isolation-group: sg-01ab23c4
+                add: []
 
 .. container:: toggle
 
@@ -1133,20 +1160,8 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) on a pipeline
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: pipeline-remove-tag
-            resource: datapipeline
-            filters:
-              - "tag:OutdatedTag": present
-            actions:
-              - type: remove-tag
-                tags: ["OutdatedTag"]
+Removes the specified tags from the specified resources.
+    
 
 .. container:: toggle
 
@@ -1210,21 +1225,8 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on a pipeline
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: tag-pipeline
-            resource: datapipeline
-            filters:
-              - "tag:target-tag": absent
-            actions:
-              - type: tag
-                key: target-tag
-                value: target-tag-value
+Applies one or more tags to the specified resources.
+    
 
 .. container:: toggle
 
