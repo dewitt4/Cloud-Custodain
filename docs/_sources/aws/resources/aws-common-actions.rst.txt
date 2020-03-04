@@ -342,23 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action to specify an action to occur at a later date
+Tag resources for future action.
 
 :example:
 
-.. code-block:: yaml
+    .. code-block :: yaml
 
         policies:
-          - name: emr-mark-for-op
-            resource: emr
-            filters:
-              - "tag:Name": absent
-            actions:
-              - type: mark-for-op
-                tag: custodian_cleanup
-                op: terminate
-                days: 4
-                msg: "Cluster does not have required tags"
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
 
 .. container:: toggle
 
@@ -535,33 +536,7 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Remove security groups from an interface.
-
-Can target either physical groups as a list of group ids or
-symbolic groups like 'matched' or 'all'. 'matched' uses
-the annotations of the 'group' interface filter.
-
-Note an interface always gets at least one security group, so
-we also allow specification of an isolation/quarantine group
-that can be specified if there would otherwise be no groups.
-
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: network-interface-remove-group
-            resource: eni
-            filters:
-              - type: security-group
-                match-resource: true
-                key: FromPort
-                value: 22
-            actions:
-              - type: modify-security-groups
-                isolation-group: sg-01ab23c4
-                add: []
+Modify security groups on an Elasticsearch domain
 
 .. container:: toggle
 
@@ -1159,20 +1134,8 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) on a resource
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: emr-remove-tag
-            resource: emr
-            filters:
-              - "tag:target-tag": present
-            actions:
-              - type: remove-tag
-                tags: ["target-tag"]
+Removes the specified tags from the specified resources.
+    
 
 .. container:: toggle
 
@@ -1236,21 +1199,8 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on a resource
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: emr-tag-table
-            resource: emr
-            filters:
-              - "tag:target-tag": absent
-            actions:
-              - type: tag
-                key: target-tag
-                value: target-tag-value
+Applies one or more tags to the specified resources.
+    
 
 .. container:: toggle
 
@@ -1285,39 +1235,24 @@ Action to create tag(s) on a resource
 tag-trim
 ++++++++
 
-Automatically remove tags from an ec2 resource.
+Action to trim the number of tags to avoid hitting tag limits
 
-EC2 Resources have a limit of 50 tags, in order to make
-additional tags space on a set of resources, this action can
-be used to remove enough tags to make the desired amount of
-space while preserving a given set of tags.
+:example:
 
-.. code-block :: yaml
+.. code-block:: yaml
 
-   policies:
-     - name: ec2-tag-trim
-       comment: |
-         Any instances with 48 or more tags get tags removed until
-         they match the target tag count, in this case 47 so we
-         that we free up a tag slot for another usage.
-       resource: ec2
-       filters:
-             # Filter down to resources which already have 8 tags
-             # as we need space for 3 more, this also ensures that
-             # metrics reporting is correct for the policy.
-           - type: value
-             key: "length(Tags)"
-             op: ge
-             value: 48
-       actions:
-          - type: tag-trim
-            space: 3
-            preserve:
-              - OwnerContact
-              - ASV
-              - CMDBEnvironment
-              - downtime
-              - custodian_status
+        policies:
+          - name: asg-tag-trim
+            resource: asg
+            filters:
+              - type: tag-count
+                count: 10
+            actions:
+              - type: tag-trim
+                space: 1
+                preserve:
+                  - OwnerName
+                  - OwnerContact
 
 .. container:: toggle
 
