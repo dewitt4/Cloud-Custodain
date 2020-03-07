@@ -224,6 +224,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#cloudtrail-api-calls">CloudTrail API Calls</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#ec2-instance-state-events">EC2 Instance State Events</a></li>
 <li class="toctree-l4"><a class="reference internal" href="#periodic-function">Periodic Function</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#event-pattern-filtering">Event Pattern Filtering</a></li>
 </ul>
 </li>
 </ul>
@@ -2720,6 +2721,36 @@ substituted so a policy can be used across accounts.</p>
       <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">periodic</span>
       <span class="nt">schedule</span><span class="p">:</span> <span class="s">&quot;rate(1</span><span class="nv"> </span><span class="s">day)&quot;</span>
       <span class="nt">role</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::{account_id}:role/some-role</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="event-pattern-filtering">
+<h4>Event Pattern Filtering<a class="headerlink" href="#event-pattern-filtering" title="Permalink to this headline">¶</a></h4>
+<p>Cloud Watch Events also support content/pattern filtering, see</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://docs.aws.amazon.com/eventbridge/latest/userguide/content-filtering-with-event-patterns.html">https://docs.aws.amazon.com/eventbridge/latest/userguide/content-filtering-with-event-patterns.html</a></p></li>
+<li><p><a class="reference external" href="https://aws.amazon.com/blogs/compute/reducing-custom-code-by-using-advanced-rules-in-amazon-eventbridge/">https://aws.amazon.com/blogs/compute/reducing-custom-code-by-using-advanced-rules-in-amazon-eventbridge/</a></p></li>
+</ul>
+<p>In the context of a custodian policy you can define a ‘pattern’ key under mode, the pattern
+will be merged with the custodian generated default event pattern.</p>
+<p>If the pattern filtering does not match the event, the custodian policy lambda will not
+be invoked/executed.</p>
+<p>In the following example policy, an additional event pattern is supplied that ignores
+any create subnet call by the iam user named <cite>deputy</cite>.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">subnet-detect</span>
+    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.subnet</span>
+    <span class="nt">mode</span><span class="p">:</span>
+      <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cloudtrail</span>
+      <span class="nt">role</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">CustodianDemoRole</span>
+      <span class="nt">events</span><span class="p">:</span>
+        <span class="p p-Indicator">-</span> <span class="nt">source</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ec2.amazonaws.com</span>
+          <span class="nt">event</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">CreateSubnet</span>
+          <span class="nt">ids</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">responseElements.subnet.subnetId</span>
+      <span class="nt">pattern</span><span class="p">:</span>
+        <span class="nt">detail</span><span class="p">:</span>
+          <span class="nt">userIdentity</span><span class="p">:</span>
+            <span class="nt">userName</span><span class="p">:</span> <span class="p p-Indicator">[{</span><span class="s">&#39;anything-but&#39;</span><span class="p p-Indicator">:</span> <span class="s">&#39;deputy&#39;</span><span class="p p-Indicator">}]</span>
 </pre></div>
 </div>
 </div>
