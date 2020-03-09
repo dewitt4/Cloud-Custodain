@@ -342,23 +342,17 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action to specify an action to occur at a later date
-
-:example:
+Action to mark a Secret resource for deferred action :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: pipeline-delete-unused
-            resource: datapipeline
-            filters:
-              - "tag:custodian_cleanup": absent
-            actions:
-              - type: mark-for-op
-                tag: custodian_cleanup
-                msg: "Unused data pipeline: {op}@{action_date}"
-                op: delete
-                days: 7
+    policies:
+        - name: mark-secret-for-delete
+          resource: secrets-manager
+          actions:
+            - type: mark-for-op
+              op: tag
+              days: 1
 
 .. container:: toggle
 
@@ -1149,20 +1143,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) on a pipeline
+Action to remove tags from a cloudformation stack
 
 :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: pipeline-remove-tag
-            resource: datapipeline
-            filters:
-              - "tag:OutdatedTag": present
-            actions:
-              - type: remove-tag
-                tags: ["OutdatedTag"]
+    policies:
+      - name: remove-cfn-tag
+        resource: cfn
+        filters:
+          - 'tag:DesiredTag': present
+        actions:
+          - type: remove-tag
+            tags: ['DesiredTag']
 
 .. container:: toggle
 
@@ -1226,21 +1220,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on a pipeline
+Action to tag a cloudformation stack
 
 :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: tag-pipeline
-            resource: datapipeline
-            filters:
-              - "tag:target-tag": absent
-            actions:
-              - type: tag
-                key: target-tag
-                value: target-tag-value
+    policies:
+      - name: add-cfn-tag
+        resource: cfn
+        filters:
+          - 'tag:DesiredTag': absent
+        actions:
+          - type: tag
+            tags:
+              DesiredTag: DesiredValue
 
 .. container:: toggle
 
@@ -1275,24 +1269,29 @@ Action to create tag(s) on a pipeline
 tag-trim
 ++++++++
 
-Action to trim the number of tags to avoid hitting tag limits
+Action to remove tags from a redshift cluster
+
+This can be used to prevent reaching the ceiling limit of tags on a
+resource
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: asg-tag-trim
-            resource: asg
+          - name: redshift-tag-trim
+            resource: redshift
             filters:
-              - type: tag-count
-                count: 10
+              - type: value
+                key: "length(Tags)"
+                op: ge
+                value: 10
             actions:
               - type: tag-trim
                 space: 1
                 preserve:
-                  - OwnerName
-                  - OwnerContact
+                  - RequiredTag1
+                  - RequiredTag2
 
 .. container:: toggle
 
