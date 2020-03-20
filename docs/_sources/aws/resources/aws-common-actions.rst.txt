@@ -342,24 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Tag resources for future action.
+Action to specify an action to occur at a later date
 
 :example:
 
-    .. code-block :: yaml
+.. code-block:: yaml
 
         policies:
-        - name: ec2-mark-stop
-          resource: ec2
-          filters:
-            - type: image-age
-              op: ge
-              days: 90
-          actions:
-            - type: mark-for-op
-              tag: custodian_cleanup
-              op: terminate
-              days: 4
+          - name: mark-elb-delete-unused
+            resource: elb
+            filters:
+              - "tag:custodian_cleanup": absent
+              - Instances: []
+            actions:
+              - type: mark-for-op
+                tag: custodian_cleanup
+                msg: "Unused ELB - No Instances: {op}@{action_date}"
+                op: delete
+                days: 7
 
 .. container:: toggle
 
@@ -1134,8 +1134,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Removes the specified tags from the specified resources.
-    
+Action to remove tag(s) from ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-remove-old-tag
+            resource: elb
+            filters:
+              - "tag:OldTagKey": present
+            actions:
+              - type: remove-tag
+                tags: [OldTagKey1, OldTagKey2]
 
 .. container:: toggle
 
@@ -1199,8 +1211,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Applies one or more tags to the specified resources.
-    
+Action to add tag(s) to ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-add-owner-tag
+            resource: elb
+            filters:
+              - "tag:OwnerName": missing
+            actions:
+              - type: tag
+                key: OwnerName
+                value: OwnerName
 
 .. container:: toggle
 
@@ -1235,24 +1260,29 @@ Applies one or more tags to the specified resources.
 tag-trim
 ++++++++
 
-Action to trim the number of tags to avoid hitting tag limits
+Action to remove tags from a redshift cluster
+
+This can be used to prevent reaching the ceiling limit of tags on a
+resource
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: asg-tag-trim
-            resource: asg
+          - name: redshift-tag-trim
+            resource: redshift
             filters:
-              - type: tag-count
-                count: 10
+              - type: value
+                key: "length(Tags)"
+                op: ge
+                value: 10
             actions:
               - type: tag-trim
                 space: 1
                 preserve:
-                  - OwnerName
-                  - OwnerContact
+                  - RequiredTag1
+                  - RequiredTag2
 
 .. container:: toggle
 
