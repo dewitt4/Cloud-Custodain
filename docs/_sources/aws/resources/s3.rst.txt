@@ -15,6 +15,8 @@ Filters
 
   - :ref:`bucket-notification <aws.s3.filters.bucket-notification>`
 
+  - :ref:`check-public-block <aws.s3.filters.check-public-block>`
+
   - :ref:`config-compliance <aws.common.filters.config-compliance>`
   
   - :ref:`cross-account <aws.s3.filters.cross-account>`
@@ -288,6 +290,59 @@ Filter based on bucket notification configuration.
         - version
     required:
     - kind
+    - type
+
+
+.. _aws.s3.filters.check-public-block:
+
+check-public-block
+++++++++++++++++++
+Filter for s3 bucket public blocks
+
+`scope`: Optional: Defaults to Any
+`enabled`: Optional: Defaults to False
+
+The defaults essentially check to see if any public blocks are missing
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: CheckForPublicAclBlock-Off
+            resource: s3
+            region: us-east-1
+            filters:
+              - type: check-public-block
+                scope: Any
+                enabled: False
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      enabled:
+        type: boolean
+      scope:
+        enum:
+        - BlockPublicAcls
+        - IgnorePublicAcls
+        - BlockPublicPolicy
+        - RestrictPublicBuckets
+        - All
+        - Any
+        type: string
+      type:
+        enum:
+        - check-public-block
+    required:
     - type
 
 
@@ -912,6 +967,8 @@ Actions
   - :ref:`set-bucket-encryption <aws.s3.actions.set-bucket-encryption>`
 
   - :ref:`set-inventory <aws.s3.actions.set-inventory>`
+
+  - :ref:`set-public-block <aws.s3.actions.set-public-block>`
 
   - :ref:`set-replication <aws.s3.actions.set-replication>`
 
@@ -1572,6 +1629,66 @@ Configure bucket inventories for an s3 bucket.
     required:
     - name
     - destination
+    - type
+
+
+.. _aws.s3.actions.set-public-block:
+
+set-public-block
+++++++++++++++++
+Action to update Public Access blocks on S3 buckets
+
+`scope`: Optional: Defaults to All
+`state`: Optional: Defaults to enable
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: s3-dont-ignore-public-acls
+            resource: s3
+            filters:
+              - type: check-public-block
+                scope: BlockPublicAcls
+                enabled: False
+            actions:
+              - type: set-public-block
+                # scope: <------ optional (All by default)
+                #   - BlockPublicAcls
+                #   - IgnorePublicAcls
+                # state: enable <------ optional (enable by default)
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      scope:
+        items:
+          enum:
+          - BlockPublicAcls
+          - IgnorePublicAcls
+          - BlockPublicPolicy
+          - RestrictPublicBuckets
+          - All
+          type: string
+        type: array
+      state:
+        enum:
+        - enable
+        - disable
+        type: string
+      type:
+        enum:
+        - set-public-block
+    required:
     - type
 
 

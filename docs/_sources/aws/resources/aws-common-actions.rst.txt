@@ -342,43 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Mark SageMaker resources for deferred action
-(notebook-instance, endpoint, endpoint-config)
+Tag resources for future action.
 
 :example:
 
-.. code-block:: yaml
+    .. code-block :: yaml
 
-    policies:
-      - name: sagemaker-notebook-invalid-tag-stop
-        resource: sagemaker-notebook
-        filters:
-          - "tag:InvalidTag": present
-        actions:
-          - type: mark-for-op
-            op: stop
-            days: 1
-
-      - name: sagemaker-endpoint-failure-delete
-        resource: sagemaker-endpoint
-        filters:
-          - 'EndpointStatus': 'Failed'
-        actions:
-          - type: mark-for-op
-            op: delete
-            days: 1
-
-      - name: sagemaker-endpoint-config-invalid-size-delete
-        resource: sagemaker-notebook
-        filters:
-          - type: value
-          - key: ProductionVariants[].InstanceType
-          - value: 'ml.m4.10xlarge'
-          - op: contains
-        actions:
-          - type: mark-for-op
-            op: delete
-            days: 1
+        policies:
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
 
 .. container:: toggle
 
@@ -555,7 +536,11 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify security groups on a Redshift cluster
+Modify security groups on an Elasticache cluster.
+
+Looks at the individual clusters and modifies the Replication
+Group's configuration for Security groups so all nodes get
+affected equally
 
 .. container:: toggle
 
@@ -1153,45 +1138,8 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Remove tag(s) from SageMaker resources
-(notebook-instance, endpoint, endpoint-config)
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: sagemaker-notebook-remove-tag
-            resource: sagemaker-notebook
-            filters:
-              - "tag:BadTag": present
-            actions:
-              - type: remove-tag
-                tags: ["BadTag"]
-
-          - name: sagemaker-endpoint-remove-tag
-            resource: sagemaker-endpoint
-            filters:
-              - "tag:expired-tag": present
-            actions:
-              - type: remove-tag
-                tags: ["expired-tag"]
-
-          - name: sagemaker-endpoint-config-remove-tag
-            resource: sagemaker-endpoint-config
-            filters:
-              - "tag:expired-tag": present
-            actions:
-              - type: remove-tag
-                tags: ["expired-tag"]
-
-          - name: sagemaker-job-remove-tag
-            resource: sagemaker-job
-            filters:
-              - "tag:expired-tag": present
-            actions:
-              - type: remove-tag
-                tags: ["expired-tag"]
+Removes the specified tags from the specified resources.
+    
 
 .. container:: toggle
 
@@ -1255,49 +1203,8 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on a SageMaker resource
-(notebook-instance, endpoint, endpoint-config)
-
-:example:
-
-.. code-block:: yaml
-
-        policies:
-          - name: tag-sagemaker-notebook
-            resource: sagemaker-notebook
-            filters:
-              - "tag:target-tag": absent
-            actions:
-              - type: tag
-                key: target-tag
-                value: target-value
-
-          - name: tag-sagemaker-endpoint
-            resource: sagemaker-endpoint
-            filters:
-                - "tag:required-tag": absent
-            actions:
-              - type: tag
-                key: required-tag
-                value: required-value
-
-          - name: tag-sagemaker-endpoint-config
-            resource: sagemaker-endpoint-config
-            filters:
-                - "tag:required-tag": absent
-            actions:
-              - type: tag
-                key: required-tag
-                value: required-value
-
-          - name: tag-sagemaker-job
-            resource: sagemaker-job
-            filters:
-                - "tag:required-tag": absent
-            actions:
-              - type: tag
-                key: required-tag
-                value: required-value
+Applies one or more tags to the specified resources.
+    
 
 .. container:: toggle
 
@@ -1332,29 +1239,39 @@ Action to create tag(s) on a SageMaker resource
 tag-trim
 ++++++++
 
-Action to remove tags from a redshift cluster
+Automatically remove tags from an ec2 resource.
 
-This can be used to prevent reaching the ceiling limit of tags on a
-resource
+EC2 Resources have a limit of 50 tags, in order to make
+additional tags space on a set of resources, this action can
+be used to remove enough tags to make the desired amount of
+space while preserving a given set of tags.
 
-:example:
+.. code-block :: yaml
 
-.. code-block:: yaml
-
-        policies:
-          - name: redshift-tag-trim
-            resource: redshift
-            filters:
-              - type: value
-                key: "length(Tags)"
-                op: ge
-                value: 10
-            actions:
-              - type: tag-trim
-                space: 1
-                preserve:
-                  - RequiredTag1
-                  - RequiredTag2
+   policies:
+     - name: ec2-tag-trim
+       comment: |
+         Any instances with 48 or more tags get tags removed until
+         they match the target tag count, in this case 47 so we
+         that we free up a tag slot for another usage.
+       resource: ec2
+       filters:
+             # Filter down to resources which already have 8 tags
+             # as we need space for 3 more, this also ensures that
+             # metrics reporting is correct for the policy.
+           - type: value
+             key: "length(Tags)"
+             op: ge
+             value: 48
+       actions:
+          - type: tag-trim
+            space: 3
+            preserve:
+              - OwnerContact
+              - ASV
+              - CMDBEnvironment
+              - downtime
+              - custodian_status
 
 .. container:: toggle
 
