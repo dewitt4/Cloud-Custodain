@@ -342,24 +342,43 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action to specify an action to occur at a later date
+Mark SageMaker resources for deferred action
+(notebook-instance, endpoint, endpoint-config)
 
 :example:
 
 .. code-block:: yaml
 
     policies:
-      - name: dax-mark-tag-compliance
-        resource: dax
+      - name: sagemaker-notebook-invalid-tag-stop
+        resource: sagemaker-notebook
         filters:
-          - "tag:custodian_cleanup": absent
-          - "tag:OwnerName": absent
+          - "tag:InvalidTag": present
         actions:
           - type: mark-for-op
-            tag: custodian_cleanup
-            msg: "Missing tag 'OwnerName': {op}@{action_date}"
+            op: stop
+            days: 1
+
+      - name: sagemaker-endpoint-failure-delete
+        resource: sagemaker-endpoint
+        filters:
+          - 'EndpointStatus': 'Failed'
+        actions:
+          - type: mark-for-op
             op: delete
-            days: 7
+            days: 1
+
+      - name: sagemaker-endpoint-config-invalid-size-delete
+        resource: sagemaker-notebook
+        filters:
+          - type: value
+          - key: ProductionVariants[].InstanceType
+          - value: 'ml.m4.10xlarge'
+          - op: contains
+        actions:
+          - type: mark-for-op
+            op: delete
+            days: 1
 
 .. container:: toggle
 
@@ -536,23 +555,7 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Common action for modifying security groups on a vpc attached resources.
-
-Security groups for add or remove can be specified via group id or
-name. Group removal also supports symbolic names such as
-'matched', 'network-location' or 'all'. 'matched' uses the
-annotations/output of the 'security-group' filter
-filter. 'network-location' uses the annotations of the
-'network-location' interface filter for `SecurityGroupMismatch`.
-
-Note a vpc attached resource requires at least one security group,
-this action will use the sg specified in `isolation-group` to ensure
-resources always have at least one security-group.
-
-type: modify-security-groups
-    add: []
-    remove: [] | matched | network-location
-    isolation-group: sg-xyz
+Modify security groups on a Redshift cluster
 
 .. container:: toggle
 
@@ -1150,20 +1153,45 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) on a resource
+Remove tag(s) from SageMaker resources
+(notebook-instance, endpoint, endpoint-config)
 
 :example:
 
 .. code-block:: yaml
 
-    policies:
-      - name: dax-remove-tag
-        resource: dax
-        filters:
-          - "tag:OutdatedTag": present
-        actions:
-          - type: remove-tag
-            tags: ["OutdatedTag"]
+        policies:
+          - name: sagemaker-notebook-remove-tag
+            resource: sagemaker-notebook
+            filters:
+              - "tag:BadTag": present
+            actions:
+              - type: remove-tag
+                tags: ["BadTag"]
+
+          - name: sagemaker-endpoint-remove-tag
+            resource: sagemaker-endpoint
+            filters:
+              - "tag:expired-tag": present
+            actions:
+              - type: remove-tag
+                tags: ["expired-tag"]
+
+          - name: sagemaker-endpoint-config-remove-tag
+            resource: sagemaker-endpoint-config
+            filters:
+              - "tag:expired-tag": present
+            actions:
+              - type: remove-tag
+                tags: ["expired-tag"]
+
+          - name: sagemaker-job-remove-tag
+            resource: sagemaker-job
+            filters:
+              - "tag:expired-tag": present
+            actions:
+              - type: remove-tag
+                tags: ["expired-tag"]
 
 .. container:: toggle
 
@@ -1227,21 +1255,49 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on a resource
+Action to create tag(s) on a SageMaker resource
+(notebook-instance, endpoint, endpoint-config)
 
 :example:
 
 .. code-block:: yaml
 
-    policies:
-      - name: dax-cluster-tag
-        resource: dax
-        filters:
-          - "tag:target-tag": absent
-        actions:
-          - type: tag
-            key: target-tag
-            value: target-tag-value
+        policies:
+          - name: tag-sagemaker-notebook
+            resource: sagemaker-notebook
+            filters:
+              - "tag:target-tag": absent
+            actions:
+              - type: tag
+                key: target-tag
+                value: target-value
+
+          - name: tag-sagemaker-endpoint
+            resource: sagemaker-endpoint
+            filters:
+                - "tag:required-tag": absent
+            actions:
+              - type: tag
+                key: required-tag
+                value: required-value
+
+          - name: tag-sagemaker-endpoint-config
+            resource: sagemaker-endpoint-config
+            filters:
+                - "tag:required-tag": absent
+            actions:
+              - type: tag
+                key: required-tag
+                value: required-value
+
+          - name: tag-sagemaker-job
+            resource: sagemaker-job
+            filters:
+                - "tag:required-tag": absent
+            actions:
+              - type: tag
+                key: required-tag
+                value: required-value
 
 .. container:: toggle
 
@@ -1276,39 +1332,29 @@ Action to create tag(s) on a resource
 tag-trim
 ++++++++
 
-Automatically remove tags from an ec2 resource.
+Action to remove tags from a redshift cluster
 
-EC2 Resources have a limit of 50 tags, in order to make
-additional tags space on a set of resources, this action can
-be used to remove enough tags to make the desired amount of
-space while preserving a given set of tags.
+This can be used to prevent reaching the ceiling limit of tags on a
+resource
 
-.. code-block :: yaml
+:example:
 
-   policies:
-     - name: ec2-tag-trim
-       comment: |
-         Any instances with 48 or more tags get tags removed until
-         they match the target tag count, in this case 47 so we
-         that we free up a tag slot for another usage.
-       resource: ec2
-       filters:
-             # Filter down to resources which already have 8 tags
-             # as we need space for 3 more, this also ensures that
-             # metrics reporting is correct for the policy.
-           - type: value
-             key: "length(Tags)"
-             op: ge
-             value: 48
-       actions:
-          - type: tag-trim
-            space: 3
-            preserve:
-              - OwnerContact
-              - ASV
-              - CMDBEnvironment
-              - downtime
-              - custodian_status
+.. code-block:: yaml
+
+        policies:
+          - name: redshift-tag-trim
+            resource: redshift
+            filters:
+              - type: value
+                key: "length(Tags)"
+                op: ge
+                value: 10
+            actions:
+              - type: tag-trim
+                space: 1
+                preserve:
+                  - RequiredTag1
+                  - RequiredTag2
 
 .. container:: toggle
 
