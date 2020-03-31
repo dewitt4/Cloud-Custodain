@@ -342,24 +342,7 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Tag resources for future action.
-
-:example:
-
-    .. code-block :: yaml
-
-        policies:
-        - name: ec2-mark-stop
-          resource: ec2
-          filters:
-            - type: image-age
-              op: ge
-              days: 90
-          actions:
-            - type: mark-for-op
-              tag: custodian_cleanup
-              op: terminate
-              days: 4
+Action to specify a delayed action on an ELB target group
 
 .. container:: toggle
 
@@ -1150,8 +1133,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Removes the specified tags from the specified resources.
-    
+Action to remove tag/tags from ELB target group
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-targetgroup-remove-expired-tag
+            resource: app-elb-target-group
+            filters:
+              - "tag:ExpiredTag": present
+            actions:
+              - type: remove-tag
+                tags: ["ExpiredTag"]
 
 .. container:: toggle
 
@@ -1215,8 +1210,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Applies one or more tags to the specified resources.
-    
+Action to create tag/tags on an ELB target group
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: appelb-targetgroup-add-required-tag
+            resource: app-elb-target-group
+            filters:
+              - "tag:RequiredTag": absent
+            actions:
+              - type: tag
+                key: RequiredTag
+                value: RequiredValue
 
 .. container:: toggle
 
@@ -1251,39 +1259,29 @@ Applies one or more tags to the specified resources.
 tag-trim
 ++++++++
 
-Automatically remove tags from an ec2 resource.
+Action to remove tags from a redshift cluster
 
-EC2 Resources have a limit of 50 tags, in order to make
-additional tags space on a set of resources, this action can
-be used to remove enough tags to make the desired amount of
-space while preserving a given set of tags.
+This can be used to prevent reaching the ceiling limit of tags on a
+resource
 
-.. code-block :: yaml
+:example:
 
-   policies:
-     - name: ec2-tag-trim
-       comment: |
-         Any instances with 48 or more tags get tags removed until
-         they match the target tag count, in this case 47 so we
-         that we free up a tag slot for another usage.
-       resource: ec2
-       filters:
-             # Filter down to resources which already have 8 tags
-             # as we need space for 3 more, this also ensures that
-             # metrics reporting is correct for the policy.
-           - type: value
-             key: "length(Tags)"
-             op: ge
-             value: 48
-       actions:
-          - type: tag-trim
-            space: 3
-            preserve:
-              - OwnerContact
-              - ASV
-              - CMDBEnvironment
-              - downtime
-              - custodian_status
+.. code-block:: yaml
+
+        policies:
+          - name: redshift-tag-trim
+            resource: redshift
+            filters:
+              - type: value
+                key: "length(Tags)"
+                op: ge
+                value: 10
+            actions:
+              - type: tag-trim
+                space: 1
+                preserve:
+                  - RequiredTag1
+                  - RequiredTag2
 
 .. container:: toggle
 
