@@ -674,13 +674,58 @@ in which to interpret the clock (default value is 'utc')
 metrics
 +++++++
 
-Filter app load balancer by metric values.
+Supports cloud watch metrics filters on resources.
 
-See available metrics here
-https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html
+All resources that have cloud watch metrics are supported.
 
-Custodian defaults to specifying dimensions for the app elb only.
-Target Group dimension not supported atm.
+Docs on cloud watch metrics
+
+- GetMetricStatistics
+  https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricStatistics.html
+
+- Supported Metrics
+  https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/aws-services-cloudwatch-metrics.html
+
+.. code-block:: yaml
+
+  - name: ec2-underutilized
+    resource: ec2
+    filters:
+      - type: metrics
+        name: CPUUtilization
+        days: 4
+        period: 86400
+        value: 30
+        op: less-than
+
+Note periods when a resource is not sending metrics are not part
+of calculated statistics as in the case of a stopped ec2 instance,
+nor for resources to new to have existed the entire
+period. ie. being stopped for an ec2 instance wouldn't lower the
+average cpu utilization.
+
+The "missing-value" key allows a policy to specify a default
+value when CloudWatch has no data to report:
+
+.. code-block:: yaml
+
+  - name: elb-low-request-count
+    resource: elb
+    filters:
+      - type: metrics
+        name: RequestCount
+        statistics: Sum
+        days: 7
+        value: 7
+        missing-value: 0
+        op: less-than
+
+This policy matches any ELB with fewer than 7 requests for the past week.
+ELBs with no requests during that time will have an empty set of metrics.
+Rather than skipping those resources, "missing-value: 0" causes the
+policy to treat their request counts as 0.
+
+Note the default statistic for metrics is Average.
 
 .. container:: toggle
 
