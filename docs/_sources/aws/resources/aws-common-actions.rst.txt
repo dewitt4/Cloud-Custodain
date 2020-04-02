@@ -342,26 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Tag resources for future action.
+Action to specify an action to occur at a later date
 
-The optional 'tz' parameter can be used to adjust the clock to align
-with a given timezone. The default value is 'utc'.
+:example:
 
-If neither 'days' nor 'hours' is specified, Cloud Custodian will default
-to marking the resource for action 4 days in the future.
+.. code-block:: yaml
 
-.. code-block :: yaml
-
-  policies:
-    - name: ec2-mark-for-stop-in-future
-      resource: ec2
-      filters:
-        - type: value
-          key: Name
-          value: instance-to-stop-in-four-days
-      actions:
-        - type: mark-for-op
-          op: stop
+        policies:
+          - name: mark-elb-delete-unused
+            resource: elb
+            filters:
+              - "tag:custodian_cleanup": absent
+              - Instances: []
+            actions:
+              - type: mark-for-op
+                tag: custodian_cleanup
+                msg: "Unused ELB - No Instances: {op}@{action_date}"
+                op: delete
+                days: 7
 
 .. container:: toggle
 
@@ -538,7 +536,7 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify security groups on a Redshift cluster
+Modify VPC security groups on an ELB.
 
 .. container:: toggle
 
@@ -1136,8 +1134,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Remove tags from ec2 resources.
-    
+Action to remove tag(s) from ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-remove-old-tag
+            resource: elb
+            filters:
+              - "tag:OldTagKey": present
+            actions:
+              - type: remove-tag
+                tags: [OldTagKey1, OldTagKey2]
 
 .. container:: toggle
 
@@ -1201,8 +1211,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Tag an ec2 resource.
-    
+Action to add tag(s) to ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-add-owner-tag
+            resource: elb
+            filters:
+              - "tag:OwnerName": missing
+            actions:
+              - type: tag
+                key: OwnerName
+                value: OwnerName
 
 .. container:: toggle
 
@@ -1237,29 +1260,39 @@ Tag an ec2 resource.
 tag-trim
 ++++++++
 
-Action to remove tags from a redshift cluster
+Automatically remove tags from an ec2 resource.
 
-This can be used to prevent reaching the ceiling limit of tags on a
-resource
+EC2 Resources have a limit of 50 tags, in order to make
+additional tags space on a set of resources, this action can
+be used to remove enough tags to make the desired amount of
+space while preserving a given set of tags.
 
-:example:
+.. code-block :: yaml
 
-.. code-block:: yaml
-
-        policies:
-          - name: redshift-tag-trim
-            resource: redshift
-            filters:
-              - type: value
-                key: "length(Tags)"
-                op: ge
-                value: 10
-            actions:
-              - type: tag-trim
-                space: 1
-                preserve:
-                  - RequiredTag1
-                  - RequiredTag2
+   policies:
+     - name: ec2-tag-trim
+       comment: |
+         Any instances with 48 or more tags get tags removed until
+         they match the target tag count, in this case 47 so we
+         that we free up a tag slot for another usage.
+       resource: ec2
+       filters:
+             # Filter down to resources which already have 8 tags
+             # as we need space for 3 more, this also ensures that
+             # metrics reporting is correct for the policy.
+           - type: value
+             key: "length(Tags)"
+             op: ge
+             value: 48
+       actions:
+          - type: tag-trim
+            space: 3
+            preserve:
+              - OwnerContact
+              - ASV
+              - CMDBEnvironment
+              - downtime
+              - custodian_status
 
 .. container:: toggle
 
