@@ -19,13 +19,13 @@ import functools
 import json
 import os
 import time
+import yaml
 
 import jinja2
 import jmespath
 from botocore.exceptions import ClientError
 from dateutil import parser
 from dateutil.tz import gettz, tzutc
-from ruamel import yaml
 
 
 class Providers(object):
