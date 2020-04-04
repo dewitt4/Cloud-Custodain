@@ -7,8 +7,6 @@ data that's enqueued to SQS via :py:meth:`c7n.actions.Notify.send_sqs`.
 Alternatively, with -p|--plain specified, the file will be assumed to be
 JSON data that can be loaded directly.
 """
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import argparse
 import base64
 import json
@@ -27,7 +25,7 @@ from c7n_mailer.utils_email import get_mimetext_message
 logger = logging.getLogger(__name__)
 
 
-class MailerTester(object):
+class MailerTester:
 
     def __init__(self, msg_file, config, msg_plain=False, json_dump_file=None):
         if not os.path.exists(msg_file):

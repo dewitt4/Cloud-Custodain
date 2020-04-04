@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import json
 import os
 import sys
@@ -441,7 +439,7 @@ class TabCompletionTest(CliTest):
 
     def test_schema_completer_wrapper(self):
 
-        class MockArgs(object):
+        class MockArgs:
             summary = False
 
         args = MockArgs()
@@ -608,7 +606,7 @@ class MetricsTest(CliTest):
         #
         # Test for defaults when --start is not supplied
         #
-        class FakeOptions(object):
+        class FakeOptions:
             start = end = None
             days = 5
 
