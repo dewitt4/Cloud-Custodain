@@ -1634,22 +1634,44 @@ set-public-block
 ++++++++++++++++
 Action to update Public Access blocks on S3 buckets
 
-if no action parameters are provided it will enable all public block configuration.
+If no action parameters are provided all settings will be set to the `state`, which defaults
 
-If a action parameters are provided, those will be set and other extant values preserved.
+If action parameters are provided, those will be set and other extant values preserved.
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: s3-dont-ignore-public-acls
+          - name: s3-public-block-enable-all
             resource: s3
             filters:
               - type: check-public-block
             actions:
               - type: set-public-block
-              # BlockPublicAcls: true <-- optional, if none provided sets all to true by default
+
+        policies:
+          - name: s3-public-block-disable-all
+            resource: s3
+            filters:
+              - type: check-public-block
+            actions:
+              - type: set-public-block
+                state: false
+
+        policies:
+          - name: s3-public-block-enable-some
+            resource: s3
+            filters:
+              - or:
+                - type: check-public-block
+                  BlockPublicAcls: false
+                - type: check-public-block
+                  BlockPublicPolicy: false
+            actions:
+              - type: set-public-block
+                BlockPublicAcls: true
+                BlockPublicPolicy: true
 
 .. container:: toggle
 
@@ -1669,6 +1691,9 @@ If a action parameters are provided, those will be set and other extant values p
       IgnorePublicAcls:
         type: boolean
       RestrictPublicBuckets:
+        type: boolean
+      state:
+        default: true
         type: boolean
       type:
         enum:
