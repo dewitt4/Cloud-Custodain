@@ -342,23 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action schedules custodian to perform an action at a certain date
+Tag resources for future action.
 
 :example:
 
-.. code-block:: yaml
+    .. code-block :: yaml
 
         policies:
-          - name: s3-encrypt
-            resource: s3
-            filters:
-              - type: missing-statement
-                statement_ids:
-                  - RequiredEncryptedPutObject
-            actions:
-              - type: mark-for-op
-                op: attach-encrypt
-                days: 7
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
 
 .. container:: toggle
 
@@ -535,7 +536,7 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify VPC security groups on an ELB.
+Modify security groups on a Redshift cluster
 
 .. container:: toggle
 
@@ -1133,20 +1134,8 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tags from a cloudformation stack
-
-:example:
-
-.. code-block:: yaml
-
-    policies:
-      - name: remove-cfn-tag
-        resource: cfn
-        filters:
-          - 'tag:DesiredTag': present
-        actions:
-          - type: remove-tag
-            tags: ['DesiredTag']
+Removes the specified tags from the specified resources.
+    
 
 .. container:: toggle
 
@@ -1210,21 +1199,8 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to tag a cloudformation stack
-
-:example:
-
-.. code-block:: yaml
-
-    policies:
-      - name: add-cfn-tag
-        resource: cfn
-        filters:
-          - 'tag:DesiredTag': absent
-        actions:
-          - type: tag
-            tags:
-              DesiredTag: DesiredValue
+Applies one or more tags to the specified resources.
+    
 
 .. container:: toggle
 
@@ -1259,24 +1235,29 @@ Action to tag a cloudformation stack
 tag-trim
 ++++++++
 
-Action to trim the number of tags to avoid hitting tag limits
+Action to remove tags from a redshift cluster
+
+This can be used to prevent reaching the ceiling limit of tags on a
+resource
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: asg-tag-trim
-            resource: asg
+          - name: redshift-tag-trim
+            resource: redshift
             filters:
-              - type: tag-count
-                count: 10
+              - type: value
+                key: "length(Tags)"
+                op: ge
+                value: 10
             actions:
               - type: tag-trim
                 space: 1
                 preserve:
-                  - OwnerName
-                  - OwnerContact
+                  - RequiredTag1
+                  - RequiredTag2
 
 .. container:: toggle
 
