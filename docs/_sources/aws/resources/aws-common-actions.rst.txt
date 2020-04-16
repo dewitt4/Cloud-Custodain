@@ -342,24 +342,21 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Action to specify an action to occur at a later date
+Mark SNS for deferred action
 
 :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: mark-elb-delete-unused
-            resource: elb
-            filters:
-              - "tag:custodian_cleanup": absent
-              - Instances: []
-            actions:
-              - type: mark-for-op
-                tag: custodian_cleanup
-                msg: "Unused ELB - No Instances: {op}@{action_date}"
-                op: delete
-                days: 7
+    policies:
+      - name: sns-invalid-tag-mark
+        resource: sns
+        filters:
+          - "tag:InvalidTag": present
+        actions:
+          - type: mark-for-op
+            op: delete
+            days: 1
 
 .. container:: toggle
 
@@ -536,7 +533,23 @@ Applies to all resources with embedded IAM Policies.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify VPC security groups on an ELB.
+Common action for modifying security groups on a vpc attached resources.
+
+Security groups for add or remove can be specified via group id or
+name. Group removal also supports symbolic names such as
+'matched', 'network-location' or 'all'. 'matched' uses the
+annotations/output of the 'security-group' filter
+filter. 'network-location' uses the annotations of the
+'network-location' interface filter for `SecurityGroupMismatch`.
+
+Note a vpc attached resource requires at least one security group,
+this action will use the sg specified in `isolation-group` to ensure
+resources always have at least one security-group.
+
+type: modify-security-groups
+    add: []
+    remove: [] | matched | network-location
+    isolation-group: sg-xyz
 
 .. container:: toggle
 
@@ -1134,20 +1147,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) from ELB(s)
+Action to remove tag(s) on sns
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: elb-remove-old-tag
-            resource: elb
+          - name: sns-remove-tag
+            resource: sns
             filters:
-              - "tag:OldTagKey": present
+              - "tag:OutdatedTag": present
             actions:
               - type: remove-tag
-                tags: [OldTagKey1, OldTagKey2]
+                tags: ["OutdatedTag"]
 
 .. container:: toggle
 
@@ -1211,21 +1224,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to add tag(s) to ELB(s)
+Action to create tag(s) on sns
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: elb-add-owner-tag
-            resource: elb
+          - name: tag-sns
+            resource: sns
             filters:
-              - "tag:OwnerName": missing
+              - "tag:target-tag": absent
             actions:
               - type: tag
-                key: OwnerName
-                value: OwnerName
+                key: target-tag
+                value: target-tag-value
 
 .. container:: toggle
 
