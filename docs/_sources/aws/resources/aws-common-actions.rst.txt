@@ -342,24 +342,22 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Tag resources for future action.
+Tag an elasticsearch domain for action later
 
 :example:
 
-    .. code-block :: yaml
+.. code-block:: yaml
 
-        policies:
-        - name: ec2-mark-stop
-          resource: ec2
-          filters:
-            - type: image-age
-              op: ge
-              days: 90
-          actions:
-            - type: mark-for-op
-              tag: custodian_cleanup
-              op: terminate
-              days: 4
+            policies:
+              - name: es-delete-missing
+                resource: elasticsearch
+                filters:
+                  - "tag:DesiredTag": absent
+                actions:
+                  - type: mark-for-op
+                    days: 7
+                    op: delete
+                    tag: c7n_es_delete
 
 .. container:: toggle
 
@@ -534,7 +532,7 @@ Action to modify SQS Queue IAM policy statements.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify VPC security groups on an ELB.
+Modify security groups on an Elasticsearch domain
 
 .. container:: toggle
 
@@ -1132,20 +1130,21 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) from CloudHSM Cluster(s)
+Removes tag(s) on an existing elasticsearch domain
 
 :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: cloudhsm-remove-tag
-            resource: aws.cloudhsm-cluster
-            filters:
-              - "tag:OldTagKey": present
-            actions:
-              - type: remove-tag
-                tags: [OldTagKey1, OldTagKey2]
+    policies:
+      - name: es-remove-tag
+        resource: elasticsearch
+        filters:
+          - "tag:ExpiredTag": present
+        actions:
+          - type: remove-tag
+            tags: ['ExpiredTag']
+    
 
 .. container:: toggle
 
@@ -1209,21 +1208,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to add tag(s) to CloudHSM Cluster(s)
+Action to create tag(s) on an existing elasticsearch domain
 
 :example:
 
 .. code-block:: yaml
 
-        policies:
-          - name: cloudhsm-tag
-            resource: aws.cloudhsm-cluster
-            filters:
-              - "tag:OwnerName": missing
-            actions:
-              - type: tag
-                key: OwnerName
-                value: OwnerName
+            policies:
+              - name: es-add-tag
+                resource: elasticsearch
+                filters:
+                  - "tag:DesiredTag": absent
+                actions:
+                  - type: tag
+                    key: DesiredTag
+                    value: DesiredValue
 
 .. container:: toggle
 
@@ -1258,39 +1257,24 @@ Action to add tag(s) to CloudHSM Cluster(s)
 tag-trim
 ++++++++
 
-Automatically remove tags from an ec2 resource.
+Action to trim the number of tags to avoid hitting tag limits
 
-EC2 Resources have a limit of 50 tags, in order to make
-additional tags space on a set of resources, this action can
-be used to remove enough tags to make the desired amount of
-space while preserving a given set of tags.
+:example:
 
-.. code-block :: yaml
+.. code-block:: yaml
 
-   policies:
-     - name: ec2-tag-trim
-       comment: |
-         Any instances with 48 or more tags get tags removed until
-         they match the target tag count, in this case 47 so we
-         that we free up a tag slot for another usage.
-       resource: ec2
-       filters:
-             # Filter down to resources which already have 8 tags
-             # as we need space for 3 more, this also ensures that
-             # metrics reporting is correct for the policy.
-           - type: value
-             key: "length(Tags)"
-             op: ge
-             value: 48
-       actions:
-          - type: tag-trim
-            space: 3
-            preserve:
-              - OwnerContact
-              - ASV
-              - CMDBEnvironment
-              - downtime
-              - custodian_status
+        policies:
+          - name: asg-tag-trim
+            resource: asg
+            filters:
+              - type: tag-count
+                count: 10
+            actions:
+              - type: tag-trim
+                space: 1
+                preserve:
+                  - OwnerName
+                  - OwnerContact
 
 .. container:: toggle
 
