@@ -3405,46 +3405,68 @@ account has attempted to set a policy at all.</p>
 <p>Check if account’s service limits are past a given threshold.</p>
 <p>Supported limits are per trusted advisor, which is variable based
 on usage in the account and support level enabled on the account.</p>
+<p>The <cite>names</cite> attribute lets you filter which checks to query limits
+about.  This is a case-insensitive globbing match on a check name.
+You can specify a name exactly or use globbing wildcards like <cite>VPC*</cite>.</p>
+<p>The names are exactly what’s shown on the trusted advisor page:</p>
 <blockquote>
-<div><ul class="simple">
-<li><p>service: AutoScaling limit: Auto Scaling groups</p></li>
-<li><p>service: AutoScaling limit: Launch configurations</p></li>
-<li><p>service: EBS limit: Active snapshots</p></li>
-<li><p>service: EBS limit: Active volumes</p></li>
-<li><p>service: EBS limit: General Purpose (SSD) volume storage (GiB)</p></li>
-<li><p>service: EBS limit: Magnetic volume storage (GiB)</p></li>
-<li><p>service: EBS limit: Provisioned IOPS</p></li>
-<li><p>service: EBS limit: Provisioned IOPS (SSD) storage (GiB)</p></li>
-<li><p>service: EC2 limit: Elastic IP addresses (EIPs)</p></li>
-</ul>
-<p># Note this is extant for each active instance type in the account
-# however the total value is against sum of all instance types.
-# see issue <a class="reference external" href="https://github.com/cloud-custodian/cloud-custodian/issues/516">https://github.com/cloud-custodian/cloud-custodian/issues/516</a></p>
-<ul class="simple">
-<li><p>service: EC2 limit: On-Demand instances - m3.medium</p></li>
-<li><p>service: EC2 limit: Reserved Instances - purchase limit (monthly)</p></li>
-<li><p>service: ELB limit: Active load balancers</p></li>
-<li><p>service: IAM limit: Groups</p></li>
-<li><p>service: IAM limit: Instance profiles</p></li>
-<li><p>service: IAM limit: Roles</p></li>
-<li><p>service: IAM limit: Server certificates</p></li>
-<li><p>service: IAM limit: Users</p></li>
-<li><p>service: RDS limit: DB instances</p></li>
-<li><p>service: RDS limit: DB parameter groups</p></li>
-<li><p>service: RDS limit: DB security groups</p></li>
-<li><p>service: RDS limit: DB snapshots per user</p></li>
-<li><p>service: RDS limit: Storage quota (GB)</p></li>
-<li><p>service: RDS limit: Internet gateways</p></li>
-<li><p>service: SES limit: Daily sending quota</p></li>
-<li><p>service: VPC limit: VPCs</p></li>
-<li><p>service: VPC limit: VPC Elastic IP addresses (EIPs)</p></li>
-</ul>
+<div><p><a class="reference external" href="https://console.aws.amazon.com/trustedadvisor/home#/category/service-limits">https://console.aws.amazon.com/trustedadvisor/home#/category/service-limits</a></p>
 </div></blockquote>
+<p>or via the awscli:</p>
+<blockquote>
+<div><p>aws –region us-east-1 support describe-trusted-advisor-checks –language en             –query ‘checks[?category==`service_limits`].[name]’ –output text</p>
+</div></blockquote>
+<p>While you can target individual checks via the <cite>names</cite> attribute, and
+that should be the preferred method, the following are provided for
+backward compatibility with the old style of checks:</p>
+<ul>
+<li><p><cite>services</cite></p>
+<blockquote>
+<div><p>The resulting limit’s <cite>service</cite> field must match one of these.
+These are case-insensitive globbing matches.</p>
+<p>Note: If you haven’t specified any <cite>names</cite> to filter, then
+these service names are used as a case-insensitive prefix match on
+the check name.  This helps limit the number of API calls we need
+to make.</p>
+</div></blockquote>
+</li>
+<li><p><cite>limits</cite></p>
+<blockquote>
+<div><p>The resulting limit’s <cite>Limit Name</cite> field must match one of these.
+These are case-insensitive globbing matches.</p>
+</div></blockquote>
+</li>
+</ul>
+<p>Some example names and their corresponding service and limit names:</p>
+<p>Check Name                          Service         Limit Name
+———————————-  ————–  ———————————
+Auto Scaling Groups                 AutoScaling     Auto Scaling groups
+Auto Scaling Launch Configurations  AutoScaling     Launch configurations
+CloudFormation Stacks               CloudFormation  Stacks
+ELB Application Load Balancers      ELB             Active Application Load Balancers
+ELB Classic Load Balancers          ELB             Active load balancers
+ELB Network Load Balancers          ELB             Active Network Load Balancers
+VPC                                 VPC             VPCs
+VPC Elastic IP Address              VPC             VPC Elastic IP addresses (EIPs)
+VPC Internet Gateways               VPC             Internet gateways</p>
+<p>Note: Some service limits checks are being migrated to service quotas,
+which is expected to largely replace service limit checks in trusted
+advisor.  In this case, some of these checks have no results.</p>
 <dl class="field-list simple">
 <dt class="field-odd">example</dt>
 <dd class="field-odd"><p></p></dd>
 </dl>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">specific-account-service-limits</span>
+    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">account</span>
+    <span class="nt">filters</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">service-limit</span>
+        <span class="nt">names</span><span class="p">:</span>
+          <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">IAM Policies</span>
+          <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">IAM Roles</span>
+          <span class="p p-Indicator">-</span> <span class="s">&quot;VPC*&quot;</span>
+        <span class="nt">threshold</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">1.0</span>
+
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">increase-account-service-limits</span>
     <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">account</span>
     <span class="nt">filters</span><span class="p">:</span>
@@ -3452,6 +3474,7 @@ on usage in the account and support level enabled on the account.</p>
         <span class="nt">services</span><span class="p">:</span>
           <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">EC2</span>
         <span class="nt">threshold</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">1.0</span>
+
   <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">specify-region-for-global-service</span>
     <span class="nt">region</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">us-east-1</span>
     <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">account</span>
@@ -3469,20 +3492,27 @@ on usage in the account and support level enabled on the account.</p>
     <span class="nt">items</span><span class="p">:</span>
       <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">string</span>
     <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">array</span>
+  <span class="nt">names</span><span class="p">:</span>
+    <span class="nt">items</span><span class="p">:</span>
+      <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">string</span>
+    <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">array</span>
   <span class="nt">refresh_period</span><span class="p">:</span>
     <span class="nt">title</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">how long should a check result be considered fresh</span>
     <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">integer</span>
   <span class="nt">services</span><span class="p">:</span>
     <span class="nt">items</span><span class="p">:</span>
       <span class="nt">enum</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">AutoScaling</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">CloudFormation</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">DynamoDB</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">EBS</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">EC2</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">ELB</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">VPC</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">AutoScaling</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">RDS</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">EBS</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">SES</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">IAM</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">RDS</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">Route53</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">SES</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">VPC</span>
     <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">array</span>
   <span class="nt">threshold</span><span class="p">:</span>
     <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">number</span>

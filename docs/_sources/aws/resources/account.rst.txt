@@ -883,44 +883,70 @@ Check if account's service limits are past a given threshold.
 Supported limits are per trusted advisor, which is variable based
 on usage in the account and support level enabled on the account.
 
-  - service: AutoScaling limit: Auto Scaling groups
-  - service: AutoScaling limit: Launch configurations
-  - service: EBS limit: Active snapshots
-  - service: EBS limit: Active volumes
-  - service: EBS limit: General Purpose (SSD) volume storage (GiB)
-  - service: EBS limit: Magnetic volume storage (GiB)
-  - service: EBS limit: Provisioned IOPS
-  - service: EBS limit: Provisioned IOPS (SSD) storage (GiB)
-  - service: EC2 limit: Elastic IP addresses (EIPs)
+The `names` attribute lets you filter which checks to query limits
+about.  This is a case-insensitive globbing match on a check name.
+You can specify a name exactly or use globbing wildcards like `VPC*`.
 
-  # Note this is extant for each active instance type in the account
-  # however the total value is against sum of all instance types.
-  # see issue https://github.com/cloud-custodian/cloud-custodian/issues/516
+The names are exactly what's shown on the trusted advisor page:
 
-  - service: EC2 limit: On-Demand instances - m3.medium
+    https://console.aws.amazon.com/trustedadvisor/home#/category/service-limits
 
-  - service: EC2 limit: Reserved Instances - purchase limit (monthly)
-  - service: ELB limit: Active load balancers
-  - service: IAM limit: Groups
-  - service: IAM limit: Instance profiles
-  - service: IAM limit: Roles
-  - service: IAM limit: Server certificates
-  - service: IAM limit: Users
-  - service: RDS limit: DB instances
-  - service: RDS limit: DB parameter groups
-  - service: RDS limit: DB security groups
-  - service: RDS limit: DB snapshots per user
-  - service: RDS limit: Storage quota (GB)
-  - service: RDS limit: Internet gateways
-  - service: SES limit: Daily sending quota
-  - service: VPC limit: VPCs
-  - service: VPC limit: VPC Elastic IP addresses (EIPs)
+or via the awscli:
+
+    aws --region us-east-1 support describe-trusted-advisor-checks --language en             --query 'checks[?category==`service_limits`].[name]' --output text
+
+While you can target individual checks via the `names` attribute, and
+that should be the preferred method, the following are provided for
+backward compatibility with the old style of checks:
+
+- `services`
+
+    The resulting limit's `service` field must match one of these.
+    These are case-insensitive globbing matches.
+
+    Note: If you haven't specified any `names` to filter, then
+    these service names are used as a case-insensitive prefix match on
+    the check name.  This helps limit the number of API calls we need
+    to make.
+
+- `limits`
+
+    The resulting limit's `Limit Name` field must match one of these.
+    These are case-insensitive globbing matches.
+
+Some example names and their corresponding service and limit names:
+
+Check Name                          Service         Limit Name
+----------------------------------  --------------  ---------------------------------
+Auto Scaling Groups                 AutoScaling     Auto Scaling groups
+Auto Scaling Launch Configurations  AutoScaling     Launch configurations
+CloudFormation Stacks               CloudFormation  Stacks
+ELB Application Load Balancers      ELB             Active Application Load Balancers
+ELB Classic Load Balancers          ELB             Active load balancers
+ELB Network Load Balancers          ELB             Active Network Load Balancers
+VPC                                 VPC             VPCs
+VPC Elastic IP Address              VPC             VPC Elastic IP addresses (EIPs)
+VPC Internet Gateways               VPC             Internet gateways
+
+Note: Some service limits checks are being migrated to service quotas,
+which is expected to largely replace service limit checks in trusted
+advisor.  In this case, some of these checks have no results.
 
 :example:
 
 .. code-block:: yaml
 
         policies:
+          - name: specific-account-service-limits
+            resource: account
+            filters:
+              - type: service-limit
+                names:
+                  - IAM Policies
+                  - IAM Roles
+                  - "VPC*"
+                threshold: 1.0
+
           - name: increase-account-service-limits
             resource: account
             filters:
@@ -928,6 +954,7 @@ on usage in the account and support level enabled on the account.
                 services:
                   - EC2
                 threshold: 1.0
+
           - name: specify-region-for-global-service
             region: us-east-1
             resource: account
@@ -953,20 +980,27 @@ on usage in the account and support level enabled on the account.
         items:
           type: string
         type: array
+      names:
+        items:
+          type: string
+        type: array
       refresh_period:
         title: how long should a check result be considered fresh
         type: integer
       services:
         items:
           enum:
+          - AutoScaling
+          - CloudFormation
+          - DynamoDB
+          - EBS
           - EC2
           - ELB
-          - VPC
-          - AutoScaling
-          - RDS
-          - EBS
-          - SES
           - IAM
+          - RDS
+          - Route53
+          - SES
+          - VPC
         type: array
       threshold:
         type: number

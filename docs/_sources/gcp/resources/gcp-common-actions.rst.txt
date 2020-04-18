@@ -198,7 +198,55 @@ Finding updates are not currently supported, due to upstream api issues.
 set-iam-policy
 ++++++++++++++
 
-Overrides the base implementation to process Project resources correctly.
+Sets IAM policy. It works with bindings only.
+
+The action supports two lists for modifying the existing IAM policy: `add-bindings` and
+`remove-bindings`. The `add-bindings` records are merged with the existing bindings, hereby
+no changes are made if all the required bindings are already present in the applicable
+resource. The `remove-bindings` records are used to filter out the existing bindings,
+so the action will take no effect if there are no matches. For more information,
+please refer to the `_add_bindings` and `_remove_bindings` methods respectively.
+
+Considering a record added both to the `add-bindings` and `remove-bindings` lists, which
+though is not a recommended thing to do in general, the latter is designed to be a more
+restrictive one, so the record will be removed from the existing IAM bindings in the end.
+
+There following member types are available to work with:
+- allUsers,
+- allAuthenticatedUsers,
+- user,
+- group,
+- domain,
+- serviceAccount.
+
+Note the `resource` field in the example that could be changed to another resource that has
+both `setIamPolicy` and `getIamPolicy` methods (such as gcp.spanner-database-instance).
+
+Example:
+
+.. code-block:: yaml
+
+    policies:
+      - name: gcp-spanner-instance-set-iam-policy
+        resource: gcp.spanner-instance
+        actions:
+          - type: set-iam-policy
+            add-bindings:
+              - members:
+                  - user:user1@test.com
+                  - user:user2@test.com
+                role: roles/owner
+              - members:
+                  - user:user3@gmail.com
+                role: roles/viewer
+            remove-bindings:
+              - members:
+                  - user:user4@test.com
+                role: roles/owner
+              - members:
+                  - user:user5@gmail.com
+                  - user:user6@gmail.com
+                role: roles/viewer
 
 .. container:: toggle
 
