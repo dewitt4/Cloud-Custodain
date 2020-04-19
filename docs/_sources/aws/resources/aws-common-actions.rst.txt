@@ -342,21 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Mark SNS for deferred action
+Tag resources for future action.
 
 :example:
 
-.. code-block:: yaml
+    .. code-block :: yaml
 
-    policies:
-      - name: sns-invalid-tag-mark
-        resource: sns
-        filters:
-          - "tag:InvalidTag": present
-        actions:
-          - type: mark-for-op
-            op: delete
-            days: 1
+        policies:
+        - name: ec2-mark-stop
+          resource: ec2
+          filters:
+            - type: image-age
+              op: ge
+              days: 90
+          actions:
+            - type: mark-for-op
+              tag: custodian_cleanup
+              op: terminate
+              days: 4
 
 .. container:: toggle
 
@@ -398,17 +401,15 @@ Mark SNS for deferred action
 modify-policy
 +++++++++++++
 
-Action to modify resource IAM policy statements.
-
-Applies to all resources with embedded IAM Policies.
+Action to modify SQS Queue IAM policy statements.
 
 :example:
 
 .. code-block:: yaml
 
        policies:
-          - name: sns-yank-cross-account
-            resource: sns
+          - name: sqs-yank-cross-account
+            resource: sqs
             filters:
               - type: cross-account
             actions:
@@ -417,8 +418,8 @@ Applies to all resources with embedded IAM Policies.
                     "Sid": "ReplaceWithMe",
                     "Effect": "Allow",
                     "Principal": "*",
-                    "Action": ["SNS:GetTopicAttributes"],
-                    "Resource": topic_arn,
+                    "Action": ["sqs:GetQueueAttributes"],
+                    "Resource": queue_url,
                         }]
                 remove-statements: '*'
 
@@ -1147,20 +1148,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Action to remove tag(s) on sns
+Action to remove tag(s) from CloudHSM Cluster(s)
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: sns-remove-tag
-            resource: sns
+          - name: cloudhsm-remove-tag
+            resource: aws.cloudhsm-cluster
             filters:
-              - "tag:OutdatedTag": present
+              - "tag:OldTagKey": present
             actions:
               - type: remove-tag
-                tags: ["OutdatedTag"]
+                tags: [OldTagKey1, OldTagKey2]
 
 .. container:: toggle
 
@@ -1224,21 +1225,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Action to create tag(s) on sns
+Action to add tag(s) to CloudHSM Cluster(s)
 
 :example:
 
 .. code-block:: yaml
 
         policies:
-          - name: tag-sns
-            resource: sns
+          - name: cloudhsm-tag
+            resource: aws.cloudhsm-cluster
             filters:
-              - "tag:target-tag": absent
+              - "tag:OwnerName": missing
             actions:
               - type: tag
-                key: target-tag
-                value: target-tag-value
+                key: OwnerName
+                value: OwnerName
 
 .. container:: toggle
 

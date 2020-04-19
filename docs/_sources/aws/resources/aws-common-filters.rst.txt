@@ -678,58 +678,38 @@ in which to interpret the clock (default value is 'utc')
 metrics
 +++++++
 
-Supports cloud watch metrics filters on resources.
+Filter app/net load balancer by metric values.
 
-All resources that have cloud watch metrics are supported.
+Note application and network load balancers use different Cloud
+Watch metrics namespaces and metric names, the custodian app-elb
+resource returns both types of load balancer, so an additional
+filter should be used to ensure only targeting a particular
+type. ie.  `- Type: application` or `- Type: network`
 
-Docs on cloud watch metrics
+See available application load balancer metrics here
+https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html
 
-- GetMetricStatistics
-  https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricStatistics.html
+See available network load balancer metrics here.
+https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-cloudwatch-metrics.html
 
-- Supported Metrics
-  https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/aws-services-cloudwatch-metrics.html
 
-.. code-block:: yaml
-
-  - name: ec2-underutilized
-    resource: ec2
-    filters:
-      - type: metrics
-        name: CPUUtilization
-        days: 4
-        period: 86400
-        value: 30
-        op: less-than
-
-Note periods when a resource is not sending metrics are not part
-of calculated statistics as in the case of a stopped ec2 instance,
-nor for resources to new to have existed the entire
-period. ie. being stopped for an ec2 instance wouldn't lower the
-average cpu utilization.
-
-The "missing-value" key allows a policy to specify a default
-value when CloudWatch has no data to report:
+For network load balancer metrics, the metrics filter requires specifying
+the namespace parameter to the filter.
 
 .. code-block:: yaml
 
-  - name: elb-low-request-count
-    resource: elb
-    filters:
-      - type: metrics
-        name: RequestCount
-        statistics: Sum
-        days: 7
-        value: 7
-        missing-value: 0
-        op: less-than
-
-This policy matches any ELB with fewer than 7 requests for the past week.
-ELBs with no requests during that time will have an empty set of metrics.
-Rather than skipping those resources, "missing-value: 0" causes the
-policy to treat their request counts as 0.
-
-Note the default statistic for metrics is Average.
+  policies:
+    - name: net-lb-underutilized
+      resource: app-elb
+      filters:
+       - Type: network
+       - type: metrics
+         name: ActiveFlowCount
+         namespace: AWS/NetworkELB
+         statistics: Sum
+         days: 14
+         value: 100
+         op: less-than
 
 .. container:: toggle
 
