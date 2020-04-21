@@ -597,6 +597,8 @@ Actions
   
   - :ref:`rename-tag <aws.common.actions.rename-tag>`
   
+  - :ref:`set-permissions <aws.security-group.actions.set-permissions>`
+
   - :ref:`tag <aws.common.actions.tag>`
   
   - :ref:`tag-trim <aws.common.actions.tag-trim>`
@@ -715,6 +717,99 @@ Action to remove ingress/egress rule(s) from a security group
       type:
         enum:
         - remove-permissions
+    required:
+    - type
+
+
+.. _aws.security-group.actions.set-permissions:
+
+set-permissions
++++++++++++++++
+Action to add/remove ingress/egress rule(s) to a security group
+
+:example:
+
+.. code-block:: yaml
+
+   policies:
+     - name: ops-access-via
+       resource: aws.security-group
+       filters:
+         - type: ingress
+           IpProtocol: "-1"
+           Ports: [22, 3389]
+           Cidr: "0.0.0.0/0"
+       actions:
+        - type: set-permissions
+          # remove the permission matched by a previous ingress filter.
+          remove-ingress: matched
+          # remove permissions by specifying them fully, ie remove default outbound
+          # access.
+          remove-egress:
+             - IpProtocol: "-1"
+               Cidr: "0.0.0.0/0"
+
+          # add a list of permissions to the group.
+          add-ingress:
+            # full syntax/parameters to authorize can be used.
+            - IpPermissions:
+               - IpProtocol: TCP
+                 FromPort: 22
+                 ToPort: 22
+                 IpRanges:
+                   - Description: Ops SSH Access
+                     CidrIp: "1.1.1.1/32"
+                   - Description: Security SSH Access
+                     CidrIp: "2.2.2.2/32"
+          # add a list of egress permissions to a security group
+          add-egress:
+             - IpProtocol: "TCP"
+               FromPort: 5044
+               ToPort: 5044
+               CidrIp: "192.168.1.2/32"
+
+.. container:: toggle
+
+  
+
+  .. raw:: html
+     
+    <div class="header docutils container" style=""></div>
+
+  .. code-block:: yaml
+
+    properties:
+      add-egress:
+        items:
+          minProperties: 1
+          type: object
+        type: array
+      add-ingress:
+        items:
+          minProperties: 1
+          type: object
+        type: array
+      remove-egress:
+        oneOf:
+        - enum:
+          - all
+          - matched
+        - items:
+            minProperties: 2
+            type: object
+          type: array
+      remove-ingress:
+        oneOf:
+        - enum:
+          - all
+          - matched
+        - items:
+            minProperties: 2
+            type: object
+          type: array
+      type:
+        enum:
+        - set-permissions
     required:
     - type
 
