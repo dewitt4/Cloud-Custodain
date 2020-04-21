@@ -342,24 +342,24 @@ fit within 32k, we default to batch size 250.
 mark-for-op
 +++++++++++
 
-Tag resources for future action.
+Action to specify an action to occur at a later date
 
 :example:
 
-    .. code-block :: yaml
+.. code-block:: yaml
 
         policies:
-        - name: ec2-mark-stop
-          resource: ec2
-          filters:
-            - type: image-age
-              op: ge
-              days: 90
-          actions:
-            - type: mark-for-op
-              tag: custodian_cleanup
-              op: terminate
-              days: 4
+          - name: mark-elb-delete-unused
+            resource: elb
+            filters:
+              - "tag:custodian_cleanup": absent
+              - Instances: []
+            actions:
+              - type: mark-for-op
+                tag: custodian_cleanup
+                msg: "Unused ELB - No Instances: {op}@{action_date}"
+                op: delete
+                days: 7
 
 .. container:: toggle
 
@@ -401,15 +401,17 @@ Tag resources for future action.
 modify-policy
 +++++++++++++
 
-Action to modify SQS Queue IAM policy statements.
+Action to modify resource IAM policy statements.
+
+Applies to all resources with embedded IAM Policies.
 
 :example:
 
 .. code-block:: yaml
 
        policies:
-          - name: sqs-yank-cross-account
-            resource: sqs
+          - name: sns-yank-cross-account
+            resource: sns
             filters:
               - type: cross-account
             actions:
@@ -418,8 +420,8 @@ Action to modify SQS Queue IAM policy statements.
                     "Sid": "ReplaceWithMe",
                     "Effect": "Allow",
                     "Principal": "*",
-                    "Action": ["sqs:GetQueueAttributes"],
-                    "Resource": queue_url,
+                    "Action": ["SNS:GetTopicAttributes"],
+                    "Resource": topic_arn,
                         }]
                 remove-statements: '*'
 
@@ -534,7 +536,7 @@ Action to modify SQS Queue IAM policy statements.
 modify-security-groups
 ++++++++++++++++++++++
 
-Modify security groups on a Redshift cluster
+Modify VPC security groups on an ELB.
 
 .. container:: toggle
 
@@ -919,6 +921,15 @@ Example generate a finding for accounts that don't have shield enabled.
       severity:
         default: 0
         type: number
+      severity_label:
+        default: INFORMATIONAL
+        enum:
+        - INFORMATIONAL
+        - LOW
+        - MEDIUM
+        - HIGH
+        - CRITICAL
+        type: string
       severity_normalized:
         default: 0
         max: 100
@@ -1132,8 +1143,20 @@ op and units are optional and will default to simple Counts.
 remove-tag
 ++++++++++
 
-Removes the specified tags from the specified resources.
-    
+Action to remove tag(s) from ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-remove-old-tag
+            resource: elb
+            filters:
+              - "tag:OldTagKey": present
+            actions:
+              - type: remove-tag
+                tags: [OldTagKey1, OldTagKey2]
 
 .. container:: toggle
 
@@ -1197,8 +1220,21 @@ Create a new tag with identical value & remove old tag
 tag
 +++
 
-Applies one or more tags to the specified resources.
-    
+Action to add tag(s) to ELB(s)
+
+:example:
+
+.. code-block:: yaml
+
+        policies:
+          - name: elb-add-owner-tag
+            resource: elb
+            filters:
+              - "tag:OwnerName": missing
+            actions:
+              - type: tag
+                key: OwnerName
+                value: OwnerName
 
 .. container:: toggle
 
