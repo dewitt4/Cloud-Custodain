@@ -1125,6 +1125,24 @@ class SecurityGroupTest(BaseTest):
             set([r["GroupId"] for r in resources]),
         )
 
+    def test_unused_ecs(self):
+        factory = self.replay_flight_data("test_security_group_ecs_unused")
+        p = self.load_policy(
+            {'name': 'sg-xyz',
+             'source': 'config',
+             'query': [
+                 {'clause': "resourceId ='sg-0f026884bba48e350'"}],
+             'resource': 'security-group',
+             'filters': ['unused']},
+            session_factory=factory)
+        unused = p.resource_manager.filters[0]
+        self.patch(
+            unused,
+            'get_scanners',
+            lambda: (('ecs-cwe', unused.get_ecs_cwe_sgs),))
+        resources = p.run()
+        assert resources == []
+
     def test_unused(self):
         factory = self.replay_flight_data("test_security_group_unused")
         p = self.load_policy(

@@ -688,7 +688,7 @@ class SGUsage(Filter):
         return list(itertools.chain(
             *[self.manager.get_resource_manager(m).get_permissions()
              for m in
-             ['lambda', 'eni', 'launch-config', 'security-group']]))
+             ['lambda', 'eni', 'launch-config', 'security-group', 'event-rule-target']]))
 
     def filter_peered_refs(self, resources):
         if not resources:
@@ -705,14 +705,18 @@ class SGUsage(Filter):
             "%d of %d groups w/ peered refs", len(peered_ids), len(resources))
         return [r for r in resources if r['GroupId'] not in peered_ids]
 
+    def get_scanners(self):
+        return (
+            ("nics", self.get_eni_sgs),
+            ("sg-perm-refs", self.get_sg_refs),
+            ('lambdas', self.get_lambda_sgs),
+            ("launch-configs", self.get_launch_config_sgs),
+            ("ecs-cwe", self.get_ecs_cwe_sgs)
+        )
+
     def scan_groups(self):
         used = set()
-        for kind, scanner in (
-                ("nics", self.get_eni_sgs),
-                ("sg-perm-refs", self.get_sg_refs),
-                ('lambdas', self.get_lambda_sgs),
-                ("launch-configs", self.get_launch_config_sgs),
-        ):
+        for kind, scanner in self.get_scanners():
             sg_ids = scanner()
             new_refs = sg_ids.difference(used)
             used = used.union(sg_ids)
@@ -735,7 +739,7 @@ class SGUsage(Filter):
 
     def get_lambda_sgs(self):
         sg_ids = set()
-        for func in self.manager.get_resource_manager('lambda').resources():
+        for func in self.manager.get_resource_manager('lambda').resources(augment=False):
             if 'VpcConfig' not in func:
                 continue
             for g in func['VpcConfig']['SecurityGroupIds']:
@@ -758,6 +762,16 @@ class SGUsage(Filter):
                         sg_ids.add(g['GroupId'])
         return sg_ids
 
+    def get_ecs_cwe_sgs(self):
+        sg_ids = set()
+        expr = jmespath.compile(
+            'EcsParameters.NetworkConfiguration.awsvpcConfiguration.SecurityGroups[]')
+        for rule in self.manager.get_resource_manager('event-rule-target').resources():
+            ids = expr.search(rule)
+            if ids:
+                sg_ids.update(ids)
+        return sg_ids
+
 
 @SecurityGroup.filter_registry.register('unused')
 class UnusedSecurityGroup(SGUsage):
@@ -768,7 +782,10 @@ class UnusedSecurityGroup(SGUsage):
     lambdas as they may not have extant resources in the vpc at a
     given moment. We also find any security group with references from
     other security group either within the vpc or across peered
-    connections.
+    connections. Also checks cloud watch event targeting ecs.
+
+    Checks - enis, lambda, launch-configs, sg rule refs, and ecs cwe
+    targets.
 
     Note this filter does not support classic security groups atm.
 
@@ -781,6 +798,7 @@ class UnusedSecurityGroup(SGUsage):
                 resource: security-group
                 filters:
                   - unused
+
     """
     schema = type_schema('unused')
 
