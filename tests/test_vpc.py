@@ -2082,6 +2082,52 @@ class SecurityGroupTest(BaseTest):
         manager = p.load_resource_manager()
         self.assertEqual(len(manager.filter_resources(resources)), 1)
 
+    def test_security_group_reference_ingress_filter(self):
+        factory = self.replay_flight_data("test_security_group_reference_ingress_filter")
+        p = self.load_policy(
+            {
+                "name": "security_group_reference_ingress_filter",
+                "resource": "security-group",
+                "filters": [
+                    {
+                        "type": "ingress",
+                        "SGReferences": {
+                            "key": "tag:SampleTagKey",
+                            "value": "SampleTagValue",
+                            "op": "equal"
+                        }
+                    }
+                ],
+            },
+            session_factory=factory,
+        )
+        resources = p.run()
+
+        self.assertEqual(len(resources), 1)
+
+    def test_security_group_reference_egress_filter(self):
+        factory = self.replay_flight_data("test_security_group_reference_egress_filter")
+        p = self.load_policy(
+            {
+                "name": "security_group_reference_egress_filter",
+                "resource": "security-group",
+                "filters": [
+                    {
+                        "type": "egress",
+                        "SGReferences": {
+                            "key": "tag:SampleTagKey",
+                            "value": "SampleTagValue",
+                            "op": "equal"
+                        }
+                    }
+                ],
+            },
+            session_factory=factory,
+        )
+        resources = p.run()
+
+        self.assertEqual(len(resources), 1)
+
     def test_egress_ipv6(self):
         p = self.load_policy({
             "name": "ipv6-test",
