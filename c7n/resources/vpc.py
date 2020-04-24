@@ -2042,6 +2042,36 @@ class InternetGateway(query.QueryResourceManager):
         id_prefix = "igw-"
 
 
+@InternetGateway.action_registry.register('delete')
+class DeleteInternetGateway(BaseAction):
+
+    """Action to delete Internet Gateway
+
+    :example:
+
+    .. code-block:: yaml
+
+            policies:
+              - name: delete-internet-gateway
+                resource: internet-gateway
+                actions:
+                  - type: delete
+    """
+
+    schema = type_schema('delete')
+    permissions = ('ec2:DeleteInternetGateway',)
+
+    def process(self, resources):
+
+        client = local_session(self.manager.session_factory).client('ec2')
+        for r in resources:
+            try:
+                client.delete_internet_gateway(InternetGatewayId=r['InternetGatewayId'])
+            except ClientError as err:
+                if not err.response['Error']['Code'] == 'InvalidInternetGatewayId.NotFound':
+                    raise
+
+
 @resources.register('nat-gateway')
 class NATGateway(query.QueryResourceManager):
 
