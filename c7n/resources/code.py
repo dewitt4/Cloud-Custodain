@@ -34,9 +34,10 @@ class CodeRepository(QueryResourceManager):
         arn = "Arn"
         date = 'creationDate'
         cfn_type = 'AWS::CodeCommit::Repository'
+        universal_tagging = object()
 
     def get_resources(self, ids, cache=True):
-        return self.augment([{'repositoryName': i} for i in ids])
+        return universal_augment(self, self.augment([{'repositoryName': i} for i in ids]))
 
 
 @CodeRepository.action_registry.register('delete')
@@ -155,6 +156,13 @@ class DeleteProject(BaseAction):
                 "Exception deleting project:\n %s" % e)
 
 
+class DescribePipeline(DescribeSource):
+
+    def augment(self, resources):
+        resources = super().augment(resources)
+        return universal_augment(self.manager, resources)
+
+
 @resources.register('codepipeline')
 class CodeDeployPipeline(QueryResourceManager):
 
@@ -167,3 +175,24 @@ class CodeDeployPipeline(QueryResourceManager):
         # Note this is purposeful, codepipeline don't have a separate type specifier.
         arn_type = ""
         cfn_type = config_type = "AWS::CodePipeline::Pipeline"
+        universal_tagging = object()
+
+    source_mapping = {
+        'describe': DescribePipeline,
+        'config': ConfigSource
+    }
+
+
+@CodeDeployPipeline.action_registry.register('delete')
+class DeletePipeline(BaseAction):
+
+    schema = type_schema('delete')
+    permissions = ('codepipeline:DeletePipeline',)
+
+    def process(self, resources):
+        client = local_session(self.manager.session_factory).client('codepipeline')
+        for r in resources:
+            try:
+                self.manager.retry(client.delete_pipeline, name=r['name'])
+            except client.exceptions.PipelineNotFoundException:
+                continue
