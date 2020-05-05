@@ -161,7 +161,7 @@ Filter glue catalog if it has cross account permissions
 
 glue-security-config
 ++++++++++++++++++++
-Filter aws account by its glue encryption status and KMS key
+Filter glue catalog by its glue encryption status and KMS key
 
 :example:
 
@@ -188,7 +188,9 @@ Filter aws account by its glue encryption status and KMS key
       AwsKmsKeyId:
         type: string
       CatalogEncryptionMode:
-        type: string
+        enum:
+        - DISABLED
+        - SSE-KMS
       ReturnConnectionPasswordEncrypted:
         type: boolean
       SseAwsKmsKeyId:
@@ -246,9 +248,9 @@ not both
             actions:
               - type: set-encryption
                 attributes:
-                    EncryptionAtRest:
-                        CatalogEncryptionMode: SSE-KMS
-                        SseAwsKmsKeyId: alias/aws/glue
+                  EncryptionAtRest:
+                    CatalogEncryptionMode: SSE-KMS
+                    SseAwsKmsKeyId: alias/aws/glue
 
 .. container:: toggle
 
@@ -262,11 +264,35 @@ not both
 
     properties:
       attributes:
-        minItems: 1
+        additionalProperties: false
+        properties:
+          ConnectionPasswordEncryption:
+            additionalProperties: false
+            properties:
+              AwsKmsKeyId:
+                type: string
+              ReturnConnectionPasswordEncrypted:
+                type: boolean
+            required:
+            - ReturnConnectionPasswordEncrypted
+            type: object
+          EncryptionAtRest:
+            additionalProperties: false
+            properties:
+              CatalogEncryptionMode:
+                enum:
+                - DISABLED
+                - SSE-KMS
+              SseAwsKmsKeyId:
+                type: string
+            required:
+            - CatalogEncryptionMode
+            type: object
         type: object
       type:
         enum:
         - set-encryption
     required:
     - attributes
+    - type
 
