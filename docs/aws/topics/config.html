@@ -241,6 +241,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#config-source">Config Source</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#config-rule">Config Rule</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#filter">Filter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#config-poll-rule">Config Poll Rule</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="securityhub.html">Security Hub</a><ul>
@@ -262,6 +263,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#pull">pull</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#asg-instance-state">asg-instance-state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#cloudtrail">cloudtrail</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#config-poll-rule">config-poll-rule</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#config-rule">config-rule</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#ec2-instance-state">ec2-instance-state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../resources/aws-modes.html#guard-duty">guard-duty</a></li>
@@ -2705,10 +2707,13 @@
 <h1>AWS Config<a class="headerlink" href="#aws-config" title="Permalink to this headline">¶</a></h1>
 <p>Custodian has deep integration with config, a custodian policy:</p>
 <ul class="simple">
-<li><p>Can be deployed as config-rule.</p></li>
-<li><p>Can use config as resource database instead of. Custodian supports
-querying resources with Config’s SQL expression language.</p></li>
+<li><p>Can be deployed as config-rule for any resource type supported by config.</p></li>
+<li><p>Can use config as resource database instead of querying service
+describe apis. Custodian supports server side querying resources
+with Config’s SQL expression language.</p></li>
 <li><p>Can filter resources based on their compliance with one or more config rules.</p></li>
+<li><p>Can be deployed as a config-poll-rule against any resource type supported
+by cloudformation.</p></li>
 </ul>
 <p>Custodian does the legwork of normalizing the resource description
 from config’s idiosyncratic format to one that looks like describe api
@@ -2764,6 +2769,28 @@ with other config-rules.</p>
         <span class="nt">states</span><span class="p">:</span> <span class="p p-Indicator">[</span><span class="nv">NON_COMPLIANT</span><span class="p p-Indicator">]</span>
     <span class="nt">actions</span><span class="p">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">stop</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="config-poll-rule">
+<h2>Config Poll Rule<a class="headerlink" href="#config-poll-rule" title="Permalink to this headline">¶</a></h2>
+<p>For resources not supported natively by AWS Config, an execution mode
+of type: config-poll-rule can be used for any resource supported by
+CloudFormation.  This is effectively a periodic policy that queries
+the resource’s service api and filters resources to evaluate
+compliance/non-compliance and then records results to AWS Config.
+CloudFormation resources are only partially supported by AWS Config,
+and are not supported for <cite>source: config</cite> nor do they support resource
+timeline or resource attributes.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">policies</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">kinesis-one-stream</span>
+    <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.kinesis</span>
+    <span class="nt">mode</span><span class="p">:</span>
+      <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">config-poll-rule</span>
+      <span class="nt">role</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">custodian-config-role</span>
+      <span class="nt">schedule</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">Three_Hours</span>
+    <span class="nt">filters</span><span class="p">:</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">tag:App</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">Dev</span>
 </pre></div>
 </div>
 </div>
