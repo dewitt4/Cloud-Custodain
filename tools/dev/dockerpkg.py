@@ -25,6 +25,7 @@ We also support running functional tests and image cve scanning before pushing.
 
 import logging
 import os
+import time
 import subprocess
 import sys
 from datetime import datetime
@@ -319,7 +320,7 @@ def build(provider, registry, tag, image, quiet, push, test, scan, verbose):
         if scan:
             scan_image(":".join(image_refs[0]))
         if push:
-            push_image(client, image_id, image_refs)
+            retry(3, (RuntimeError,), push_image, client, image_id, image_refs)
 
 
 def get_labels(image):
@@ -342,6 +343,19 @@ def get_labels(image):
     if hub_env.get("sha"):
         labels["org.opencontainers.image.revision"] = hub_env["sha"]
     return labels
+
+
+def retry(retry_count, exceptions, func, *args, **kw):
+    attempts = 1
+    while attempts <= retry_count:
+        try:
+            func(*args, **kw)
+        except exceptions:
+            log.warn('retrying on %s' % func)
+            attempts += 1
+            time.sleep(5)
+            if attempts > retry_count:
+                raise
 
 
 def get_github_env():
