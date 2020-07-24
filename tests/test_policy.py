@@ -279,7 +279,6 @@ class PolicyMetaLint(BaseTest):
             'AWS::ServiceCatalog::CloudFormationProduct',
             'AWS::ServiceCatalog::Portfolio',
             'AWS::SSM::FileData',
-            'AWS::SNS::Topic',
             'AWS::SecretsManager::Secret'}
 
         resource_map = {}
