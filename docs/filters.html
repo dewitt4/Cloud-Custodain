@@ -109,6 +109,15 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Generic Filters</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#value-filter">Value Filter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#event-filter">Event Filter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reduce-filter">Reduce Filter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#grouping-resources">Grouping resources</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sorting-resources">Sorting resources</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#selecting-resources">Selecting resources</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#combining-resource-groups">Combining resource groups</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#attributes">Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="actions.html">Generic Actions</a><ul>
@@ -310,6 +319,7 @@
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#offhour">offhour</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#onhour">onhour</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#ops-item">ops-item</a></li>
+<li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#reduce">reduce</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#security-group">security-group</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#shield-metrics">shield-metrics</a></li>
 <li class="toctree-l3"><a class="reference internal" href="aws/resources/aws-common-filters.html#subnet">subnet</a></li>
@@ -1646,6 +1656,7 @@
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#onhour">onhour</a></li>
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#parent">parent</a></li>
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#policy-compliant">policy-compliant</a></li>
+<li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#reduce">reduce</a></li>
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#regeneration-period">regeneration-period</a></li>
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#resource-lock">resource-lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="azure/resources/azure-common-filters.html#storage-diagnostic-settings">storage-diagnostic-settings</a></li>
@@ -2069,6 +2080,7 @@
 <li class="toctree-l3"><a class="reference internal" href="gcp/resources/gcp-common-filters.html#event">event</a></li>
 <li class="toctree-l3"><a class="reference internal" href="gcp/resources/gcp-common-filters.html#offhour">offhour</a></li>
 <li class="toctree-l3"><a class="reference internal" href="gcp/resources/gcp-common-filters.html#onhour">onhour</a></li>
+<li class="toctree-l3"><a class="reference internal" href="gcp/resources/gcp-common-filters.html#reduce">reduce</a></li>
 <li class="toctree-l3"><a class="reference internal" href="gcp/resources/gcp-common-filters.html#value">value</a></li>
 </ul>
 </li>
@@ -2994,10 +3006,11 @@ as normal.</p>
 </div>
 <div class="section" id="event-filter">
 <h2>Event Filter<a class="headerlink" href="#event-filter" title="Permalink to this headline">¶</a></h2>
+<p>Filter against a CloudWatch event JSON associated to a resource type. The
+list of possible keys are now from the cloudtrail event and not the
+describe resource call as is the case in the ValueFilter</p>
 <blockquote>
-<div><p>Filter against a CloudWatch event JSON associated to a resource type. The list of possible keys are now from the cloudtrail
-event and not the describe resource call as is the case in the ValueFilter</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">no-ec2-public-ips</span>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">no-ec2-public-ips</span>
   <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.ec2</span>
   <span class="nt">mode</span><span class="p">:</span>
     <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">cloudtrail</span>
@@ -3013,6 +3026,202 @@ event and not the describe resource call as is the case in the ValueFilter</p>
 </pre></div>
 </div>
 </div></blockquote>
+</div>
+<div class="section" id="reduce-filter">
+<h2>Reduce Filter<a class="headerlink" href="#reduce-filter" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">reduce</span></code> filter lets you group, sort, and limit the number of
+resources to act on.  Maybe you want to delete AMIs, but want to do it in
+small batches where you act on the oldest AMIs first.  Or maybe you want
+to do some chaos engineering and randomly select ec2 instances part of
+ASGs, but want to make sure no more than one instance per ASG is affected.
+This filter lets you do that.</p>
+<p>This works using this process:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Group resources</p></li>
+<li><p>Sort each group of resources</p></li>
+<li><p>Selecting a number of resources in each group</p></li>
+<li><p>Combine the resulting resources</p></li>
+</ol>
+</div></blockquote>
+<div class="section" id="grouping-resources">
+<h3>Grouping resources<a class="headerlink" href="#grouping-resources" title="Permalink to this headline">¶</a></h3>
+<p>Resources are grouped based on the value extracted as defined by the
+<code class="docutils literal notranslate"><span class="pre">group-by</span></code> attribute.  All resources not able to extract a value are
+placed in a group by themselves.  This is also the case when <code class="docutils literal notranslate"><span class="pre">group-by</span></code>
+is not specified.</p>
+</div>
+<div class="section" id="sorting-resources">
+<h3>Sorting resources<a class="headerlink" href="#sorting-resources" title="Permalink to this headline">¶</a></h3>
+<p>Sorting of individual resources within a group is controlled by a
+combination of the <code class="docutils literal notranslate"><span class="pre">sort-by</span></code> and <code class="docutils literal notranslate"><span class="pre">order</span></code> attributes.  <code class="docutils literal notranslate"><span class="pre">sort-by</span></code>
+determines which value to use to sort and <code class="docutils literal notranslate"><span class="pre">order</span></code> controls how they are
+sorted.  For any resources with a null value, those are by default sorted
+last.  You can optionally sort those first with the <code class="docutils literal notranslate"><span class="pre">null-order</span></code>
+attribute.</p>
+<p>Note: if neither <code class="docutils literal notranslate"><span class="pre">sort-by</span></code> or <code class="docutils literal notranslate"><span class="pre">order</span></code> are specified, no sorting is
+done.</p>
+</div>
+<div class="section" id="selecting-resources">
+<h3>Selecting resources<a class="headerlink" href="#selecting-resources" title="Permalink to this headline">¶</a></h3>
+<p>Once groups have been sorted, we can then apply rules to select a specific
+number of resources in each group.  We first <code class="docutils literal notranslate"><span class="pre">discard</span></code> some resources
+and then <code class="docutils literal notranslate"><span class="pre">limit</span></code> the remaining set to a maximum count.</p>
+<p>When the <code class="docutils literal notranslate"><span class="pre">discard</span></code> or <code class="docutils literal notranslate"><span class="pre">discard-percent</span></code> attributes are specified, we
+take the ordered resources in each group and discard the first
+<code class="docutils literal notranslate"><span class="pre">discard-percent</span></code> of them or <code class="docutils literal notranslate"><span class="pre">discard</span></code> absolute count, whichever is
+larger.</p>
+<p>After discarding resources, we then limit the remaining set.
+<code class="docutils literal notranslate"><span class="pre">limit-percent</span></code> is applied first to reduce the number of resources to
+this percentage of the original.  <code class="docutils literal notranslate"><span class="pre">limit</span></code> is then applied to allow for
+an absolute count.  Resources are kept from the beginning of the list.</p>
+<p>To explain this with an example, suppose you have 50 resources in a group
+with all of these set:</p>
+<blockquote>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">discard</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="nt">discard-percent</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="nt">limit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="nt">limit-percent</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">30</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>This would first discard the first 10 resources because 20 percent of 50
+is 10, which is greater than 5.  You now have 40 resources left in the
+group and the limit settings are applied.  30% of 40 is 12, but <code class="docutils literal notranslate"><span class="pre">limit</span></code>
+is set to 10, which is lower, so the first 10 of the remaining are kept.
+If they were numbered #1-50, you’d have discarded 1-10, kept 11-20, and
+dropped the remaining 21-50.</p>
+<p>If you had the following settings:</p>
+<blockquote>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">discard-percent</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">25</span>
+<span class="nt">limit-percent</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">50</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>We’d discard the first 25% of 50 (12), then of the remaining 38 resources,
+we’d keep 50% of those (19).  You’d end up with resources 13-31.</p>
+<p>Now, some of these could eliminate all resources from a group.  If you
+have 20 resources in one group and 5 in another and specify
+<code class="docutils literal notranslate"><span class="pre">limit-percent</span> <span class="pre">=</span> <span class="pre">10</span></code>, you’ll get 2 resources from the first group and 0
+resources from the second.</p>
+</div>
+<div class="section" id="combining-resource-groups">
+<h3>Combining resource groups<a class="headerlink" href="#combining-resource-groups" title="Permalink to this headline">¶</a></h3>
+<p>Once the groups have been modified, we now need to combine them back to
+one set of resources.  Since the groups are determined by a JMESPath
+expression, we sort the groups first based on the <code class="docutils literal notranslate"><span class="pre">order</span></code> attribute the
+same way we sort within a group.  After the groups are sorted, it’s a
+simple concatenation of resources.</p>
+</div>
+<div class="section" id="attributes">
+<h3>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline">¶</a></h3>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">group-by</span></code>, <code class="docutils literal notranslate"><span class="pre">sort-by</span></code></p>
+<p>These are both defined the same way…</p>
+<p>Note: For simplicity, you can specify these as just a single string
+which is treated as the <code class="docutils literal notranslate"><span class="pre">key</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">key</span></code> - The JMESPath expression to extract a value</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_regex</span></code> - A regular expression with a single capture group that
+extracts a portion of the result of the <code class="docutils literal notranslate"><span class="pre">key</span></code> expression.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_type</span></code> - parse the value as one of the following:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">string</span></code> (default)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">number</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">date</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">order</span></code> controls how to sorting is done</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">asc</span></code> (default) - sort in ascending order based on <code class="docutils literal notranslate"><span class="pre">key</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">desc</span></code> - sort in descending order based on <code class="docutils literal notranslate"><span class="pre">key</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reverse</span></code> - reverse the order of resources (ignores <code class="docutils literal notranslate"><span class="pre">key</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">randomize</span></code> - randomize the order of resources (ignores <code class="docutils literal notranslate"><span class="pre">key</span></code>)</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">null-order</span></code> - when sorting, where to put resources that have a null value</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">last</span></code> (default) - at the end of the list</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">first</span></code> - at the start of the list</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discard</span></code> - discard the first N resources within each group</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discard-percent</span></code> - discard the first N percentage of resources within each group</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">limit</span></code> - select the first N resources within each group (after
+discards)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">limit-percent</span></code> - select the first N percentage of resources within each group
+(after discards)</p></li>
+</ul>
+</div>
+<div class="section" id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h3>
+<p>This example will select the longest running instance from each ASG, then
+randomly choose 10% of those, making sure to not affect more than 15
+instances total, then terminate them.</p>
+<blockquote>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">chaos-engineering</span>
+  <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.ec2</span>
+  <span class="nt">filters</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;State.Name&quot;</span><span class="p p-Indicator">:</span> <span class="s">&quot;running&quot;</span>
+    <span class="p p-Indicator">-</span> <span class="s">&quot;tag:aws:autoscaling:groupName&quot;</span><span class="p p-Indicator">:</span> <span class="l l-Scalar l-Scalar-Plain">present</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">reduce</span>
+      <span class="nt">group-by</span><span class="p">:</span> <span class="s">&quot;tag:aws:autoscaling:groupName&quot;</span>
+      <span class="nt">sort-by</span><span class="p">:</span> <span class="s">&quot;LaunchTime&quot;</span>
+      <span class="nt">order</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">asc</span>
+      <span class="nt">limit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">1</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">reduce</span>
+      <span class="nt">order</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">randomize</span>
+      <span class="nt">limit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">15</span>
+      <span class="nt">limit-percent</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">10</span>
+  <span class="nt">actions</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">terminate</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>This example will delete old AMIs, but make sure to only do the top 10
+based on age.</p>
+<blockquote>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">limited-ami-expiration</span>
+  <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.ami</span>
+  <span class="nt">filters</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">image-age</span>
+      <span class="nt">days</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">180</span>
+      <span class="nt">op</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ge</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">reduce</span>
+      <span class="nt">sort-by</span><span class="p">:</span> <span class="s">&quot;CreationDate&quot;</span>
+      <span class="nt">order</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">asc</span>
+      <span class="nt">limit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">10</span>
+  <span class="nt">actions</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">deregister</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>This example simply sorts the resources by when they are marked for
+expiration.  We use a <code class="docutils literal notranslate"><span class="pre">date</span></code> type because the tags might be in
+different date formats or are not text-sortable.</p>
+<blockquote>
+<div><div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span> <span class="nt">name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">ami-expiration-by-expire-date</span>
+  <span class="nt">resource</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">aws.ami</span>
+  <span class="nt">filters</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">value</span>
+      <span class="nt">key</span><span class="p">:</span> <span class="s">&quot;tag:expire-after&quot;</span>
+      <span class="nt">value_type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">age</span>
+      <span class="nt">op</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">gt</span>
+      <span class="nt">value</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">0</span>
+    <span class="p p-Indicator">-</span> <span class="nt">type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">reduce</span>
+      <span class="nt">sort-by</span><span class="p">:</span>
+        <span class="nt">key</span><span class="p">:</span> <span class="s">&quot;tag:expire-after&quot;</span>
+        <span class="nt">value_type</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">date</span>
+      <span class="nt">order</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">asc</span>
+      <span class="nt">limit</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">10</span>
+  <span class="nt">actions</span><span class="p">:</span>
+    <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">deregister</span>
+</pre></div>
+</div>
+</div></blockquote>
+</div>
 </div>
 </div>
 
