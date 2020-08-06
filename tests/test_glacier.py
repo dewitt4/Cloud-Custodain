@@ -247,3 +247,23 @@ class GlacierStatementTest(BaseTest):
             ]
         )
         self.assertTrue("RemoveMe" not in [s["Sid"] for s in data.get("Statement", ())])
+
+
+class GlacierVaultTest(BaseTest):
+
+    def test_glacier_vault_delete(self):
+        session_factory = self.replay_flight_data("test_glacier_vault_delete")
+        p = self.load_policy(
+            {
+                "name": "glacier-vault-delete",
+                "resource": "aws.glacier",
+                "filters": [{"type": "value", "key": "VaultName", "value": "c7n-test-delete"}],
+                "actions": [{"type": "delete"}],
+            },
+            session_factory=session_factory,)
+        resources = p.run()
+        self.assertEqual(len(resources), 1)
+        client = session_factory().client("glacier")
+        with self.assertRaises(ClientError) as e:
+            client.describe_vault(vaultName='c7n-test-delete')
+        self.assertEqual(e.exception.response['Error']['Code'], 'ResourceNotFoundException')
